@@ -1,0 +1,23 @@
+# 望舒输入法 · Wangshu Input Method
+
+**开发预览：尚未完成验收。本仓库不提供安装包。**
+
+面向 Android InputMethodService 和 Windows Text Services Framework 的输入法项目，含共享中文拼音候选与数学符号核心。词库、语音、编辑和隐私功能仍在开发；Android 16、Windows 真实宿主、麦克风和用户设备均需继续验收。不要将源码预览当作完成的日常输入法。
+
+## 当前源码范围
+
+- `android/`：Android 服务、界面和原生桥接源码。
+- `windows/` 与 `staging/personal-native/`：Windows TSF、设置工具和其共享个人数据源码。
+- `core/`、`data/`：共享候选引擎及词库／符号数据；派生词库的许可独立于项目代码。
+- `tests/`：有限的合成数据主机测试；这些结果不代表真实平台验收。
+- `third_party/`、`data/notices/` 与 `docs/` 中的来源清单：第三方许可和固定依赖信息。
+
+## 构建与隐私限制
+
+仓库不包含安装包、语音模型、定制语音 AAR、SDK/NDK 或用户数据。脚本仍假定原开发工作区的 `.tools` 布局；缺少依赖时不能直接从此快照离线构建。尚未完成干净环境重建。请在准备依赖前核对 `docs/` 的来源、哈希及许可，并审阅脚本。
+
+输入法会与当前编辑框及系统服务交互。语音、剪贴板、词频学习、系统设备端识别和备份数据流仍需逐平台核验；不要在问题报告上传自己的输入、剪贴板内容或录音。
+
+## 许可证
+
+项目原创代码按 [Apache-2.0](LICENSE) 许可。`data/pinyin.tsv` 是 CC-CEDICT 派生词库，按 CC BY-SA 4.0 单独提供；其他第三方库和模型也有独立条款。详细来源和归属见 [THIRD_PARTY.md](THIRD_PARTY.md) 及附带 notices。
