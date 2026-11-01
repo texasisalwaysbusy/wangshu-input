@@ -1,0 +1,6 @@
+<resources>
+    <style name="WangshuImeTheme" parent="WangshuImeBase">
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:navigationBarColor">@color/paper</item>
+    </style>
+</resources>

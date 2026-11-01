@@ -1,0 +1,9 @@
+<resources>
+    <color name="ink">#25282D</color>
+    <color name="muted">#626872</color>
+    <color name="accent">#42658A</color>
+    <color name="paper">#EEF0F3</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="selected">#D7E2EF</color>
+    <color name="function_key">#DCE0E6</color>
+</resources>

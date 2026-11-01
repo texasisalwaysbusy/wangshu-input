@@ -1,0 +1,7 @@
+{
+  "source": "https://deb.debian.org/debian/pool/main/c/cc-cedict/cc-cedict_0.0~repack20250329.orig.tar.xz",
+  "sha256": "3fbd39aa626d7211b7cfadb3fe050061edbf6b79fd14ab1396235d2c9e237904",
+  "debian_source_version": "0.0~repack20250329",
+  "original_vendor_direct_read": "MDBG URL HTTP403; not retried",
+  "license": "CC-BY-SA-4.0, upstream cedict_ts.u8 header inspected and preserved"
+}

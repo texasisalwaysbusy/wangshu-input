@@ -1,0 +1,103 @@
+{
+  "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2",
+  "sha256": "27ffbd9ee24ad186d99acc2f6354d7992b27bcab490812510665fa8f9389c5f8",
+  "bytes": 511274346,
+  "model_card": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20",
+  "license": "Apache-2.0 explicitly stated on original conversion author model card",
+  "files": [
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/README.md",
+      "bytes": 296
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/encoder-epoch-99-avg-1.onnx",
+      "bytes": 330083505
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/decoder-epoch-99-avg-1.onnx",
+      "bytes": 13876452
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/joiner-epoch-99-avg-1.onnx",
+      "bytes": 12833618
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/joiner-epoch-99-avg-1.int8.onnx",
+      "bytes": 3228404
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/decoder-epoch-99-avg-1.int8.onnx",
+      "bytes": 13091040
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/tokens.txt",
+      "bytes": 56317
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/3.wav",
+      "bytes": 282604
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/0.wav",
+      "bytes": 321744
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/1.wav",
+      "bytes": 163244
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/2.wav",
+      "bytes": 150124
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/test_wavs/8k.wav",
+      "bytes": 282284
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/bpe.model",
+      "bytes": 244836
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/encoder-epoch-99-avg-1.int8.onnx",
+      "bytes": 181895032
+    },
+    {
+      "name": "sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20/bpe.vocab",
+      "bytes": 12564
+    }
+  ],
+  "selected_files": {
+    "encoder.onnx": {
+      "source_member": "encoder-epoch-99-avg-1.int8.onnx",
+      "sha256": "8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b",
+      "bytes": 181895032
+    },
+    "decoder.onnx": {
+      "source_member": "decoder-epoch-99-avg-1.onnx",
+      "sha256": "2e3b5ec371f8899ee6acd829fd753ba45772df57a91bdf37cde3136354e7db7d",
+      "bytes": 13876452
+    },
+    "joiner.onnx": {
+      "source_member": "joiner-epoch-99-avg-1.int8.onnx",
+      "sha256": "1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0",
+      "bytes": 3228404
+    },
+    "tokens.txt": {
+      "source_member": "tokens.txt",
+      "sha256": "a8e0e4ec53810e433789b54a5c0134a7eaa2ffca595a6334d54c00da858841d3",
+      "bytes": 56317
+    }
+  },
+  "runtime_aar": {
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.6/sherpa-onnx-static-link-onnxruntime-1.13.6.aar",
+    "sha256": "01e87037afca2ed49085062aace5c012e60321e8e23e3a72b6d9ac02c843f66c",
+    "bytes": 37751439,
+    "status": "Original universal AAR evaluated in cloud only; replaced with local ASR-only native build to exclude unused TTS/espeak components"
+  },
+  "android_asr_source": {
+    "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.13.6",
+    "sha256": "78f5d10f957d2de1867a1e08395e9ec2ec388911c853dd141887396667f3ff34",
+    "build": "TTS=OFF, speaker diarization=OFF, websocket=OFF; Eigen MPL2-only; CPU runtime; NDK27.2 16KB"
+  },
+  "publication_note": "Local workspace pack path omitted; no model or AAR binary is included."
+}

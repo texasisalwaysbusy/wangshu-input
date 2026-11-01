@@ -1,0 +1,11 @@
+{
+  "project": "jieba",
+  "version": "0.42.1",
+  "source": "https://files.pythonhosted.org/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz",
+  "archive_sha256": "055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2",
+  "dictionary_sha256": "7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8",
+  "license": "MIT, upstream license text preserved",
+  "use": "dictionary frequency lookup only; no package install or upstream Python execution",
+  "license_source": "https://raw.githubusercontent.com/fxsjy/jieba/master/LICENSE",
+  "license_sha256": "18ba0984839f85853b29fadaf992f7dba8fd0ca0fbeae34de2b8735222dc7a37"
+}

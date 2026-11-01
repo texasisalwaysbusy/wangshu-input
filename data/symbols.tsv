@@ -1,0 +1,213 @@
+# alias<TAB>symbol<TAB>category<TAB>spoken phrases (math voice mode only)
+alpha	α	希腊	阿尔法
+beta	β	希腊	贝塔
+gamma	γ	希腊	伽马
+delta	δ	希腊	德尔塔
+epsilon	ε	希腊	艾普西隆
+theta	θ	希腊	西塔
+lambda	λ	希腊	兰姆达
+mu	μ	希腊	缪
+pi	π	希腊	圆周率
+sigma	σ	希腊	西格玛
+phi	φ	希腊	斐
+omega	ω	希腊	欧米伽
+Gamma	Γ	希腊
+Delta	Δ	希腊
+Theta	Θ	希腊
+Lambda	Λ	希腊
+Sigma	Σ	希腊
+Omega	Ω	希腊
+sum	∑	运算	求和符号
+prod	∏	运算	连乘符号
+int	∫	运算	积分符号
+iint	∬	运算	二重积分符号
+oint	∮	运算	环路积分符号
+sqrt	√	运算	根号
+partial	∂	运算	偏导符号
+nabla	∇	运算	梯度符号
+infty	∞	运算	无穷大|无穷符号
+times	×	运算	乘以
+div	÷	运算	除以
+pm	±	运算	正负号
+cdot	·	运算	点乘符号
+neq	≠	关系	不等于
+leq	≤	关系	小于等于
+geq	≥	关系	大于等于
+approx	≈	关系	约等于
+equiv	≡	关系	恒等于
+propto	∝	关系	正比于
+in	∈	集合	属于符号
+notin	∉	集合	不属于符号
+subset	⊂	集合	真包含于
+subseteq	⊆	集合	包含于符号
+cup	∪	集合	并集符号
+cap	∩	集合	交集符号
+emptyset	∅	集合	空集符号
+forall	∀	逻辑	任意符号
+exists	∃	逻辑	存在符号
+land	∧	逻辑	逻辑与
+lor	∨	逻辑	逻辑或
+neg	¬	逻辑	逻辑非
+to	→	箭头	趋向于
+leftarrow	←	箭头	左箭头
+Rightarrow	⇒	箭头	推出符号
+Leftrightarrow	⇔	箭头	当且仅当符号
+mapsto	↦	箭头	映射到
+N	ℕ	集合	自然数集
+Z	ℤ	集合	整数集
+Q	ℚ	集合	有理数集
+R	ℝ	集合	实数集
+C	ℂ	集合	复数集
+X	𝕏	集合
+squared	²	上下标	的平方
+cubed	³	上下标	的立方
+sub0	₀	上下标
+sub1	₁	上下标
+sub2	₂	上下标
+degree	°	运算	度数符号
+angle	∠	运算	角符号
+perp	⊥	关系	垂直符号
+parallel	∥	关系	平行符号
+ldots	…	标点	省略号
+therefore	∴	逻辑	所以符号
+because	∵	逻辑	因为符号
+frac12	½	分数	二分之一
+frac13	⅓	分数	三分之一
+frac14	¼	分数	四分之一
+frac23	⅔	分数	三分之二
+equals	=	关系	等于
+comma	，	标点
+period	。	标点
+question	？	标点
+exclamation	！	标点
+semicolon	；	标点
+colon	：	标点
+Alpha	Α	希腊
+Beta	Β	希腊
+Epsilon	Ε	希腊
+zeta	ζ	希腊
+Zeta	Ζ	希腊
+eta	η	希腊
+Eta	Η	希腊
+iota	ι	希腊
+Iota	Ι	希腊
+kappa	κ	希腊
+Kappa	Κ	希腊
+Mu	Μ	希腊
+nu	ν	希腊
+Nu	Ν	希腊
+xi	ξ	希腊
+Xi	Ξ	希腊
+omicron	ο	希腊
+Omicron	Ο	希腊
+Pi	Π	希腊
+rho	ρ	希腊
+Rho	Ρ	希腊
+tau	τ	希腊
+Tau	Τ	希腊
+upsilon	υ	希腊
+Upsilon	Υ	希腊
+Phi	Φ	希腊
+chi	χ	希腊
+Chi	Χ	希腊
+psi	ψ	希腊
+Psi	Ψ	希腊
+varepsilon	ϵ	希腊
+vartheta	ϑ	希腊
+varphi	ϕ	希腊
+varpi	ϖ	希腊
+varrho	ϱ	希腊
+varsigma	ς	希腊
+hbar	ℏ	运算
+ell	ℓ	运算
+Re	ℜ	运算
+Im	ℑ	运算
+anglemeasured	∡	运算
+iiiint	⨌	运算
+tripleint	∭	运算
+bigoplus	⨁	运算
+oplus	⊕	运算
+otimes	⊗	运算
+circ	∘	运算
+star	⋆	运算
+bullet	•	运算
+prime	′	上下标
+dprime	″	上下标
+tprime	‴	上下标
+dagger	†	上下标
+supset	⊃	集合
+supseteq	⊇	集合
+nsubseteq	⊈	集合
+nsupseteq	⊉	集合
+ni	∋	集合
+setminus	∖	集合
+uplus	⊎	集合
+complement	∁	集合
+notexists	∄	逻辑
+implies	⇒	逻辑
+iff	⇔	逻辑
+vdash	⊢	逻辑
+models	⊨	逻辑
+top	⊤	逻辑
+bot	⊥	逻辑
+sim	∼	关系
+simeq	≃	关系
+cong	≅	关系
+ll	≪	关系
+gg	≫	关系
+lesssim	≲	关系
+gtrsim	≳	关系
+prec	≺	关系
+succ	≻	关系
+mid	∣	关系
+nmid	∤	关系
+uparrow	↑	箭头
+downarrow	↓	箭头
+leftrightarrow	↔	箭头
+longrightarrow	⟶	箭头
+hookrightarrow	↪	箭头
+nearrow	↗	箭头
+searrow	↘	箭头
+nwarrow	↖	箭头
+swarrow	↙	箭头
+langle	⟨	标点
+rangle	⟩	标点
+lfloor	⌊	标点
+rfloor	⌋	标点
+lceil	⌈	标点
+rceil	⌉	标点
+vert	|	标点
+Vert	‖	标点
+lquote	“	标点
+rquote	”	标点
+lbook	《	标点
+rbook	》	标点
+vdots	⋮	标点
+cdots	⋯	标点
+ddots	⋱	标点
+sup0	⁰	上下标
+sup1	¹	上下标
+sup2	²	上下标
+sup3	³	上下标
+sup4	⁴	上下标
+sup5	⁵	上下标
+sup6	⁶	上下标
+sup7	⁷	上下标
+sup8	⁸	上下标
+sup9	⁹	上下标
+sub3	₃	上下标
+sub4	₄	上下标
+sub5	₅	上下标
+sub6	₆	上下标
+sub7	₇	上下标
+sub8	₈	上下标
+sub9	₉	上下标
+supplus	⁺	上下标
+supminus	⁻	上下标
+supeq	⁼	上下标
+subplus	₊	上下标
+subminus	₋	上下标
+subeq	₌	上下标
+subn	ₙ	上下标
+supi	ⁱ	上下标
+supn	ⁿ	上下标

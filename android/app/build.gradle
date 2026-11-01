@@ -1,0 +1,28 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'org.wangshu.ime'
+    compileSdk 36
+    ndkVersion '27.2.12479018'
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'org.wangshu.ime'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'org.wangshu.ime.ImeInstrumentation'
+        ndk { abiFilters 'arm64-v8a','armeabi-v7a','x86','x86_64' }
+        externalNativeBuild { cmake { arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
+    }
+    sourceSets { main { assets.srcDirs=[rootProject.file('../data')] } }
+    externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt';version '3.22.1' } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17;targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { debug { debuggable true;jniDebuggable false } }
+    packaging { jniLibs { useLegacyPackaging true } }
+    lint { abortOnError true }
+}
+
+dependencies {
+    implementation files('libs/sherpa-onnx-asr-only-1.13.6.aar')
+    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+}

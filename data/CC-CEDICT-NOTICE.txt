@@ -1,0 +1,13 @@
+CC-CEDICT — community-maintained Chinese-English dictionary, published by MDBG.
+Source release: 2025-03-29 (Debian source repack20250329).
+Original referenced work: CEDICT, Copyright (C) 1997, 1998 Paul Andrew Denisowski.
+License: Creative Commons Attribution-ShareAlike 4.0 International.
+https://creativecommons.org/licenses/by-sa/4.0/
+https://www.mdbg.net/chinese/dictionary?page=cc-cedict
+This pinyin.tsv is an adapted dataset: simplified headwords and normalized toneless
+pinyin were extracted; English definitions/traditional spellings were omitted;
+MIT-licensed jieba 0.42.1 word frequencies and hand-authored common-word rankings were
+added. Jieba copyright (c) 2013 Sun Junyi; license in notices/JIEBA-LICENSE.txt.
+The adapted dataset remains CC BY-SA 4.0.
+Source URLs, pinned SHA-256 values and the transformation script accompany the project.
+No MDBG endorsement is implied. Software code and hand-authored symbol mappings are separate.
