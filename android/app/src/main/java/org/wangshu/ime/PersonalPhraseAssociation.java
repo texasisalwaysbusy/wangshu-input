@@ -17,12 +17,34 @@ final class PersonalPhraseAssociation implements AutoCloseable {
     PersonalPhraseAssociation(Host host){this.host=host;}
     private void main(){if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Main thread required");}
     private boolean current(long id,int session,InputConnection owner,PersonalPhraseSuggestions.Language language){return !closed&&id==generation&&host.allowed()&&host.session()==session&&host.connection()==owner&&host.language()==language;}
+    // Worker-only cancellation fence. Host eligibility belongs to the main thread;
+    // cancellation stops later stages, but cannot interrupt an already-started IPC.
+    private boolean workerCancelled(long id){return closed||id!=generation||Thread.currentThread().isInterrupted();}
     void clear(){main();generation++;if(debounce!=null)handler.removeCallbacks(debounce);if(timeout!=null)handler.removeCallbacks(timeout);if(running!=null)running.cancel(true);debounce=timeout=null;running=null;visible=null;host.show(null);}
     void request(){
         main();clear();if(closed||!host.allowed())return;int session=host.session();InputConnection owner=host.connection();PersonalPhraseSuggestions.Language language=host.language();if(owner==null||language==null)return;long id=generation;
         debounce=()->{if(!current(id,session,owner,language))return;long deadline=SystemClock.elapsedRealtime()+1000;timeout=()->{if(id==generation)clear();};handler.postDelayed(timeout,1000);
             running=worker.submit(()->{SplitSelection.Snapshot before=null;PhraseData data=null;String suffix=null;
-                try{if(closed||id!=generation||Thread.currentThread().isInterrupted())return;before=host.read(owner);if(before!=null&&before.start==before.end){data=host.phrases();if(data!=null&&data.revision>=0){suffix=PersonalPhraseSuggestions.suggest(before.text.substring(0,before.start),before.text.substring(before.end),language,data.phrases);if(suffix!=null&&!WangshuIme.sameVoiceSnapshot(before,host.read(owner)))suffix=null;}}}catch(Exception refused){before=null;data=null;suffix=null;}
+                try{
+                    if(workerCancelled(id))return;
+                    before=host.read(owner);
+                    if(workerCancelled(id))return;
+                    if(before!=null&&before.start==before.end){
+                        data=host.phrases();
+                        if(workerCancelled(id))return;
+                        if(data!=null&&data.revision>=0){
+                            suffix=PersonalPhraseSuggestions.suggest(before.text.substring(0,before.start),before.text.substring(before.end),language,data.phrases);
+                            if(workerCancelled(id))return;
+                            if(suffix!=null){
+                                SplitSelection.Snapshot after=host.read(owner);
+                                if(workerCancelled(id))return;
+                                if(!WangshuIme.sameVoiceSnapshot(before,after))suffix=null;
+                            }
+                        }
+                    }
+                }catch(Exception refused){before=null;data=null;suffix=null;}
+                // Do not clear shared main-thread fields: a replacement request may own them.
+                if(workerCancelled(id))return;
                 final SplitSelection.Snapshot captured=before;final PhraseData saved=data;final String result=suffix;
                 handler.post(()->{if(!current(id,session,owner,language))return;if(SystemClock.elapsedRealtime()>deadline){clear();return;}if(timeout!=null)handler.removeCallbacks(timeout);timeout=null;running=null;
                     if(result==null||saved==null||saved.revision!=host.revision()){visible=null;host.show(null);return;}visible=new Display(id,saved.revision,session,owner,captured,language,result);host.show(visible);});

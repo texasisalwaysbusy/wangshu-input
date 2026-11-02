@@ -30,6 +30,9 @@ final class MathAssociation implements AutoCloseable {
     MathAssociation(Host host,Provider provider){this.host=host;this.provider=provider;}
     private void main(){if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Main thread required");}
     private boolean current(long id,int session,InputConnection connection){return !closed&&id==generation&&host.allowed()&&host.session()==session&&host.connection()==connection;}
+    // Worker-only cancellation fence. Host eligibility belongs to the main thread;
+    // cancellation stops later stages, but cannot interrupt an already-started IPC.
+    private boolean workerCancelled(long id){return closed||id!=generation||Thread.currentThread().isInterrupted();}
     void clear(){main();generation++;if(debounce!=null)handler.removeCallbacks(debounce);if(timeout!=null)handler.removeCallbacks(timeout);if(running!=null)running.cancel(true);debounce=timeout=null;running=null;visible=null;host.show(null);}
     void request(){
         main();clear();if(closed||!host.allowed())return;
@@ -40,10 +43,28 @@ final class MathAssociation implements AutoCloseable {
             running=worker.submit(()->{
                 SplitSelection.Snapshot before=null;ContextMathCandidates.Result result=null;
                 try{
-                    if(closed||id!=generation||Thread.currentThread().isInterrupted())return;before=host.read(connection);String[] query=query(before);
-                    if(query!=null){result=provider.suggest("",query[1]);if(result.status!=ContextMathCandidates.Status.READY)result=provider.suggest(query[0],query[1]);}
-                    if(result!=null&&result.status==ContextMathCandidates.Status.READY&&!WangshuIme.sameVoiceSnapshot(before,host.read(connection)))result=null;
+                    if(workerCancelled(id))return;
+                    before=host.read(connection);
+                    if(workerCancelled(id))return;
+                    String[] query=query(before);
+                    if(query!=null){
+                        if(workerCancelled(id))return;
+                        result=provider.suggest("",query[1]);
+                        if(workerCancelled(id))return;
+                        if(result.status!=ContextMathCandidates.Status.READY){
+                            result=provider.suggest(query[0],query[1]);
+                            if(workerCancelled(id))return;
+                        }
+                    }
+                    if(result!=null&&result.status==ContextMathCandidates.Status.READY){
+                        if(workerCancelled(id))return;
+                        SplitSelection.Snapshot after=host.read(connection);
+                        if(workerCancelled(id))return;
+                        if(!WangshuIme.sameVoiceSnapshot(before,after))result=null;
+                    }
                 }catch(RuntimeException refused){before=null;result=null;/* No input logging or retry. Typing remains available. */}
+                // Do not clear shared main-thread fields: a replacement request may own them.
+                if(workerCancelled(id))return;
                 final SplitSelection.Snapshot captured=before;final ContextMathCandidates.Result answer=result;
                 handler.post(()->{
                     if(!current(id,session,connection))return;if(SystemClock.elapsedRealtime()>deadline){clear();return;}
