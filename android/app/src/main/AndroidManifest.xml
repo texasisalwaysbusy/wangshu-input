@@ -2,7 +2,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
     <application android:label="望舒输入法" android:icon="@drawable/ic_ime" android:theme="@style/WangshuImeTheme" android:allowBackup="false">
-        <activity android:name=".SettingsActivity" android:exported="true" android:windowSoftInputMode="stateAlwaysHidden|adjustResize">
+        <!-- Modified 2026-11-03: use normal forward-navigation hiding, not always-hide on focus. -->
+        <activity android:name=".SettingsActivity" android:exported="true" android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".LearningSettingsActivity" android:exported="false" />
