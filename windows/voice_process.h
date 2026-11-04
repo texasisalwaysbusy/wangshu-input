@@ -45,7 +45,7 @@ public:
         if(!ok){DWORD code=GetLastError();cancel();state=Failed;error="Unable to start owned local voice process ("+std::to_string(code)+")";return false;}
         state=Starting;deadline=GetTickCount64()+120000;return true;
     }
-    void finish(){if(!active()||!input)return;DWORD written=0;char c='F';if(!WriteFile(input,&c,1,&written,nullptr)||written!=1){fail("Unable to finish local recording");return;}state=Finishing;deadline=GetTickCount64()+60000;}
+    void finish(){if((state!=Starting&&state!=Recording)||!input)return;DWORD written=0;char c='F';if(!WriteFile(input,&c,1,&written,nullptr)||written!=1){fail("Unable to finish local recording");return;}state=Finishing;deadline=GetTickCount64()+60000;}
     void fail(const std::string& message){cancel();state=Failed;error=message;}
     void poll(){
         if(!active()||!output)return;
@@ -53,7 +53,7 @@ public:
         DWORD available=0;BOOL peek=PeekNamedPipe(output,nullptr,0,nullptr,&available,nullptr);
         if(peek&&available){char b[4096];DWORD n=0;if(ReadFile(output,b,std::min<DWORD>(sizeof(b),available),&n,nullptr)){pending.append(b,n);if(pending.size()>32768){fail("Local voice response too large");return;}
             size_t pos=0;while((pos=pending.find('\n'))!=std::string::npos){std::string line=pending.substr(0,pos);pending.erase(0,pos+1);if(!line.empty()&&line.back()=='\r')line.pop_back();
-                if(line=="READY"){if(state!=Finishing)state=Recording;deadline=GetTickCount64()+60000;}
+                if(line=="READY"){if(state!=Finishing){state=Recording;deadline=GetTickCount64()+60000;}}
                 else if(line.rfind("RESULT ",0)==0){std::string value=line.substr(7);cancel();text=value;state=Complete;return;}
                 else if(line.rfind("ERROR ",0)==0){fail(line.substr(6));return;}
             }

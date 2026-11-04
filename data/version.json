@@ -1,0 +1,9 @@
+{
+  "entries": 119556,
+  "keys": 85043,
+  "pinyin_sha256": "ba80abb85e43b47f7d16c7e2a39f3de56e3dadc986fb67e4167bbd075e64d77b",
+  "symbols_sha256": "8eec154551936b7a94efbac8b067b7f26f2f8bbfc31fbffe4f4ad94d28ef9393",
+  "upstream_sha256": "7db7ae8b547715e92cf7b9e14ee3bb2676c504e76b942e0397e884a2a310251f",
+  "frequency_sha256": "7197c3211ddd98962b036cdf40324d1ea2bfaa12bd028e68faa70111a88e12a8",
+  "license": "CC-BY-SA-4.0 for derived dictionary; jieba MIT frequencies; symbols hand-authored"
+}

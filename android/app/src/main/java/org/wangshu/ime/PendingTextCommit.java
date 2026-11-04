@@ -10,7 +10,31 @@ final class PendingTextCommit {
         boolean commit(Object connection,String value);
         void clearPending();
     }
+    /** A caller-owned display/editor binding, never recaptured during cleanup.
+     * current() must check that binding after its external reads. The final
+     * clear operation must recheck and then change local pending state without
+     * another callback between that check and mutation.
+     */
+    interface BoundHost {
+        boolean current();
+        boolean commit(String value);
+        boolean clearPendingIfCurrent();
+    }
     private PendingTextCommit(){}
+
+    static Result sendBound(BoundHost host,String value){
+        if(value==null)throw new IllegalArgumentException("Missing pending text");
+        try{if(!host.current())return Result.STALE;}
+        catch(RuntimeException unavailable){return Result.UNAVAILABLE;}
+        final boolean accepted;
+        try{accepted=host.commit(value);}
+        catch(RuntimeException uncertain){return Result.UNCERTAIN;}
+        try{
+            if(!host.current())return Result.STALE;
+            if(!accepted)return Result.REJECTED;
+            return host.clearPendingIfCurrent()?Result.ACCEPTED:Result.STALE;
+        }catch(RuntimeException uncertain){return Result.UNCERTAIN;}
+    }
 
     static Result send(Host host,String value){
         if(value==null)throw new IllegalArgumentException("Missing pending text");

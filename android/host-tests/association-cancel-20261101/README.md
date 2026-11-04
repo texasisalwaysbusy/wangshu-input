@@ -33,8 +33,8 @@ returns, and an already-queued old completion crossing a newer request/deadline.
 The gate deliberately ignores interruption to model an already-started operation.
 Tests wait for physical executor completion, not just a cancelled Future.
 Thread/owner violations are recorded before throwing so swallowed executor errors
-cannot fake a pass. The harness records worker/main-thread boundary violations before an exception
-can be swallowed by an executor.
+cannot fake a pass. A deliberately faulty worker UI call was separately verified
+to make six cases fail.
 
 Observed red/green on the same final harness: old controllers fail 24 of 31 cases;
 updated controllers pass 31 cases / 277 assertions. Integrated standalone run
@@ -45,10 +45,9 @@ operation is performed by this harness.
 
 This is a bounded cancellation fix, not complete phrase-association acceptance.
 A host transition that changes allowed/session without calling `clear()` is not
-observed by the worker. This known limitation is not fixed or counted as passing
-by the 31-scenario suite.
+observed by the worker and remains an explicitly failing limitation demonstration.
 Checks cannot retract an already-started read or close the race between the last
 check and IPC. The fake timeout is not a measurement of Android scheduling or IPC
 latency. Click-time synchronous reads and captured-owner insertion concerns in
-the existing phrase-association path remain separate blockers. Full app build,
+the pre-existing phrase experiment remain separate blockers. Full app build,
 native Handler/editor lifecycle tests and device acceptance are NOT_RUN here.

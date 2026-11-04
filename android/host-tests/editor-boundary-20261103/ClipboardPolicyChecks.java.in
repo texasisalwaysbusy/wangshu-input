@@ -1,0 +1,16 @@
+package org.wangshu.ime;
+import android.content.*;import android.os.PersistableBundle;import java.io.IOException;
+final class PersonalStore {/*TEXT*/}
+public final class ClipboardPolicyChecks {
+ static final int MAX_TEXT=8000;/*ALLOWED*/
+ static int checks;static void check(boolean v,String n){if(!v)throw new AssertionError(n);checks++;}
+ public static void main(String[] args){
+  ClipData c=new ClipData();String expected=c.item.text.toString();check(allowedText(c,true,false).equals(expected),"exact multiline ZWJ text retained");check(allowedText(c,false,false)==null,"capture optin mandatory");check(allowedText(c,true,true)==null,"private editor refuses");check(allowedText(null,true,false)==null,"null unavailable");
+  c.count=2;check(allowedText(c,true,false)==null,"multiple items refused");c.count=0;check(allowedText(c,true,false)==null,"zero items refused");c.count=1;
+  c.description.extras=new PersistableBundle();c.description.extras.putBoolean("android.content.extra.IS_SENSITIVE",true);check(allowedText(c,true,false)==null,"official sensitive marker refused");c.description.extras.putBoolean("android.content.extra.IS_SENSITIVE",false);check(allowedText(c,true,false).equals(expected),"false sensitive marker not transformed");
+  c.description.plain=false;check(allowedText(c,true,false)==null,"nonplain MIME refused");c.description.plain=true;c.item.uri=new Object();check(allowedText(c,true,false)==null,"URI plus text never resolved");c.item.uri=null;c.item.intent=new Object();check(allowedText(c,true,false)==null,"intent plus text refused");c.item.intent=null;c.item.text=null;check(allowedText(c,true,false)==null,"no text refused");
+  for(String invalid:new String[]{""," \t\n","x\u0000z","x\u0085z","x\ud800z","x\udc00z","x\r\nz","x".repeat(8001)}){c.item.text=invalid;check(allowedText(c,true,false)==null,"invalid or oversized text refused");}
+  c.item.text="😀".repeat(8000);check(allowedText(c,true,false).equals(c.item.text),"limit counts code points, exact non-BMP retained");c.item.text="😀".repeat(8001);check(allowedText(c,true,false)==null,"non-BMP over limit refused");
+  System.out.println("PASS clipboard policy "+checks+" extracted checks; Android clipboard NOT_RUN");
+ }
+}

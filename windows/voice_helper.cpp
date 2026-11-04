@@ -56,7 +56,27 @@ struct Microphone {
  HWAVEIN handle=nullptr;std::array<WAVEHDR,4> headers{};std::array<std::array<short,1600>,4> data{};
  ~Microphone(){if(handle){waveInReset(handle);for(auto& h:headers)if(h.dwFlags&WHDR_PREPARED)waveInUnprepareHeader(handle,&h,sizeof(h));waveInClose(handle);}}
  void start(){WAVEFORMATEX f{};f.wFormatTag=WAVE_FORMAT_PCM;f.nChannels=1;f.nSamplesPerSec=16000;f.wBitsPerSample=16;f.nBlockAlign=2;f.nAvgBytesPerSec=32000;if(waveInOpen(&handle,WAVE_MAPPER,&f,0,0,CALLBACK_NULL)!=MMSYSERR_NOERROR)throw std::runtime_error("microphone unavailable; check Windows permission");for(size_t i=0;i<headers.size();i++){headers[i].lpData=reinterpret_cast<char*>(data[i].data());headers[i].dwBufferLength=data[i].size()*2;if(waveInPrepareHeader(handle,&headers[i],sizeof(WAVEHDR))!=MMSYSERR_NOERROR||waveInAddBuffer(handle,&headers[i],sizeof(WAVEHDR))!=MMSYSERR_NOERROR)throw std::runtime_error("microphone buffer failed");}if(waveInStart(handle)!=MMSYSERR_NOERROR)throw std::runtime_error("microphone start failed");}
- void record(Asr& asr){start();ULONGLONG deadline=GetTickCount64()+30000;while(!finishRecording&&!cancelled&&GetTickCount64()<deadline){bool available=false;for(auto& h:headers)if(h.dwFlags&WHDR_DONE){available=true;std::vector<float> samples(h.dwBytesRecorded/2);auto* pcm=reinterpret_cast<short*>(h.lpData);for(size_t i=0;i<samples.size();i++)samples[i]=pcm[i]/32768.f;asr.accept(samples.data(),samples.size());h.dwBytesRecorded=0;if(waveInAddBuffer(handle,&h,sizeof(h))!=MMSYSERR_NOERROR)throw std::runtime_error("microphone requeue failed");}if(!available)Sleep(10);}waveInStop(handle);waveInReset(handle);if(!cancelled)for(auto& h:headers)if((h.dwFlags&WHDR_DONE)&&h.dwBytesRecorded){std::vector<float> samples(h.dwBytesRecorded/2);auto* pcm=reinterpret_cast<short*>(h.lpData);for(size_t i=0;i<samples.size();i++)samples[i]=pcm[i]/32768.f;asr.accept(samples.data(),samples.size());h.dwBytesRecorded=0;}}
+ void record(Asr& asr){
+  start();size_t next=0;ULONGLONG deadline=GetTickCount64()+30000;
+  while(!finishRecording&&!cancelled&&GetTickCount64()<deadline){
+   bool available=false;
+   // Consume in the order queued, including after the circular queue wraps.
+   for(size_t i=0;i<headers.size();++i){
+    auto& h=headers[next];if(!(h.dwFlags&WHDR_DONE))break;available=true;
+    std::vector<float> samples(h.dwBytesRecorded/2);auto* pcm=reinterpret_cast<short*>(h.lpData);for(size_t j=0;j<samples.size();++j)samples[j]=pcm[j]/32768.f;
+    asr.accept(samples.data(),samples.size());h.dwBytesRecorded=0;
+    if(waveInAddBuffer(handle,&h,sizeof(h))!=MMSYSERR_NOERROR)throw std::runtime_error("microphone requeue failed");
+    next=(next+1)%headers.size();
+   }
+   if(!available)Sleep(10);
+  }
+  waveInStop(handle);waveInReset(handle);
+  // Reset returns queued buffers; drain any nonempty data in queue order.
+  if(!cancelled)for(size_t i=0;i<headers.size();++i){
+   auto& h=headers[(next+i)%headers.size()];
+   if((h.dwFlags&WHDR_DONE)&&h.dwBytesRecorded){std::vector<float> samples(h.dwBytesRecorded/2);auto* pcm=reinterpret_cast<short*>(h.lpData);for(size_t j=0;j<samples.size();++j)samples[j]=pcm[j]/32768.f;asr.accept(samples.data(),samples.size());h.dwBytesRecorded=0;}
+  }
+ }
 };
 int wmain(int argc,wchar_t** argv){
  try{

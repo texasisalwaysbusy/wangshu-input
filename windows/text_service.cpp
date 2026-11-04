@@ -20,6 +20,8 @@
 #include "voice_process.h"
 #include "voice_position.h"
 #include "numeric_candidates.h"
+#include "phrase_associations.h"
+#include "../core/mixed_composition.h"
 #include "context_candidates.h"
 #include "personal_store.h"
 #include "learning_queue.h"
@@ -113,7 +115,7 @@ class TextService;
 struct CandidateProof {
     std::string input,voice,calculation,personalRevision,learningRevision,learningWord;size_t page=0;unsigned modes=0;
     wangshu::context_math::Kind calculationKind=wangshu::context_math::Kind::Value;
-    bool personal=false,readable=false,ranking=false,rankingReadable=false,autoLearn=false;ITfContext* context=nullptr;unsigned long long epoch=0,voiceGeneration=0,calculationGeneration=0;
+    bool association=false,personal=false,readable=false,ranking=false,rankingReadable=false,autoLearn=false;ITfContext* context=nullptr;unsigned long long epoch=0,voiceGeneration=0,calculationGeneration=0;
 };
 // A separately reference-counted snapshot may outlive its service in a host.
 // detach() invalidates callbacks and releases editor references before deactivation.
@@ -196,7 +198,8 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     ITfContext* composingContext=nullptr;ITfComposition* composition=nullptr;RECT caretBounds{};bool caretValid=false;
     HWND popup=nullptr;HFONT font=nullptr;std::shared_ptr<const wangshu::Engine> sharedEngine;bool loaded=false,chinese=true,math=false,listening=false,noLearn=false,learningWriteFailed=false,learningTimerActive=false,privateInput=false;
     VoiceProcess localVoice;std::string voiceReview,voiceRecovery;
-    std::shared_ptr<const wangshu::voice_position::Snapshot> voicePosition;unsigned long long voiceGeneration=0;
+    std::shared_ptr<const wangshu::voice_position::Snapshot> voicePosition;unsigned long long voiceGeneration=0;bool voiceLastStopPreserved=false;
+    bool calculationAssociation=false;std::string associationPersonalRevision,associationLearningRevision;
     std::string calculation;wangshu::context_math::Kind calculationKind=wangshu::context_math::Kind::Value;std::shared_ptr<const wangshu::voice_position::Snapshot> calculationPosition;ITfContext* calculationTarget=nullptr;unsigned long long calculationGeneration=0;
     ITfUIElementMgr* uiManager=nullptr;CandidateElement* uiCandidates=nullptr;DWORD uiId=TF_INVALID_COOKIE;bool hostShowsOwnUI=true,notifyingUI=false;
     std::unique_ptr<wangshu::WindowsPersonalStore> personalStore;
@@ -207,7 +210,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     ISpRecognizer* recognizer=nullptr;ISpRecoContext* recoContext=nullptr;ISpRecoGrammar* grammar=nullptr;ITfContext* voiceTarget=nullptr;
     const wangshu::Engine& dictionary()const{static const wangshu::Engine empty;return sharedEngine?*sharedEngine:empty;}
     std::vector<wangshu::Candidate> personalLookup(const std::string& input,size_t candidatePage=0,CandidateProof* proof=nullptr){
-        if(input.empty()||input[0]=='\\'||privateInput||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE)))return dictionary().lookup(input,9,candidatePage);
+        if(input.empty()||input[0]=='\\'||input.find('`')!=std::string::npos||privateInput||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE)))return dictionary().lookup(input,9,candidatePage);
         if(proof)proof->personal=true;
         wangshu::PersonalSnapshot snapshot;
         try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();snapshot=personalStore->read();if(proof){proof->readable=true;proof->personalRevision=snapshot.revision;}if(snapshot.fromBackup&&status.empty())status=L"个人词库正在使用有效备份；请在本地管理程序确认恢复";}
@@ -219,14 +222,16 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     unsigned candidateModes()const{return activationFlags^(chinese?0x10000000u:0)^(math?0x20000000u:0)^(noLearn?0x40000000u:0)^(privateInput?0x08000000u:0);}
     void captureCandidates(){
         displayed=CandidateProof{};displayed.input=buffer;displayed.voice=voiceReview;displayed.page=page;displayed.modes=candidateModes();displayed.epoch=focusEpoch;displayed.voiceGeneration=voiceGeneration;displayed.calculation=calculation;displayed.calculationGeneration=calculationGeneration;displayed.calculationKind=calculationKind;
-        if(!voiceReview.empty())candidates={{voiceReview,"语音待核对"}};else if(!calculation.empty())candidates={{calculation,calculationKind==wangshu::context_math::Kind::Substitution?"计算 · 代入":"计算 · 精确结果"}};else candidates=personalLookup(buffer,page,&displayed);
+        if(calculationAssociation){displayed.association=true;displayed.personal=true;displayed.readable=true;displayed.ranking=true;displayed.rankingReadable=true;displayed.personalRevision=associationPersonalRevision;displayed.learningRevision=associationLearningRevision;}
+        if(!voiceReview.empty())candidates={{voiceReview,"语音待核对"}};else if(!calculation.empty())candidates={{calculation,calculationAssociation?"常用语联想":calculationKind==wangshu::context_math::Kind::Substitution?"计算 · 代入":"计算 · 精确结果"}};else candidates=personalLookup(buffer,page,&displayed);
         ITfContext* next=composingContext?composingContext:!voiceReview.empty()?voiceTarget:!calculation.empty()?calculationTarget:nullptr;if(next)next->AddRef();else next=focused();drop(candidateContext);candidateContext=next;displayed.context=next;
     }
     bool validCandidate(ITfContext* context,const CandidateProof& proof){
+        if(proof.association&&(noLearn||privateInput||!calculationAssociation))return false;
         if(!manager||!loaded||!context||context!=proof.context||focusEpoch!=proof.epoch||buffer!=proof.input||voiceReview!=proof.voice||calculation!=proof.calculation||(!proof.calculation.empty()&&(calculationGeneration!=proof.calculationGeneration||calculationKind!=proof.calculationKind))||(!proof.voice.empty()&&voiceGeneration!=proof.voiceGeneration)||page!=proof.page||candidateModes()!=proof.modes||disabled(context))return false;
         ITfContext* current=focused();bool scope=current?current==context:composingContext==context||voiceTarget==context;drop(current);if(!scope)return false;
-        if(proof.personal){try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();auto now=personalStore->readFresh();if(!proof.readable||now.revision!=proof.personalRevision)return false;}catch(...){if(proof.readable)return false;}}
-        if(proof.ranking){try{auto now=personalStore->readLearningFresh();if(!proof.rankingReadable||now.revision!=proof.learningRevision)return false;}catch(...){if(proof.rankingReadable)return false;}}
+        if(proof.personal){try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();auto now=personalStore->readFresh();if(proof.association&&now.fromBackup)return false;if(!proof.readable||now.revision!=proof.personalRevision)return false;}catch(...){if(proof.readable)return false;}}
+        if(proof.ranking){try{auto now=personalStore->readLearningFresh();if(proof.association&&(now.fromBackup||!now.data.phraseAssociations))return false;if(!proof.rankingReadable||now.revision!=proof.learningRevision)return false;}catch(...){if(proof.rankingReadable)return false;}}
         return true;
     }
     bool sameCompositionRange(ITfContext* context,TfEditCookie cookie,ITfRange* range,const std::wstring& expected,size_t maximum=128){
@@ -247,7 +252,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(!composition||composingContext!=context)return false;
         auto release=[](ITfRange* value){if(value)value->Release();};
         ITfRange* raw=nullptr;HRESULT h=composition->GetRange(&raw);std::unique_ptr<ITfRange,decltype(release)> range(raw,release);
-        return SUCCEEDED(h)&&sameCompositionRange(context,cookie,range.get(),wide(proof.input));
+        return SUCCEEDED(h)&&sameCompositionRange(context,cookie,range.get(),wide(wangshu::mixed::raw(proof.input)));
     }
     bool selectCandidate(ITfContext* context,size_t index,bool async=false,const std::string& suffix=""){
         CandidateProof expected=displayed;
@@ -414,22 +419,31 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     void completeAsync(unsigned long long token,HRESULT result){if(token!=revision||token!=pendingRevision)return;pendingRevision=0;if(SUCCEEDED(result)){if(!voiceReview.empty())stopVoice();buffer.clear();page=0;finishLearningStatus();}else if(!voiceRecovery.empty())status=L"语音位置无法核对；结果暂存，Ctrl+Shift+V 重新定位后再确认";else status=L"编辑器拒绝插入，候选和拼音仍保留，可重试";update();}
     bool acceptsAsync(unsigned long long token)const{return token==revision&&token==pendingRevision&&manager&&loaded;}
     bool commit(ITfContext* c,const std::string& value,bool async=false,const CandidateProof* proof=nullptr){
+        // A delimiter-only preedit never created a host composition. An empty
+        // commit here must clear only local grammar, not the selected document text.
+        if(!composition&&!buffer.empty()&&value.empty()&&voiceReview.empty()&&wangshu::mixed::raw(buffer).empty()){buffer.clear();page=0;status.clear();update();return true;}
         learningWriteFailed=false;
         if(async){unsigned long long token=++revision;pendingRevision=token;HRESULT h=request(c,wide(value),true,true,true,proof);if(h==TF_S_ASYNC){if(pendingRevision==token){status=L"正在等待编辑器插入，候选和拼音仍保留";update();}return true;}if(FAILED(h))completeAsync(token,h);return SUCCEEDED(h);}
         HRESULT h=request(c,wide(value),true,false,false,proof);if(SUCCEEDED(h)){if(!voiceReview.empty())stopVoice();buffer.clear();page=0;finishLearningStatus();update();return true;}status=!voiceRecovery.empty()?L"语音位置无法核对；结果暂存，Ctrl+Shift+V 重新定位后再确认":L"编辑器暂时不接受输入；请重新聚焦后重试";update();return false;
     }
-    void clearCalculation(){bool had=!calculation.empty();calculation.clear();calculationKind=wangshu::context_math::Kind::Value;calculationPosition.reset();drop(calculationTarget);++calculationGeneration;if(had)endCandidateUI();}
+    void clearCalculation(){bool had=!calculation.empty();calculation.clear();calculationAssociation=false;associationPersonalRevision.clear();associationLearningRevision.clear();calculationKind=wangshu::context_math::Kind::Value;calculationPosition.reset();drop(calculationTarget);++calculationGeneration;if(had)endCandidateUI();}
     void requestCalculation(ITfContext* c) noexcept{try{
         bool had=!calculation.empty();clearCalculation();if(had)status.clear();
-        if(!math||!c||disabled(c)||!buffer.empty()||composition||listening||!voiceReview.empty()||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_COMLESS|TF_TMAE_CONSOLE))){if(had)update();return;}
+        if(!c||disabled(c)||!buffer.empty()||composition||listening||!voiceReview.empty()||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_COMLESS|TF_TMAE_CONSOLE))){if(had)update();return;}
         ITfContext* current=focused();bool here=current==c;drop(current);if(!here){if(had)update();return;}
+        // Disabled means no optional context read; no-learn also suppresses this
+        // explicitly personal feature, without changing deterministic math.
+        bool associationsEnabled=false;
+        if(!noLearn&&!privateInput){try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();auto setting=personalStore->readLearningFresh();associationsEnabled=setting.data.phraseAssociations&&!setting.fromBackup;}catch(...){}}
+        if(!math&&!associationsEnabled){if(had)update();return;}
         auto generation=calculationGeneration,requestRevision=revision;
         auto guard=new(std::nothrow)VoicePositionSession(c);if(!guard){if(had)update();return;}HRESULT result=E_FAIL;
         HRESULT h=c->RequestEditSession(client,guard,TF_ES_SYNC|TF_ES_READ,&result);auto before=guard->snapshot;guard->Release();
         if(FAILED(h)||FAILED(result)||!before){if(had)update();return;}
-        auto answer=wangshu::numeric::atCaret(before->text,before->caret);
+        auto answer=math?wangshu::numeric::atCaret(before->text,before->caret):wangshu::numeric::Result{};
+        bool association=false;std::string personalRevision,learningRevision;
         auto answerKind=wangshu::context_math::Kind::Value;
-        if(!answer.ready&&before->caret>0&&before->caret<=before->text.size()){
+        if(math&&!answer.ready&&before->caret>0&&before->caret<=before->text.size()){
             // Full bounded capture is kept intact for stale checks. Never truncate
             // earlier definitions to manufacture an unambiguous context.
             std::wstring_view document(before->text);
@@ -442,6 +456,19 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
                 answer.ready=true;answer.text=std::move(suggested.candidate->text);answerKind=suggested.candidate->kind;
             }
         }
+        if(!answer.ready&&!noLearn&&!privateInput&&before->caret==before->text.size()){
+            try{
+                if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();
+                auto settings=personalStore->readLearningFresh();
+                if(settings.data.phraseAssociations&&!settings.fromBackup){
+                    auto manual=personalStore->readFresh();
+                    if(!manual.fromBackup){std::vector<std::wstring> phrases;for(const auto& value:manual.data.phrases)phrases.push_back(wide(value.text));
+                        auto suggestion=wangshu::phrase_association::suggest(before->text,before->caret,phrases);
+                        if(suggestion){answer.ready=true;answer.text=*suggestion;association=true;personalRevision=manual.revision;learningRevision=settings.revision;}
+                    }
+                }
+            }catch(...){/* Unreadable settings/data never enable associations. */}
+        }
         // Compute from immutable text, then re-read the same host before publication.
         if(answer.ready){
             auto verify=new(std::nothrow)VoicePositionSession(c);if(!verify){if(had)update();return;}HRESULT checked=E_FAIL;
@@ -449,9 +476,10 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
             if(FAILED(read)||FAILED(checked)||!fresh||!(*fresh==*before)){if(had)update();return;}
         }
         current=focused();here=current==c;drop(current);
-        if(!answer.ready||!here||generation!=calculationGeneration||requestRevision!=revision||!manager||!loaded||!math){if(had)update();return;}
+        if(!answer.ready||!here||generation!=calculationGeneration||requestRevision!=revision||!manager||!loaded||(!math&&!association)|| (association&&(noLearn||privateInput))){if(had)update();return;}
+        calculationAssociation=association;associationPersonalRevision=std::move(personalRevision);associationLearningRevision=std::move(learningRevision);
         calculation=narrow(answer.text);calculationKind=answerKind;calculationPosition=std::move(before);calculationTarget=c;c->AddRef();
-        status=answerKind==wangshu::context_math::Kind::Substitution?L"点击代入候选追加表达式；尚未求出数值，Enter/空格仍交给输入框":L"点击计算候选追加精确结果；Enter/空格仍交给输入框";update();
+        status=association?L"本地常用语联想：点击候选追加；空格/Enter仍交给输入框":answerKind==wangshu::context_math::Kind::Substitution?L"点击代入候选追加表达式；尚未求出数值，Enter/空格仍交给输入框":L"点击计算候选追加精确结果；Enter/空格仍交给输入框";update();
     }catch(...){clearCalculation();update();}}
     bool selectCalculation(ITfContext* c,const CandidateProof& proof,bool async){
         if(!validCandidate(c,proof)||proof.calculation.empty())return false;
@@ -461,7 +489,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         return true;
     }
     HRESULT applyCalculation(ITfContext* c,TfEditCookie cookie,const CandidateProof& proof,unsigned long long token){
-        if(token!=revision||proof.calculationGeneration!=calculationGeneration||!validCandidate(c,proof)||!math||!calculationPosition||c!=calculationTarget||composition||!buffer.empty()||listening||!voiceReview.empty())return E_ABORT;
+        if(token!=revision||proof.calculationGeneration!=calculationGeneration||!validCandidate(c,proof)||(!math&&!proof.association)||!calculationPosition||c!=calculationTarget||composition||!buffer.empty()||listening||!voiceReview.empty())return E_ABORT;
         VoiceGuard privacy(c);HRESULT h=privacy.DoEditSession(cookie);if(FAILED(h))return h;
         auto before=calculationPosition;wangshu::voice_position::Snapshot now;h=wangshu::voice_position::capture(c,cookie,now);
         if(FAILED(h)||!(now==*before)||token!=revision||proof.calculationGeneration!=calculationGeneration||before!=calculationPosition)return E_ABORT;
@@ -471,7 +499,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         TF_SELECTION selected{};ULONG count=0;h=c->GetSelection(cookie,TF_DEFAULT_SELECTION,1,&selected,&count);wangshu::voice_position::Range selection(selected.range);LONG first=1,last=1;
         if(FAILED(h)||count!=1||!selection||FAILED(range->CompareStart(cookie,selection.get(),TF_ANCHOR_START,&first))||first||FAILED(range->CompareEnd(cookie,selection.get(),TF_ANCHOR_END,&last))||last)return E_ABORT;
         h=privacy.DoEditSession(cookie);if(FAILED(h))return h;
-        if(token!=revision||proof.calculationGeneration!=calculationGeneration||before!=calculationPosition||c!=calculationTarget)return E_ABORT;
+        if(token!=revision||proof.calculationGeneration!=calculationGeneration||before!=calculationPosition||c!=calculationTarget||(proof.association&&!validCandidate(c,proof)))return E_ABORT;
         auto current=[&]{return token==revision&&proof.calculationGeneration==calculationGeneration&&before==calculationPosition&&c==calculationTarget;};
         auto text=wide(proof.calculation);h=range->SetText(cookie,0,text.c_str(),static_cast<LONG>(text.size()));
         // A confirmed applied write is never replayed, even if the host changed
@@ -480,14 +508,14 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(SUCCEEDED(h)){
             bool placed=false;wangshu::voice_position::Range end;if(SUCCEEDED(wangshu::voice_position::clone(range.get(),end))&&SUCCEEDED(end->Collapse(cookie,TF_ANCHOR_END))&&current()){TF_SELECTION position{end.get(),{TF_AE_NONE,FALSE}};placed=SUCCEEDED(c->SetSelection(cookie,1,&position));}
             if(!current())return h;
-            clearCalculation();status=placed?(proof.calculationKind==wangshu::context_math::Kind::Substitution?L"已追加代入表达式；未知变量保持原样":L"已追加精确计算结果"):L"计算候选已写入；编辑器未确认光标，请检查原文";update();
+            clearCalculation();status=placed?(proof.association?L"已追加本地常用语候选":proof.calculationKind==wangshu::context_math::Kind::Substitution?L"已追加代入表达式；未知变量保持原样":L"已追加精确计算结果"):L"计算候选已写入；编辑器未确认光标，请检查原文";update();
         }else{status=L"编辑器未确认计算结果写入；请核对原文，未自动重试";update();}
         return h;
     }
     static bool ctrl(){return (GetKeyState(VK_CONTROL)&0x8000)!=0;}
     static bool shift(){return (GetKeyState(VK_SHIFT)&0x8000)!=0;}
     static char character(WPARAM key){if(key>='A'&&key<='Z')return static_cast<char>((shift()!=((GetKeyState(VK_CAPITAL)&1)!=0))?key:key+('a'-'A'));BYTE state[256];GetKeyboardState(state);wchar_t out[4]{};int n=ToUnicode(static_cast<UINT>(key),MapVirtualKeyW(static_cast<UINT>(key),MAPVK_VK_TO_VSC),state,out,4,4);return n==1&&out[0]>=32&&out[0]<127?static_cast<char>(out[0]):0;}
-    bool eats(ITfContext* c,WPARAM k){if(!loaded||disabled(c))return false;if(!voiceReview.empty()&&(k==VK_RETURN||k==VK_SPACE||k==VK_ESCAPE))return true;if(ctrl()&&shift()&&(k=='M'||k=='V'))return true;if(ctrl()||(GetKeyState(VK_MENU)&0x8000))return false;if(k==VK_SPACE&&shift())return true;if(!chinese)return false;if(!buffer.empty()&&(k==VK_SPACE||k==VK_RETURN||k==VK_BACK||k==VK_ESCAPE||k==VK_NEXT||k==VK_PRIOR||(k>='1'&&k<='9')))return true;if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty())return true;char a=character(k);return (a>='a'&&a<='z')||(a>='A'&&a<='Z')||a=='\\'||(!buffer.empty()&&a=='\'')||(a&&std::strchr(",.?!;:",a));}
+    bool eats(ITfContext* c,WPARAM k){if(!loaded||disabled(c))return false;if(!voiceReview.empty()&&(k==VK_RETURN||k==VK_SPACE||k==VK_ESCAPE))return true;if(ctrl()&&shift()&&(k=='M'||k=='V'))return true;if(ctrl()||(GetKeyState(VK_MENU)&0x8000))return false;if(k==VK_SPACE&&shift())return true;if(!chinese)return false;if(!buffer.empty()&&(k==VK_SPACE||k==VK_RETURN||k==VK_BACK||k==VK_ESCAPE||k==VK_NEXT||k==VK_PRIOR||(k>='1'&&k<='9')))return true;if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty())return true;char a=character(k);if((buffer.empty()||buffer[0]!='\\')&&(a=='`'||(wangshu::mixed::active(buffer)&&a>=32&&a<=126)))return true;return (a>='a'&&a<='z')||(a>='A'&&a<='Z')||a=='\\'||(!buffer.empty()&&a=='\'')||(a&&std::strchr(",.?!;:",a));}
     HRESULT bindVoice(ITfContext* c){
         if(!c||disabled(c)||composition)return E_ABORT;
         ITfContext* current=focused();bool focusedHere=current==c;drop(current);if(!focusedHere)return E_ABORT;
@@ -514,14 +542,23 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     void reviewVoice(std::string text){
         // Recognition completion never silently chooses a new insertion position.
         auto value=wide(text);if(text.empty()||value.size()>wangshu::voice_position::MaxUnits||!wangshu::voice_position::textValid(value)){stopVoice();status=L"没有可安全核对的有界语音文字";update();return;}
-        HRESULT position=checkVoiceRead();auto bound=voicePosition;ITfContext* target=voiceTarget;if(target)target->AddRef();stopVoice();
+        const auto generation=voiceGeneration;auto bound=voicePosition;ITfContext* target=voiceTarget;if(target)target->AddRef();
+        if(!target||!bound){drop(target);return;}
+        HRESULT position=checkVoiceRead();
+        if(generation!=voiceGeneration||target!=voiceTarget||bound!=voicePosition){
+            // Only a single preserving stop may retain this result; a replacement
+            // session or a later explicit cancellation owns the current state.
+            bool retain=position!=E_ACCESSDENIED&&voiceGeneration==generation+1&&voiceLastStopPreserved&&!voiceTarget&&!voicePosition&&!listening&&voiceReview.empty()&&voiceRecovery.empty();
+            drop(target);if(retain){voiceRecovery=std::move(text);status=L"语音位置已变化，结果暂存内存；Ctrl+Shift+V 重新定位后再确认";update();}return;
+        }
+        stopVoice();
         if(position==E_ACCESSDENIED){voiceRecovery.clear();status=L"隐私输入框已取消语音";}
         else if(FAILED(position)){voiceRecovery=std::move(text);status=L"语音位置已变化，结果暂存内存；Ctrl+Shift+V 重新定位后再确认";}
         else{voiceTarget=target;target=nullptr;voicePosition=std::move(bound);voiceReview=std::move(text);status=L"请核对：Enter/空格插入 · Esc取消";SetTimer(popup,VoiceTimer,250,nullptr);}
         drop(target);update();
     }
     void retainVoice(){stopVoice(true);status=L"语音位置已变化，结果暂存内存；Ctrl+Shift+V 重新定位后再确认";}
-    void stopVoice(bool preserve=false){if(preserve&&!voiceReview.empty())voiceRecovery=std::move(voiceReview);voiceReview.clear();voicePosition.reset();++voiceGeneration;localVoice.cancel();if(popup)KillTimer(popup,VoiceTimer);listening=false;if(grammar)grammar->SetDictationState(SPRS_INACTIVE);if(recognizer)recognizer->SetRecoState(SPRST_INACTIVE_WITH_PURGE);drop(grammar);drop(recoContext);drop(recognizer);drop(voiceTarget);}
+    void stopVoice(bool preserve=false){voiceLastStopPreserved=preserve;if(preserve&&!voiceReview.empty())voiceRecovery=std::move(voiceReview);voiceReview.clear();voicePosition.reset();++voiceGeneration;localVoice.cancel();if(popup)KillTimer(popup,VoiceTimer);listening=false;if(grammar)grammar->SetDictationState(SPRS_INACTIVE);if(recognizer)recognizer->SetRecoState(SPRST_INACTIVE_WITH_PURGE);drop(grammar);drop(recoContext);drop(recognizer);drop(voiceTarget);}
     void startVoice(ITfContext* c){
         if(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_COMLESS|TF_TMAE_CONSOLE|TF_TMAE_UIELEMENTENABLEDONLY)){stopVoice();status=L"当前 Windows 输入上下文仅启用键盘文字，未启动麦克风";update();return;}
         if(localVoice.active()){localVoice.finish();status=L"本地识别中，完成后请核对文字";update();return;}
@@ -555,20 +592,38 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         else{listening=true;status=L"Ctrl+Shift+V 停止；切换输入框自动停止";SetTimer(popup,VoiceTimer,250,nullptr);}
         update();
     }
-    void pollVoice() noexcept{try{
+    void pollVoice() noexcept{const auto generation=voiceGeneration;try{
         if(!listening&&!localVoice.active()&&voiceReview.empty())return;
         ITfContext* c=focused();bool valid=c&&c==voiceTarget&&!disabled(c);
-        bool sensitive=false;if(valid){auto guard=new(std::nothrow)VoiceGuard(c);HRESULT allowed=E_FAIL;HRESULT h=guard?c->RequestEditSession(client,guard,TF_ES_SYNC|TF_ES_READ,&allowed):E_OUTOFMEMORY;if(guard)guard->Release();sensitive=allowed==E_ACCESSDENIED;valid=SUCCEEDED(h)&&SUCCEEDED(allowed);}drop(c);if(!valid){if(sensitive){stopVoice();voiceRecovery.clear();status.clear();}else retainVoice();update();return;}
+        if(generation!=voiceGeneration){drop(c);return;}
+        bool sensitive=false;if(valid){auto guard=new(std::nothrow)VoiceGuard(c);HRESULT allowed=E_FAIL;HRESULT h=guard?c->RequestEditSession(client,guard,TF_ES_SYNC|TF_ES_READ,&allowed):E_OUTOFMEMORY;if(guard)guard->Release();sensitive=allowed==E_ACCESSDENIED;valid=SUCCEEDED(h)&&SUCCEEDED(allowed);}drop(c);if(generation!=voiceGeneration)return;if(!valid){if(sensitive){stopVoice();voiceRecovery.clear();status.clear();}else retainVoice();update();return;}
         if(!localVoice.active())return;
-        localVoice.poll();
+        localVoice.poll();if(generation!=voiceGeneration)return;
         if(localVoice.state==VoiceProcess::Recording){status=L"本地聆听 · Ctrl+Shift+V 完成（最长30秒）";update();}
         else if(localVoice.state==VoiceProcess::Complete){std::string text=localVoice.text;if(math)text=dictionary().voiceMath(text);reviewVoice(std::move(text));}
         else if(localVoice.state==VoiceProcess::Failed){stopVoice();status=L"本地语音未完成，请检查语音包和麦克风；未转云";update();}
-    }catch(...){stopVoice();status=L"本地语音未完成；键盘仍可用";update();}}
-    void voiceEvents(){if(!recoContext||!listening)return;SPEVENT event{};ULONG n=0;while(recoContext&&SUCCEEDED(recoContext->GetEvents(1,&event,&n))&&n){
-        if(event.eEventId==SPEI_RECOGNITION&&event.elParamType==SPET_LPARAM_IS_OBJECT&&event.lParam){auto result=reinterpret_cast<ISpRecoResult*>(event.lParam);wchar_t* value=nullptr;if(SUCCEEDED(result->GetText(SP_GETWHOLEPHRASE,SP_GETWHOLEPHRASE,TRUE,&value,nullptr))&&value){ITfContext* current=focused();if(current&&current==voiceTarget&&!disabled(current)){auto text=narrow(value);if(math)text=dictionary().voiceMath(text);reviewVoice(std::move(text));}drop(current);CoTaskMemFree(value);}}
-        if(event.elParamType==SPET_LPARAM_IS_OBJECT&&event.lParam)reinterpret_cast<IUnknown*>(event.lParam)->Release();else if((event.elParamType==SPET_LPARAM_IS_POINTER||event.elParamType==SPET_LPARAM_IS_STRING)&&event.lParam)CoTaskMemFree(reinterpret_cast<void*>(event.lParam));event={};n=0;
-    }}
+    }catch(...){if(generation==voiceGeneration){stopVoice();status=L"本地语音未完成；键盘仍可用";update();}}}
+    void voiceEvents(){
+        if(!recoContext||!listening)return;
+        const auto generation=voiceGeneration;auto source=recoContext;source->AddRef();
+        struct SourceHold{ISpRecoContext* p;~SourceHold(){p->Release();}} sourceHold{source};
+        auto currentSession=[&]{return generation==voiceGeneration&&source==recoContext&&listening;};
+        struct EventHold{SPEVENT event{};~EventHold(){if(event.elParamType==SPET_LPARAM_IS_OBJECT&&event.lParam)reinterpret_cast<IUnknown*>(event.lParam)->Release();else if((event.elParamType==SPET_LPARAM_IS_POINTER||event.elParamType==SPET_LPARAM_IS_STRING)&&event.lParam)CoTaskMemFree(reinterpret_cast<void*>(event.lParam));}};
+        while(currentSession()){
+            EventHold owned;auto& event=owned.event;ULONG n=0;
+            HRESULT h=source->GetEvents(1,&event,&n);if(FAILED(h)||!n)break;
+            if(!currentSession())break;
+            if(event.eEventId==SPEI_RECOGNITION&&event.elParamType==SPET_LPARAM_IS_OBJECT&&event.lParam){
+                auto result=reinterpret_cast<ISpRecoResult*>(event.lParam);wchar_t* value=nullptr;
+                h=result->GetText(SP_GETWHOLEPHRASE,SP_GETWHOLEPHRASE,TRUE,&value,nullptr);
+                std::unique_ptr<wchar_t,decltype(&CoTaskMemFree)> textValue(value,&CoTaskMemFree);
+                if(SUCCEEDED(h)&&value&&currentSession()){
+                    ITfContext* current=focused();bool valid=current&&current==voiceTarget&&!disabled(current);drop(current);
+                    if(valid&&currentSession()){auto text=narrow(value);if(math)text=dictionary().voiceMath(text);if(currentSession())reviewVoice(std::move(text));}
+                }
+            }
+        }
+    }
 public:
     TextService(){InterlockedIncrement(&objectCount);}
     ~TextService(){Deactivate();InterlockedDecrement(&objectCount);}
@@ -625,27 +680,31 @@ public:
     }
     HRESULT STDMETHODCALLTYPE OnSetFocus(BOOL foreground) override{if(!foreground)focusLost();return S_OK;}
     HRESULT STDMETHODCALLTYPE OnTestKeyDown(ITfContext* c,WPARAM k,LPARAM,BOOL* eat) override{if(!eat)return E_POINTER;bool hadCalculation=!calculation.empty();clearCalculation();if(hadCalculation){status.clear();update();}invalidatePending();if((listening||!voiceReview.empty())&&!(ctrl()&&shift()&&k=='V')&&(voiceReview.empty()||(k!=VK_RETURN&&k!=VK_SPACE&&k!=VK_ESCAPE))){stopVoice(true);status.clear();update();}*eat=eats(c,k);return S_OK;}
-    HRESULT STDMETHODCALLTYPE OnTestKeyUp(ITfContext* c,WPARAM key,LPARAM,BOOL* eat) override{if(!eat)return E_POINTER;*eat=FALSE;if(math&&(character(key)=='='||key==VK_LEFT||key==VK_RIGHT||key==VK_HOME||key==VK_END||key==VK_BACK||key==VK_DELETE))requestCalculation(c);return S_OK;}
+    HRESULT STDMETHODCALLTYPE OnTestKeyUp(ITfContext* c,WPARAM key,LPARAM,BOOL* eat) override{if(!eat)return E_POINTER;*eat=FALSE;if(!ctrl()&&!(GetKeyState(VK_MENU)&0x8000)&&(character(key)||key==VK_SPACE||key==VK_RETURN||key==VK_LEFT||key==VK_RIGHT||key==VK_HOME||key==VK_END||key==VK_BACK||key==VK_DELETE))requestCalculation(c);return S_OK;}
     HRESULT STDMETHODCALLTYPE OnKeyUp(ITfContext*,WPARAM,LPARAM,BOOL* eat) override{if(!eat)return E_POINTER;*eat=FALSE;return S_OK;}
     HRESULT STDMETHODCALLTYPE OnPreservedKey(ITfContext*,REFGUID,BOOL* eat) override{if(!eat)return E_POINTER;*eat=FALSE;return S_OK;}
     HRESULT keyDownImpl(ITfContext* c,WPARAM k,LPARAM,BOOL* eat){
         if(!eat)return E_POINTER;
         if(!calculation.empty()){clearCalculation();status.clear();update();}
         invalidatePending();*eat=eats(c,k);if(!*eat)return S_OK;
-        if(ctrl()&&shift()&&k=='V'){if(!buffer.empty()&&!(candidates.empty()?commit(c,buffer):selectCandidate(c,0)))return S_OK;startVoice(c);return S_OK;}
+        if(ctrl()&&shift()&&k=='V'){if(!buffer.empty()&&!(candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,0)))return S_OK;startVoice(c);return S_OK;}
         if(!voiceReview.empty()){if(k==VK_RETURN||k==VK_SPACE){std::string value=voiceReview;commit(c,value);*eat=TRUE;return S_OK;}if(k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}stopVoice(true);}
         if(listening)stopVoice();
         if(ctrl()&&shift()&&k=='M'){math=!math;status=math?L"数学模式 · \\alpha 符号 · 算式 = 后点选精确结果":L"";update();return S_OK;}
-        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,buffer))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
+        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
         if(k==VK_NEXT||k==VK_PRIOR){if(k==VK_PRIOR&&page)page--;if(k==VK_NEXT&&!personalLookup(buffer,page+1).empty())page++;update();return S_OK;}
-        if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty()){buffer.push_back(static_cast<char>(k));page=0;*eat=SUCCEEDED(request(c,wide(buffer),false));if(!*eat)buffer.pop_back();update();return S_OK;}
+        char mixedKey=character(k);
+        if((buffer.empty()||buffer[0]!='\\')&&(mixedKey=='`'||(wangshu::mixed::active(buffer)&&mixedKey>=32&&mixedKey<=126))){
+            if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(mixedKey);page=0;status=L"中英分段：反引号切换原文英段；关闭英段后空格确认，Enter原文";if(mixedKey=='`'){update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;
+        }
+        if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty()){buffer.push_back(static_cast<char>(k));page=0;*eat=SUCCEEDED(request(c,wide(wangshu::mixed::raw(buffer)),false));if(!*eat)buffer.pop_back();update();return S_OK;}
         if(!buffer.empty()&&k>='1'&&k<='9'){size_t n=static_cast<size_t>(k-'1');if(n<candidates.size())*eat=selectCandidate(c,n);return S_OK;}
-        if(k==VK_SPACE||k==VK_RETURN){*eat=k==VK_RETURN||candidates.empty()?commit(c,buffer):selectCandidate(c,uiCandidates?uiCandidates->selection():0);return S_OK;}
+        if(k==VK_SPACE||k==VK_RETURN){*eat=k==VK_RETURN||candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,uiCandidates?uiCandidates->selection():0);return S_OK;}
         if(k==VK_ESCAPE){*eat=commit(c,"");return S_OK;}
-        if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;HRESULT h=request(c,wide(buffer),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
+        if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;if(wangshu::mixed::raw(previous)==wangshu::mixed::raw(buffer)){*eat=TRUE;update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
         char a=character(k);std::string punctuation=dictionary().punctuation(a,true);
-        if(a&&std::strchr(",.?!;:",a)){if(!buffer.empty()&&!candidates.empty())*eat=selectCandidate(c,0,false,punctuation);else *eat=commit(c,buffer+punctuation);return S_OK;}
-        if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(a);page=0;status.clear();HRESULT h=request(c,wide(buffer),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;
+        if(a&&std::strchr(",.?!;:",a)){if(!buffer.empty()&&!candidates.empty())*eat=selectCandidate(c,0,false,punctuation);else *eat=commit(c,wangshu::mixed::raw(buffer)+punctuation);return S_OK;}
+        if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(a);page=0;status.clear();HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;
     }
     HRESULT STDMETHODCALLTYPE OnKeyDown(ITfContext* c,WPARAM k,LPARAM l,BOOL* eat) override{try{return keyDownImpl(c,k,l,eat);}catch(const std::bad_alloc&){if(eat)*eat=FALSE;return E_OUTOFMEMORY;}catch(...){if(eat)*eat=FALSE;return E_FAIL;}}
     HRESULT STDMETHODCALLTYPE OnInitDocumentMgr(ITfDocumentMgr*) override{return S_OK;}

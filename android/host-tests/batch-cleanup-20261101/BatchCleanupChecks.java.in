@@ -1,0 +1,145 @@
+package org.wangshu.ime;
+
+/** Fake local connections with separate text and batch counters. Not Android IPC. */
+public final class BatchCleanupChecks {
+    enum Fault { NONE, BEGIN_SWITCH, BEGIN_PRIVATE, BEGIN_QUERY_THROW,
+        SELECT_SWITCH, SELECT_THROW, SELECT_THROW_SWITCH, COMMIT_SWITCH,
+        COMMIT_PRIVATE, COMMIT_QUERY_THROW, COMMIT_THROW, END_SWITCH,
+        END_QUERY_THROW, END_FALSE, END_THROW, END_REENTER, BEGIN_FALSE }
+    int inputSession = 1;
+    boolean priv, queryThrows, nestedRejected;
+    final InputConnection original = new InputConnection();
+    final InputConnection replacement = new InputConnection();
+    InputConnection current = original;
+    Fault fault;
+    SplitSelection selection;
+    BatchCleanupChecks(Fault f) { fault = f; }
+    boolean privateInput() { return priv; }
+    InputConnection getCurrentInputConnection() {
+        if (queryThrows) throw new IllegalStateException("synthetic owner query");
+        return current;
+    }
+    void switchOwner() { inputSession++; current = replacement; }
+    final class InputConnection {
+        String text = "ROOT";
+        int start = 4, end = 4, begins, ends, commits, selections, depth;
+        boolean beginBatchEdit() {
+            begins++;
+            if (fault == Fault.BEGIN_FALSE) return false;
+            depth++;
+            if (fault == Fault.BEGIN_SWITCH) switchOwner();
+            if (fault == Fault.BEGIN_PRIVATE) priv = true;
+            if (fault == Fault.BEGIN_QUERY_THROW) queryThrows = true;
+            return true;
+        }
+        boolean setSelection(int s, int e) {
+            selections++; start = s; end = e;
+            if (selections == 1) {
+                if (fault == Fault.SELECT_SWITCH || fault == Fault.SELECT_THROW_SWITCH) switchOwner();
+                if (fault == Fault.SELECT_THROW || fault == Fault.SELECT_THROW_SWITCH)
+                    throw new IllegalStateException("synthetic selection");
+            }
+            return true;
+        }
+        boolean commitText(String value, int cursor) {
+            commits++;
+            text = text.substring(0, start) + value + text.substring(end);
+            start = end = start + value.length();
+            if (fault == Fault.COMMIT_SWITCH) switchOwner();
+            if (fault == Fault.COMMIT_PRIVATE) priv = true;
+            if (fault == Fault.COMMIT_QUERY_THROW) queryThrows = true;
+            if (fault == Fault.COMMIT_THROW) throw new IllegalStateException("synthetic applied commit");
+            return true;
+        }
+        boolean endBatchEdit() {
+            ends++; depth--;
+            if (fault == Fault.END_SWITCH) switchOwner();
+            if (fault == Fault.END_QUERY_THROW) queryThrows = true;
+            if (fault == Fault.END_REENTER) nestedRejected = !selection.toggle(9, "nested");
+            if (fault == Fault.END_THROW) throw new IllegalStateException("synthetic end outcome unknown");
+            return fault != Fault.END_FALSE;
+        }
+    }
+    SplitSelection.Snapshot snapshotFrom(InputConnection c) {
+        return c == null || priv ? null : new SplitSelection.Snapshot(c.text, c.start, c.end);
+    }
+    /* ACTUAL_OWNER_METHODS */
+    SplitSelection make() {
+        final Object owner = splitOwner();
+        return new SplitSelection(new SplitSelection.Editor() {
+            public boolean current() { return splitCurrent(owner); }
+            public SplitSelection.Snapshot read() { return snapshotSplit(owner); }
+            public boolean replace(int s, int e, String v, int after) { return replaceSplit(owner, s, e, v, after); }
+        });
+    }
+    static int cases, assertions, failed;
+    interface Test { void run(); }
+    static void check(boolean value, String message) {
+        assertions++;
+        if (!value) throw new AssertionError(message);
+    }
+    static void run(String name, Test body) {
+        cases++;
+        try { body.run(); System.out.println("PASS " + name); }
+        catch (Throwable t) { failed++; System.out.println("FAIL " + name + " :: " + t); }
+    }
+    void untouchedReplacement() {
+        check(replacement.begins == 0 && replacement.ends == 0 && replacement.commits == 0 && replacement.selections == 0,
+              "no edit or cleanup on replacement connection");
+        check(replacement.text.equals("ROOT"), "replacement text intact");
+    }
+    void uncertain(int expectedCommits) {
+        selection = make();
+        check(!selection.toggle(1, "x"), "uncertain result is not confirmed");
+        check(original.begins == 1 && original.ends == 1, "one successful begin must get one original-connection end attempt");
+        check(original.depth == 0, "fake host depth balanced");
+        check(original.commits == expectedCommits, "no extra commit");
+        check(original.text.equals(expectedCommits == 0 ? "ROOT" : "ROOTx"), "already applied text retained, no rollback");
+        untouchedReplacement();
+        int beforeBegins = original.begins, beforeEnds = original.ends;
+        check(!selection.ready() && !selection.selected(1) && selection.selectedText().isEmpty(), "uncertain selection frozen");
+        check(!selection.toggle(1, "x") && original.commits == expectedCommits && original.begins == beforeBegins && original.ends == beforeEnds,
+              "frozen selection neither retries edit nor repeats cleanup");
+    }
+    public static void main(String[] args) {
+        run("normal insert and withdrawal pair batches", () -> {
+            BatchCleanupChecks h = new BatchCleanupChecks(Fault.NONE); h.selection = h.make();
+            check(h.selection.toggle(1, "x") && h.original.text.equals("ROOTx"), "insert observed");
+            check(h.selection.toggle(1, "x") && h.original.text.equals("ROOT"), "withdraw observed");
+            check(h.original.begins == 2 && h.original.ends == 2 && h.original.depth == 0 && h.original.commits == 2, "two independent pairs");
+            h.untouchedReplacement();
+        });
+        for (Fault f : new Fault[]{Fault.BEGIN_SWITCH, Fault.BEGIN_PRIVATE, Fault.BEGIN_QUERY_THROW,
+                Fault.SELECT_SWITCH, Fault.SELECT_THROW, Fault.SELECT_THROW_SWITCH})
+            run(f.name(), () -> new BatchCleanupChecks(f).uncertain(0));
+        for (Fault f : new Fault[]{Fault.COMMIT_SWITCH, Fault.COMMIT_PRIVATE, Fault.COMMIT_QUERY_THROW,
+                Fault.COMMIT_THROW, Fault.END_SWITCH, Fault.END_QUERY_THROW, Fault.END_FALSE, Fault.END_THROW})
+            run(f.name(), () -> new BatchCleanupChecks(f).uncertain(1));
+        run("rejected begin does not edit", () -> {
+            BatchCleanupChecks h = new BatchCleanupChecks(Fault.BEGIN_FALSE); h.selection = h.make();
+            check(!h.selection.toggle(1, "x"), "begin rejection is unconfirmed");
+            check(h.original.begins == 1 && h.original.ends == 0 && h.original.commits == 0, "no successful batch to finish");
+            h.untouchedReplacement();
+        });
+        run("nested call from cleanup stays busy", () -> {
+            BatchCleanupChecks h = new BatchCleanupChecks(Fault.END_REENTER); h.selection = h.make();
+            check(h.selection.toggle(1, "x") && h.nestedRejected, "nested busy does not poison outer observation");
+            check(h.original.begins == 1 && h.original.ends == 1 && h.original.commits == 1 && h.original.depth == 0, "one pair and one write");
+            h.untouchedReplacement();
+        });
+        run("pre-existing batch nesting preserved", () -> {
+            BatchCleanupChecks h = new BatchCleanupChecks(Fault.NONE); h.original.depth = 1; h.selection = h.make();
+            check(h.selection.toggle(1, "x"), "own batch accepted");
+            check(h.original.begins == 1 && h.original.ends == 1 && h.original.depth == 1, "close only own batch, not foreign outer batch");
+            h.untouchedReplacement();
+        });
+        run("unavailable owner never begins", () -> {
+            BatchCleanupChecks h = new BatchCleanupChecks(Fault.NONE); h.queryThrows = true; h.selection = h.make();
+            check(!h.selection.toggle(1, "x"), "owner unavailable");
+            check(h.original.begins == 0 && h.original.ends == 0 && h.original.commits == 0, "no host mutation");
+            h.untouchedReplacement();
+        });
+        System.out.println("RESULT cases=" + cases + " assertions=" + assertions + " failed_cases=" + failed + "; synthetic host, Android NOT_RUN");
+        if (failed != 0) System.exit(1);
+    }
+}

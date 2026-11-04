@@ -8,13 +8,31 @@ android {
         applicationId 'org.wangshu.ime'
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.1.0-beta.1'
         testInstrumentationRunner 'org.wangshu.ime.ImeInstrumentation'
         ndk { abiFilters 'arm64-v8a','armeabi-v7a','x86','x86_64' }
         externalNativeBuild { cmake { arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
     }
-    sourceSets { main { assets.srcDirs=[rootProject.file('../data')] } }
+    buildFeatures { buildConfig true }
+    flavorDimensions += 'capability'
+    productFlavors {
+        full { dimension 'capability'; buildConfigField 'boolean', 'BASIC_TYPING_PREVIEW', 'false' }
+        typingPreview {
+            dimension 'capability'
+            applicationIdSuffix '.typingpreview'
+            versionNameSuffix '-basic-typing-preview'
+            buildConfigField 'boolean', 'BASIC_TYPING_PREVIEW', 'true'
+        }
+    }
+    sourceSets {
+        main {
+            assets.srcDirs=[rootProject.file('../data')]
+            java.exclude 'org/wangshu/ime/OfflineVoice.java'
+        }
+        // Keep the production implementation at its original path, byte-for-byte.
+        full { java { srcDirs=['src/main/java']; include 'org/wangshu/ime/OfflineVoice.java' } }
+    }
     externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt';version '3.22.1' } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17;targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { debug { debuggable true;jniDebuggable false } }
@@ -23,6 +41,15 @@ android {
 }
 
 dependencies {
-    implementation files('libs/sherpa-onnx-asr-only-1.13.6.aar')
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+    fullImplementation files('libs/sherpa-onnx-asr-only-1.13.6.aar')
+    fullImplementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.21'
+}
+
+// Optional existing compiler override for restricted build hosts. No Windows-only path.
+tasks.withType(JavaCompile).configureEach {
+    def compilerOverride = System.getenv('WANGSHU_JAVAC')
+    if (compilerOverride) {
+        options.fork = true
+        options.forkOptions.executable = compilerOverride
+    }
 }

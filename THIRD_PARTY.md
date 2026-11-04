@@ -8,3 +8,7 @@
 - `third_party/sherpa/c-api.h` 来源于 [sherpa-onnx 1.13.6](https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.6)，Apache-2.0，附带上游许可。ONNX Runtime 使用 MIT；其及其他传递依赖的 notices 在 `data/` 中，具体来源见 `docs/speech-dependencies.json`。
 - 双语 Zipformer 语音模型、上游通用 AAR 与项目定制 ASR AAR不在此仓库。[模型发布方](https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20)声明 Apache-2.0；文件与哈希记录在 `docs/voice-model-source.json`。实际模型、其上游数据和 AAR 的完整分发范围仍需逐项核实。
 - Kotlin、NDK、MinGW、GCC 运行时和其他第三方依赖须按实际构建版本分别保留其许可与 notices；某项第三方许可并不自动成为整个项目代码的许可。
+
+- 本地预测的 115 条例句为项目原创合成材料，CC0-1.0；来源与边界见 `data/LOCAL-PREDICTIONS-SOURCE.json`，不是用户输入或训练语料。
+- 本次公开首页与原创图片的归属见 `docs/public/ATTRIBUTIONS.md`。
+

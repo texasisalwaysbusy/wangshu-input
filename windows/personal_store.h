@@ -23,6 +23,7 @@ struct LearningData {
     static constexpr unsigned MaxCount=255;
     static constexpr unsigned long long DecayMillis=30ULL*24*60*60*1000;
     bool enabled=false;
+    bool phraseAssociations=false; // Explicit opt-in; v1 migration defaults off.
     std::vector<LearnedCandidate> entries;
     static LearningData parse(const std::string& bytes);
     std::string serialize()const;

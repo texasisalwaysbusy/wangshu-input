@@ -1,0 +1,27 @@
+package org.wangshu.ime;
+import android.view.*;import android.view.inputmethod.*;import android.text.InputType;import java.util.*;
+class BaseService {public void onStartInput(EditorInfo e,boolean r){}public void onFinishInput(){}public void onWindowHidden(){}public void onUpdateSelection(int a,int b,int c,int d,int e,int f){}}
+final class WangshuIme extends BaseService {
+ SplitSelection.Snapshot preeditSnapshot;InputConnection preeditConnection;int preeditSession,preeditStart=-1,preeditEnd=-1;boolean localCommitInFlight,pendingCommitInFlight,candidateChoiceInFlight,inputEntryInFlight;final StringBuilder buffer=new StringBuilder();int inputSession,page;long shownGeneration,emojiSelectionRevision;boolean compositionWriteWarned,editing,phrasesOpen,password,numbers,math,suppressClipboardUntilChange;
+ String[] current={};InputConnection connection;Runnable connectionHook;InputConnection getCurrentInputConnection(){InputConnection saved=connection;if(connectionHook!=null){Runnable r=connectionHook;connectionHook=null;r.run();}return saved;}
+ final EditorActions editorActions=new EditorActions(this);BeforeCaretEditor beforeCaret;BeforeCaretEditor.Preview prefixPreview;BackspaceGesture backspaceGesture;
+ static final class Handler {final List<Runnable> pending=new ArrayList<>();void postDelayed(Runnable r,long d){pending.add(r);}void removeCallbacks(Runnable r){pending.remove(r);}void removeCallbacksAndMessages(Object o){pending.clear();}void tick(){if(!pending.isEmpty())pending.remove(0).run();}}
+ final Handler keyHandler=new Handler();static class Association {void clear(){}void request(){}}Association mathAssociation,phraseAssociation;
+ static class Panel{void resetSplit(){}}Panel personalPanel;static class Memory{void reset(int n){}}final Memory emojiScrollMemory=new Memory();static class Voice{void bindInputSession(int n){}void clearInputSession(){}}Voice voiceHold;
+ static class HeldVoice{SplitSelection.Snapshot before;boolean contextChanged;}HeldVoice heldVoice;static class LearningStore{static void cancelPendingAutomatic(){}}
+ void stopClipboard(){}void syncClipboard(){}boolean voiceWork;Runnable voiceCancelHook;void cancelVoice(){voiceWork=false;if(voiceCancelHook!=null){Runnable r=voiceCancelHook;voiceCancelHook=null;r.run();}}boolean hasVoiceWork(){return voiceWork;}boolean privateInput(){return password;}void rebuild(){refresh();}void refresh(){shownGeneration++;shownInput=buffer.toString();shownSession=inputSession;shownModes=candidateModes();shownPage=page;shownDictionaryReady=DataFiles.ready;current=noCandidates?new String[0]:new String[]{"你","fixture"};}void refreshAfterCandidate(boolean b){refresh();}void toast(String s){}void showDeleteHint(boolean b){}boolean emojiPanelActive(){return false;}int candidateModes(){return english?1:0;}int dp(int x){return x;}
+ WangshuIme(InputConnection c){connection=c;createBackspace();onStartInput(new EditorInfo(),false);}
+ void appendPending(String s){buffer.append(s);updateEntryComposition(new TextWrite(this));}
+ boolean fullSnapshot(){return snapshotFrom(connection)!=null;}
+ boolean english,shownDictionaryReady=true,noCandidates,shownFuzzy;int shownSession,shownModes,shownPage;long shownRevision,shownLearningRevision;Set<FuzzyPinyin.Pair> shownRules=new HashSet<>();String shownInput="";TextWrite inputEntry;
+ static final class DataFiles{static boolean ready=true;}static final class NativeBridge{static String punctuation(char c,boolean chinese){return chinese&&c==','?"，":String.valueOf(c);}}
+ static final class Prefs {boolean getBoolean(String k,boolean d){return d;}}Prefs getSharedPreferences(String n,int m){return new Prefs();}EditorInfo getCurrentInputEditorInfo(){return new EditorInfo();}
+ // Dictionary/candidate display is a deterministic synthetic boundary. The actual
+ // key/space/enter/punctuation, TextWrite and commitCandidate bodies run below.
+ boolean chooseBoundFromEntry(int i,long g,TextWrite origin){if(!candidatesReady())return false;CandidateClick click=new CandidateClick(this,g,origin);boolean accepted=commitCandidate(click,noCandidates?MixedComposition.raw(click.raw):"你");refreshAfterCandidate(accepted);return accepted;}
+ boolean chooseBound(int i,long g){return chooseBoundFromEntry(i,g,null);}
+ void textWriteWarning(PendingTextCommit.Result result){}void type(String text){for(char c:text.toCharArray())key(String.valueOf(c));}void confirmSpace(){space();}void confirmEnter(){enter(false);}void confirmCandidate(){choose(0);}void staleCandidate(long generation){chooseBound(0,generation);}void typePunctuation(char c){punctuation(c);}boolean confirmRaw(){return finishRaw();}boolean escape(){return commitPending("");}
+ // Reflection lets the unchanged baseline compile while reporting its missing local command entry.
+ void commandButton(){try{getClass().getDeclaredMethod("startLocalCommand").invoke(this);}catch(ReflectiveOperationException e){throw new IllegalStateException(e);}}
+PRODUCTION_METHODS
+}

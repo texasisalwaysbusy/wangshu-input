@@ -14,8 +14,9 @@ final class VoiceModels {
     static final long[] SIZES={181895032L,13876452L,3228404L,56317L};
     static final String[] HASHES={"8fa764187a261844f859d7143ebaa563af5d10adfece4c18a8f414c88cba2a9b","2e3b5ec371f8899ee6acd829fd753ba45772df57a91bdf37cde3136354e7db7d","1ed689c5ed19dbaa725d9d191bb4822b5f4855a39e1ffd28cbc1f340d25b2ee0","a8e0e4ec53810e433789b54a5c0134a7eaa2ffca595a6334d54c00da858841d3"};
     static File folder(Context c){return new File(c.getFilesDir(),"voice/"+VERSION);}
-    static boolean available(Context c){File f=folder(c);if(!new File(f,"verified").isFile())return false;for(int i=0;i<NAMES.length;i++)if(new File(f,NAMES[i]).length()!=SIZES[i])return false;return true;}
+    static boolean available(Context c){if(BuildConfig.BASIC_TYPING_PREVIEW)return false;File f=folder(c);if(!new File(f,"verified").isFile())return false;for(int i=0;i<NAMES.length;i++)if(new File(f,NAMES[i]).length()!=SIZES[i])return false;return true;}
     static synchronized void install(Context c,InputStream input)throws Exception{
+        if(BuildConfig.BASIC_TYPING_PREVIEW)throw new UnsupportedOperationException(PreviewFeatures.VOICE_UNAVAILABLE);
         File target=folder(c);
         File parent=target.getParentFile();if(!parent.isDirectory()&&!parent.mkdirs())throw new IOException("无法创建语音目录");
         File temp=new File(parent,"import-"+UUID.randomUUID()+".part");if(!temp.mkdir())throw new IOException("无法准备语音包");

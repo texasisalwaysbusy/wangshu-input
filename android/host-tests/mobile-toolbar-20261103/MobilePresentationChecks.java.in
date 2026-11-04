@@ -1,0 +1,196 @@
+package org.wangshu.ime;
+
+import java.util.*;
+
+/** Production bodies/fragments are inserted by run.py; Android views are fakes. */
+public final class MobilePresentationChecks {
+    static class Node {
+        final List<Node> children=new ArrayList<>();
+        String text="",description="",tooltip="",skin="";
+        boolean enabled=true;int options=-1,minWidth,minimumWidth;
+        Runnable click=()->{},longClick=()->{};Object params;
+        void addView(Node n){children.add(n);}void addView(Node n,Object p){n.params=p;children.add(n);}
+        void removeAllViews(){children.clear();}
+        void setText(String x){text=x;}void setAllCaps(boolean x){}void setTextSize(int x){}
+        void setMaxLines(int x){}void setHorizontallyScrolling(boolean x){}
+        void setAutoSizeTextTypeUniformWithConfiguration(int a,int b,int c,int d){}
+        void setAutoSizeTextTypeWithDefaults(int x){}void setTextColor(int x){}
+        void setMinWidth(int x){minWidth=x;}void setMinimumWidth(int x){minimumWidth=x;}
+        void setPadding(int a,int b,int c,int d){}
+        void setContentDescription(String x){description=x;}void setTooltipText(String x){tooltip=x;}
+        void setEnabled(boolean x){enabled=x;}
+        interface Listener{void run(Node node);}
+        void setOnClickListener(Listener listener){click=()->listener.run(this);}
+        interface LongListener{boolean run(Node node);}
+        void setOnLongClickListener(LongListener listener){longClick=()->listener.run(this);}
+        void press(){if(enabled)click.run();}
+    }
+    static class Button extends Node {Button(Object ignored){}}
+    static class GlyphKey extends Button {GlyphKey(Object ignored){super(ignored);}}
+    static class ImageButton extends Button {ToolbarIcon.Kind icon;ImageButton(Object ignored){super(ignored);}}
+    static class TextView {static final int AUTO_SIZE_TEXT_TYPE_NONE=0;}
+    static class LinearLayout extends Node {
+        static class LayoutParams {int width,height;float weight;
+            LayoutParams(int w,int h){width=w;height=h;}LayoutParams(int w,int h,float x){this(w,h);weight=x;}}
+    }
+    static class ScrollView extends Node {ScrollView(Object ignored){}}
+    static class Space extends Node {Space(Object ignored){}}
+    static class ToolbarIcon {/*EXTRACT_ICON_ENUM*/}
+    static class KeyboardSkin {
+        static void key(Object ignored,Node b,boolean selected){b.skin="key";}
+        static void function(Object ignored,Node b,boolean selected){b.skin="function";}
+    }
+    static class android {static class util {static class TypedValue {static final int COMPLEX_UNIT_SP=2;}}}
+    static class R {static class color {static final int ink=0;}}
+    static class BuildConfig {static boolean BASIC_TYPING_PREVIEW;}
+    static class PreviewFeatures {static final String VOICE_UNAVAILABLE="preview voice unavailable";}
+    static class SettingsActivity {}
+    static class Intent {static final int FLAG_ACTIVITY_NEW_TASK=0x10000000;Class<?> target;int flags;
+        Intent(Object ignored,Class<?> type){target=type;}Intent addFlags(int x){flags|=x;return this;}}
+    static class Surface {Button space;void spaceKey(Button b){space=b;}}
+    static class Before {void invalidate(){}}
+    static class PersonalPanel {void open(){}}
+    static class DataFiles {static boolean ready=true;}
+    boolean math,numbers,english,password,phrasesOpen,editing,isCompact,finish=true,currentPageFuzzy;
+    int inputSession;long emojiViewGeneration;Object inputOwner=new Object();Object getCurrentInputConnection(){return inputOwner;}
+    int position,page,chosen=-1,longPressed=-1,rebuilds,refreshes,voiceStarts,hides;
+    Object offlineTask,recognizer;Intent launched;
+    LinearLayout root=new LinearLayout(),keys=new LinearLayout(),candidates=new LinearLayout(),toolbar;
+    ImageButton voiceButton,hideButton;Surface inputSurface=new Surface();Before beforeCaret=new Before();
+    PersonalPanel personalPanel=new PersonalPanel();StringBuilder buffer=new StringBuilder("test");
+    String[] current=new String[0];String[][] pages={new String[0]};
+    class Pref {int getInt(String key,int fallback){return position;}}
+    Pref getSharedPreferences(String name,int mode){return new Pref();}
+    int dp(int n){return n;}boolean compact(){return isCompact;}int keyHeight(){return isCompact?36:48;}
+    int candidateTextSizeSp(){return isCompact?18:20;}int getColor(int color){return color;}
+    LinearLayout row(){return new LinearLayout();}LinearLayout column(){return new LinearLayout();}
+    void cancelBackspace(){}void cancelHoldForOtherInput(){}boolean finishRaw(){return finish;}
+    void rebuild(){rebuilds++;}void refresh(){refreshes++;}void space(){}void enter(){}
+    void punctuation(char ch){}void key(String text){buffer.append(text);}void toast(String text){}
+    void captureClipboard(boolean requested){}void startVoice(){voiceStarts++;}
+    void requestHideSelf(int flags){hides++;}void startActivity(Intent intent){launched=intent;}
+    ImageButton cursorButton(){ImageButton b=new ImageButton(this);b.description="光标与文本编辑";return b;}
+    ImageButton tool(LinearLayout parent,ToolbarIcon.Kind icon,String name,String help,float weight,boolean selected,Runnable action){
+        ImageButton b=new ImageButton(this);b.icon=icon;b.description=name;b.tooltip=help;b.click=action;
+        parent.addView(b,new LinearLayout.LayoutParams(0,48,weight));return b;
+    }
+    void add(LinearLayout row,String value,float weight,Runnable action){row.addView(button(value,action),new LinearLayout.LayoutParams(0,dp(keyHeight()),weight));}
+    void addBackspace(LinearLayout row,float weight){add(row,"⌫",weight,()->{});}
+    Runnable displayedCandidate(int index){return ()->chosen=index;}
+    void bindCandidateOptions(Button button,int index){button.options=index;button.longClick=()->longPressed=index;}
+    String[] lookup(String input,int requestedPage){return requestedPage>=0&&requestedPage<pages.length?pages[requestedPage]:new String[0];}
+
+    /*EXTRACT_FUNCTION*/
+    /*EXTRACT_BUTTON*/
+    /*EXTRACT_CANDIDATE_BUTTON*/
+    void renderStrip(){/*EXTRACT_STRIP*/}
+    /*EXTRACT_EXPANDED*/
+    /*EXTRACT_BOTTOM*/
+    /*EXTRACT_ENTER*/
+    /*EXTRACT_LANGUAGE*/
+    void renderToolbar(){/*EXTRACT_TOOLBAR*/}
+
+    static int assertions,passed,failed;
+    static void check(boolean ok,String reason){assertions++;if(!ok)throw new AssertionError(reason);}
+    interface Test {void run();}
+    static void test(String name,Test run){try{run.run();passed++;System.out.println("PASS "+name);}catch(AssertionError failure){failed++;System.out.println("FAIL "+name+": "+failure.getMessage());}}
+    static List<Button> allButtons(Node parent){List<Button> result=new ArrayList<>();if(parent instanceof Button)result.add((Button)parent);for(Node child:parent.children)result.addAll(allButtons(child));return result;}
+    static Button find(Node parent,String description){for(Button b:allButtons(parent))if(b.description.equals(description))return b;throw new AssertionError("Missing "+description);}
+    static Button label(Node parent,String text){for(Button b:allButtons(parent))if(b.text.equals(text))return b;throw new AssertionError("Missing text "+text);}
+    static final String[] VALUES={"你好","nihao","3D","3d","2 号","erhao","空格","kongge","中","zhong","数学","shuxue","↵","enter","⌫","delete","⌄","down","⌃","up","001","zero","A1","a1"};
+
+    static void candidateChecks(boolean expanded){
+        for(boolean compact:new boolean[]{false,true})for(boolean fuzzy:new boolean[]{false,true})for(int page=0;page<2;page++){
+            MobilePresentationChecks h=new MobilePresentationChecks();h.isCompact=compact;h.currentPageFuzzy=fuzzy;h.page=page;
+            h.pages=new String[][]{VALUES,new String[]{"空格","kongge","3D","3d","2 号","erhao","最后","last"}};h.current=h.pages[page];
+            Button realSpace=h.button("空格",()->{});check(h.inputSurface.space==realSpace,"fixture real space binds");
+            if(expanded)h.expandedKeys();else h.renderStrip();
+            check(h.inputSurface.space==realSpace,"literal 空格 candidate must not replace real space gesture binding");
+            List<Button> rendered=new ArrayList<>();for(Button b:allButtons(expanded?h.keys:h.candidates))if(b.options>=0)rendered.add(b);
+            check(rendered.size()==h.current.length/2,"one rendered button per candidate");
+            for(int i=0;i<rendered.size();i++){
+                Button b=rendered.get(i);String value=h.current[i*2];
+                check(value.equals(b.text),"literal label, without synthetic prefix: "+value+" vs "+b.text);
+                check(b.getClass()==Button.class,"literal candidate is a plain Button, including glyph text");
+                check(b.skin.equals("key"),"ordinary candidate skin, not function styling");
+                check(b.options==i,"long press index unchanged");b.press();check(h.chosen==i,"tap selects original page-local index");
+                b.longClick.run();check(h.longPressed==i,"long press keeps original index");
+                check(b.description.equals((expanded?"展开候选 ":"候选 ")+(i+1)+" "+value),"accessibility ordinal and literal text retained");
+                if(!expanded){check(b.minWidth==48&&b.minimumWidth==48,"candidate minimum touch width unchanged");if(fuzzy)check(b.tooltip.equals(h.current[i*2+1]),"fuzzy tooltip metadata retained");}
+            }
+            if(expanded){
+                Button previous=label(h.keys,"上一组"),next=label(h.keys,"下一组");
+                check(previous.enabled==(page>0),"previous group enabled state unchanged");
+                check(next.enabled==(page==0),"next group enabled state unchanged");
+                if(page==0){next.press();check(h.page==1&&h.refreshes==1,"next group mapping unchanged");}
+                else{previous.press();check(h.page==0&&h.refreshes==1,"previous group mapping unchanged");}
+            }
+        }
+    }
+
+    static void toolbarChecks(){
+        for(boolean math:new boolean[]{false,true})for(boolean english:new boolean[]{false,true})for(boolean password:new boolean[]{false,true})for(boolean preview:new boolean[]{false,true}){
+            BuildConfig.BASIC_TYPING_PREVIEW=preview;
+            MobilePresentationChecks h=new MobilePresentationChecks();h.math=math;h.english=english;h.password=password;h.renderToolbar();
+            check(h.toolbar.children.size()==7,"seven direct equal toolbar slots, no asymmetric groups");
+            Button corner=(Button)h.toolbar.children.get(0);check(corner.description.equals("设置"),"Settings is first upper-left control");
+            check(h.toolbar.children.get(3).description.equals("光标与文本编辑"),"cursor is the center (fourth of seven) slot");
+            check(corner.tooltip.equals("打开输入法设置")&&((ImageButton)corner).icon==ToolbarIcon.Kind.SETTINGS,"Settings description, help and glyph preserved");
+            int settings=0;for(Button b:allButtons(h.toolbar)){
+                if(b.description.equals("设置"))settings++;
+                check(!Arrays.asList("中","英","密码·英","中英文切换").contains(b.description),"no toolbar language switch in any state");
+            }
+            check(settings==1,"exactly one Settings toolbar entry");
+            check(allButtons(h.toolbar).size()==6&&h.toolbar.children.get(5) instanceof Space,"one noninteractive spacer, no new tool/action");
+            check(h.toolbar.children.get(6)==h.hideButton,"hide remains in right corner");
+            corner.press();check(h.launched!=null&&h.launched.target==SettingsActivity.class&&h.launched.flags==Intent.FLAG_ACTIVITY_NEW_TASK,"Settings action unchanged");
+            check(h.english==english&&h.math==math,"Settings click does not change input mode");
+            for(Node slot:h.toolbar.children){LinearLayout.LayoutParams params=(LinearLayout.LayoutParams)slot.params;check(params.width==0&&params.height==48&&params.weight==1,"every tool has the same responsive slot and 48dp height; not a pixel test");}
+            for(int windowDp:new int[]{240,280,320,344,360,400,600,840}){
+                double available=windowDp-8,slot=available/7;
+                check(slot>=24,"24dp icon fits weighted slot at "+windowDp+"dp; layout-parameter model only");
+                check(Math.abs(slot*3.5-available/2)<0.00001,"cursor exactly centered in content width "+windowDp);
+                check(Math.abs(slot*7-available)<0.00001,"slots consume available width without fixed-width overflow "+windowDp);
+                if(windowDp>=344)check(slot>=48,"48dp toolbar width when content width is at least336dp");
+            }
+
+
+        }
+        BuildConfig.BASIC_TYPING_PREVIEW=false;
+    }
+
+    static void bottomChecks(){
+        for(int position:new int[]{0,1,-1,2,999})for(boolean english:new boolean[]{false,true})for(boolean password:new boolean[]{false,true})for(boolean compact:new boolean[]{false,true})for(boolean math:new boolean[]{false,true}){
+            MobilePresentationChecks h=new MobilePresentationChecks();h.position=position;h.english=english;h.password=password;h.isCompact=compact;h.math=math;h.bottom();
+            List<Button> buttons=allButtons(h.keys);Button language=find(h.keys,password?"密码字段使用英文直输":"中英文切换；长按开始或结束组合内的英文字面段"),space=label(h.keys,"空格");
+            check((buttons.indexOf(language)<buttons.indexOf(space))==(position==1),"left/right setting, invalid preference defaults right");
+            check(h.inputSurface.space==space,"dedicated real space retains gesture registration");
+            check(language.text.equals(english||password?"英":"中"),"language label reflects current mode or password");
+            check(language.enabled==!password,"password language switch disabled");
+            h.finish=false;language.press();check(h.english==english&&h.rebuilds==0,"unconfirmed composition prevents language switch");
+            h.finish=true;language.press();check(h.english==(password?english:!english),"existing toggle semantics preserved");
+            check(h.rebuilds==(password?0:1),"one rebuild per accepted toggle");
+        }
+        check(LanguageKeyPosition.read(()->{throw new ClassCastException();})==LanguageKeyPosition.RIGHT,"corrupt preference type defaults right");
+    }
+
+    static void mixedEntryChecks(){
+        MobilePresentationChecks h=new MobilePresentationChecks();LinearLayout line=h.row();h.buffer.setLength(0);h.buffer.append("nihao");h.addLanguageKey(line);Button key=(Button)line.children.get(0);
+        check(key.tooltip.contains("长按")&&key.description.contains("英文字面段"),"mixed segment help is exposed without adding controls");
+        key.longClick.run();check(h.buffer.toString().equals("nihao`")&&!h.english&&h.rebuilds==0,"long press opens English literal within same preedit");
+        h.buffer.append("OpenAI");key.longClick.run();check(h.buffer.toString().equals("nihao`OpenAI`")&&!h.english,"long press closes literal without committing");
+        h.rebuild();check(h.buffer.toString().equals("nihao`OpenAI`"),"view rebuild retains segment buffer");
+        for(int mode=0;mode<5;mode++){MobilePresentationChecks f=new MobilePresentationChecks();LinearLayout row=f.row();f.buffer.setLength(0);f.buffer.append(mode==4?"\\alpha":"nihao");f.password=mode==0;f.english=mode==1;f.math=mode==2;f.numbers=mode==3;f.addLanguageKey(row);String before=f.buffer.toString();((Button)row.children.get(0)).longClick.run();check(f.buffer.toString().equals(before),"restricted language/mode/command cannot start mixed segment "+mode);}
+        for(int mode=0;mode<3;mode++){MobilePresentationChecks f=new MobilePresentationChecks();LinearLayout row=f.row();f.addLanguageKey(row);String before=f.buffer.toString();if(mode==0)f.inputSession++;else if(mode==1)f.emojiViewGeneration++;else f.inputOwner=new Object();((Button)row.children.get(0)).longClick.run();check(f.buffer.toString().equals(before),"stale session/view/editor cannot use prior segment key "+mode);}
+        check(MixedComposition.display("nihao`OpenAI").contains("英段未结束"),"unclosed literal has a continuous status hint");
+    }
+    public static void main(String[] args){
+        test("candidate strip: literal text, real space binding, indices and accessibility",()->candidateChecks(false));
+        test("expanded grid: literal text, real space binding, indices and paging",()->candidateChecks(true));
+        test("toolbar: single Settings corner, no language action, uniform seven-slot structure",MobilePresentationChecks::toolbarChecks);
+        test("bottom language key: left/right, corrupt settings, passwords and pending input",MobilePresentationChecks::bottomChecks);
+        test("mixed segment existing-key entry",MobilePresentationChecks::mixedEntryChecks);
+        System.out.println("RESULT "+passed+" groups PASS / "+failed+" FAIL; "+assertions+" assertions executed. Extracted production code with fake Android views only.");
+        if(failed!=0)System.exit(1);
+    }
+}

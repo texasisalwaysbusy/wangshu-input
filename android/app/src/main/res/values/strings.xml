@@ -1,1 +1,23 @@
-<resources><string name="subtype_name">中文拼音 · 数学符号</string></resources>
+<resources>
+    <string name="app_name">望舒输入法 · 完整候选</string>
+    <string name="ime_name">望舒输入法 · 完整候选</string>
+    <string name="subtype_name">望舒完整候选 · 拼音 / 数学 / 离线语音</string>
+
+<!-- Extracted lint-reported labels; displayed text and consent wording are unchanged. -->
+    <string name="clipboard_retention_limits">"到期内容在下次使用键盘历史时清理。置顶条目保留到取消置顶或手动删除。达到100条时只淘汰最旧的未置顶内容；全部置顶则停止新增。编辑、置顶、删除、添加到常用语可在键盘面板中完成。"</string>
+    <string name="fuzzy_pair_example">"%1$s\n%2$s"</string>
+    <string name="fuzzy_sample_pinyin" translatable="false">"zhan"</string>
+    <string name="personal_entry_label">"%1$s  ·  %2$s"</string>
+    <string name="personal_page_number">"%1$s / %2$s"</string>
+    <string name="candidate_font_preview">"候选预览：你好  数学  Example"</string>
+    <string name="cursor_step_description">"每移动 %1$s dp 移动一个字（小值更灵敏）"</string>
+    <string name="local_dictionary_ready">"本地词典已就绪 · %1$s 词条"</string>
+    <string name="local_dictionary_unavailable">"本地词典未就绪：%1$s"</string>
+    <string name="voice_import_incomplete">"导入未完成：%1$s"</string>
+    <string name="settings_backup_preview">"%1$s%2$s剪贴板保留期限恢复后，后续使用会清理到期的未置顶历史。%3$s文件可能包含自定义符号及手动文字。\n\n请核对每项变化，特别是回车应用动作开关。取消不会写入或修复设置。"</string>
+    <string name="voice_review_default">"请核对：%1$s"</string>
+    <string name="voice_review_reason">"%1$s\n%2$s"</string>
+    <string name="candidate_page_summary">"%1$s · 第 %2$s 组"</string>
+    <string name="candidate_label">"候选"</string>
+    <string name="fuzzy_candidate_label">"模糊候选"</string>
+</resources>

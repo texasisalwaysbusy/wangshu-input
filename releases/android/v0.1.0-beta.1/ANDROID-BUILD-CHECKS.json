@@ -1,0 +1,75 @@
+{
+  "version": "0.1.0-beta.1",
+  "source_archive_sha256": "63d49bbdc82e8b09c57055afd253e14928c302ad66f8e1a4745820ed17d3e863",
+  "source_files_verified_unchanged": 406,
+  "source_modified_during_build": false,
+  "toolchain": {
+    "jdk": "17.0.19",
+    "gradle": "8.13",
+    "agp": "8.13.2",
+    "compile_sdk": 36,
+    "build_tools": "35.0.0",
+    "ndk": "27.2.12479018",
+    "cmake": "3.22.1"
+  },
+  "dependency_mode": "Offline, no new dependency download",
+  "builds": {
+    "full_app": "PASS",
+    "full_android_test_apk_compile_only": "PASS",
+    "typing_preview_app": "PASS",
+    "preview_android_test_apk_compile_only": "PASS"
+  },
+  "lint": {
+    "full": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "typing_preview": {
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "unit_tests": {
+    "full": "NO-SOURCE",
+    "typing_preview": "NO-SOURCE",
+    "note": "Not counted as executed test passes."
+  },
+  "static_artifact_checks": {
+    "signature": "PASS",
+    "permissions": "PASS",
+    "zip_crc": "PASS",
+    "zipalign": "PASS",
+    "four_abis": "PASS",
+    "elf_16kib_alignment": "PASS"
+  },
+  "full_manifest": {
+    "package": "org.wangshu.ime",
+    "versionCode": 2,
+    "versionName": "0.1.0-beta.1",
+    "permissions": [
+      "android.permission.RECORD_AUDIO"
+    ],
+    "internet_permission": false
+  },
+  "typing_preview_manifest": {
+    "package": "org.wangshu.ime.typingpreview",
+    "versionCode": 2,
+    "versionName": "0.1.0-beta.1-basic-typing-preview",
+    "microphone_permission": false,
+    "internet_permission": false
+  },
+  "focused_host_assertions": {
+    "chromium_editor_and_local_preedit": "44/44 PASS",
+    "voice_safety": "56/56 PASS",
+    "voice_ui": "43/43 PASS"
+  },
+  "NOT_RUN": [
+    "installation",
+    "ADB",
+    "instrumentation execution",
+    "manual retest after fixes",
+    "physical-device retest after fixes",
+    "real Windows TSF registration/microphone"
+  ],
+  "evidence_boundary": "Android build/static results were obtained on an existing Windows toolchain. Cloud independently verified APK size, SHA-256, ZIP CRC, four native ABI directories and no bundled model/recordings/signing keys. Neither establishes Android runtime compatibility or voice quality."
+}

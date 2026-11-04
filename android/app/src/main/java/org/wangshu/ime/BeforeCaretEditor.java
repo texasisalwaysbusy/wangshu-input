@@ -85,7 +85,9 @@ public final class BeforeCaretEditor {
             request.hintMaxChars=MAX_UTF16+1;request.hintMaxLines=MAX_UTF16+1;
             request.flags=InputConnection.GET_TEXT_WITH_STYLES;
             ExtractedText value=owner.connection.getExtractedText(request,0);
-            if(value==null||value.text==null||value.text.length()>MAX_UTF16||value.startOffset!=0||value.partialStartOffset>=0||value.partialEndOffset>=0)return null;
+            // Only partialStartOffset identifies a delta. For a full snapshot,
+            // partialEndOffset is unused; Chromium sets it to text.length().
+            if(value==null||value.text==null||value.text.length()>MAX_UTF16||value.startOffset!=0||value.partialStartOffset!=-1)return null;
             if(value.text instanceof Spanned){
                 Spanned styled=(Spanned)value.text;
                 for(Object span:styled.getSpans(0,styled.length(),Object.class))if((styled.getSpanFlags(span)&Spanned.SPAN_COMPOSING)!=0)return null;

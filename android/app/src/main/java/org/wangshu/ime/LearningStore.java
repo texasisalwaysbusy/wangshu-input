@@ -54,7 +54,7 @@ final class LearningStore {
         Thread load=new Thread(()->{
             LearningStore loaded=null;IOException failure=null;SharedPreferences prefs=null;boolean value=false;Object preferenceTicket=null;
             try{
-                prefs=owner.getSharedPreferences(PREFERENCES,0);prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
+                prefs=AppPreferences.open(owner,PREFERENCES);prefs.registerOnSharedPreferenceChangeListener(preferenceListener);
                 synchronized(epochGate){preferenceTicket=preferenceEpoch;}
                 try{value=prefs.getBoolean(ENABLED,false);}catch(ClassCastException invalid){value=false;}
                 loaded=new LearningStore(new File(owner.getFilesDir(),"candidate-learning-v1.tsv"));

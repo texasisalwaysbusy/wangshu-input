@@ -107,7 +107,22 @@ public final class AssociationCancellationChecks {
         void clear() { if (phrase) ((PersonalPhraseAssociation)controller).clear(); else ((MathAssociation)controller).clear(); }
         void start() { request(); Handler.advance(120); }
         void gated() throws Exception { await(() -> gate.entered.getCount() == 0, "blocked boundary was actually reached"); }
-        void drained() throws Exception { await(() -> worker.getActiveCount() == 0 && worker.getQueue().isEmpty(), "physical worker completion, not cancelled Future state"); }
+        void drained() throws Exception {
+            if (worker.isShutdown()) {
+                await(worker::isTerminated, "physical worker termination after shutdown");
+                return;
+            }
+            // Only this owner thread submits, and all tested requests have already been
+            // dispatched. Wait for capacity before submitting: the production executor's
+            // DiscardOldestPolicy must never evict a real request for this test barrier.
+            await(() -> worker.getQueue().remainingCapacity() > 0, "capacity for completion barrier");
+            // A non-cancelled FIFO marker runs after earlier tasks physically return.
+            // getActiveCount()==0 + queue.isEmpty() is NOT an atomic idle observation:
+            // a worker can dequeue the next task between those two reads.
+            java.util.concurrent.Future<?> barrier = worker.submit(() -> { });
+            await(barrier::isDone, "physical worker completion before uncancelled barrier");
+            barrier.get();
+        }
         long generation() throws Exception { Field field=controller.getClass().getDeclaredField("generation");field.setAccessible(true);return field.getLong(controller); }
         public void close() throws Exception {
             if (!closed) { if (phrase) ((PersonalPhraseAssociation)controller).close(); else ((MathAssociation)controller).close(); closed = true; }

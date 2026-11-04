@@ -10,6 +10,8 @@ import java.io.*;
 
 /** Local authored dictionary and phrases, with validated additive import preview. */
 public final class PersonalActivity extends Activity {
+    @Override public android.content.SharedPreferences getSharedPreferences(String name,int mode){return AppPreferences.managed(name)?AppPreferences.open(this,name):super.getSharedPreferences(name,mode);}
+
     private String tab="words";
     private LinearLayout panel;
     private PersonalStore store;
@@ -29,11 +31,11 @@ public final class PersonalActivity extends Activity {
         button(panel,tab.equals("words")?"添加词条":"添加常用语",()->edit(-1,null));
         LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);panel.addView(list);
         try{JSONArray entries=store.snapshot().getJSONArray(tab);panel.addView(label("本地文件 · "+entries.length()+" 条 · JSON v1",12));if(entries.length()==0)list.addView(label(tab.equals("words")?"为专业术语添加全拼，之后可直接从候选栏选择。":"保存多行文字；点击键盘工具栏“剪贴板”，切换到“常用语”即可调用。",15));
-            for(int i=0;i<entries.length();i++){final int index=i;JSONObject item=entries.getJSONObject(i);String text=item.getString("text"),prefix=tab.equals("words")?item.getString("pinyin"):item.optString("shortcut","");Button b=new Button(this);b.setAllCaps(false);b.setText((prefix.isEmpty()?"":prefix+"  ·  ")+text);b.setMaxLines(3);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);b.setPadding(dp(12),dp(10),dp(12),dp(10));b.setMinHeight(dp(56));b.setContentDescription("编辑个人条目 "+(i+1));KeyboardSkin.key(this,b,false);b.setOnClickListener(v->edit(index,item));list.addView(b,new LinearLayout.LayoutParams(-1,-2));}
+            for(int i=0;i<entries.length();i++){final int index=i;JSONObject item=entries.getJSONObject(i);String text=item.getString("text"),prefix=tab.equals("words")?item.getString("pinyin"):item.optString("shortcut","");Button b=new Button(this);b.setAllCaps(false);b.setText(prefix.isEmpty()?text:getString(R.string.personal_entry_label,prefix,text));b.setMaxLines(3);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);b.setPadding(dp(12),dp(10),dp(12),dp(10));b.setMinHeight(dp(56));b.setContentDescription("编辑个人条目 "+(i+1));KeyboardSkin.key(this,b,false);b.setOnClickListener(v->edit(index,item));list.addView(b,new LinearLayout.LayoutParams(-1,-2));}
         }catch(Exception e){error(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"读取失败，文件保留");}
         button(panel,"从 JSON / TSV 文件合并导入",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/json","text/tab-separated-values","text/plain","application/octet-stream"}),21);});
         button(panel,"备份词库与常用语",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"wangshu-personal-v1.json"),22);});
-        panel.addView(label("导入只合并，不替换已有数据。JSON v1 支持词库和常用语；TSV 仅支持拼音、词条两列（制表符分隔），可带表头，不支持权重或来源列。词条按 NFC 去重，不折叠数学字符；同拼音不同词条保留。上限：1 MiB、2000 词条、1000 常用语。本备份暂不包含设置。",12));button(panel,"返回",this::finish);ThemeBars.navigation(this,getWindow());
+        panel.addView(label("导入只合并，不替换已有数据。JSON v1 支持词库和常用语；TSV 仅支持拼音、词条两列（制表符分隔），可带表头，不支持权重或来源列。词条按 NFC 去重，不折叠数学字符；同拼音不同词条保留。上限：1 MiB、2000 词条、1000 常用语。本文件只含词库与常用语；设置请在“本地设置备份与还原”另行备份。",12));button(panel,"返回",this::finish);ThemeBars.navigation(this,getWindow());
     }
     private void edit(int index,JSONObject item){
         if(busy){Toast.makeText(this,"文件操作进行中，请稍候",Toast.LENGTH_SHORT).show();return;}

@@ -94,10 +94,16 @@
     "bytes": 37751439,
     "status": "Original universal AAR evaluated in cloud only; replaced with local ASR-only native build to exclude unused TTS/espeak components"
   },
+  "local_voice_pack": {
+    "path": "artifacts/wangshu-voice-zh-en-v1.zip",
+    "bytes": 176337336,
+    "sha256": "4b2d94108b6b70bcb8294601f93024257f9fb18455de7b301b0906c48397e775",
+    "tracked_in_git": false,
+    "recovery": "Recreate with tools/package_voice.py from pinned public model source; no private data"
+  },
   "android_asr_source": {
     "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/refs/tags/v1.13.6",
     "sha256": "78f5d10f957d2de1867a1e08395e9ec2ec388911c853dd141887396667f3ff34",
     "build": "TTS=OFF, speaker diarization=OFF, websocket=OFF; Eigen MPL2-only; CPU runtime; NDK27.2 16KB"
-  },
-  "publication_note": "Local workspace pack path omitted; no model or AAR binary is included."
+  }
 }

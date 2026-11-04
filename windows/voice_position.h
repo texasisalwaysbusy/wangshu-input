@@ -20,6 +20,10 @@ inline HRESULT read(TfEditCookie cookie,ITfRange* source,std::wstring& out){
   WCHAR chunk[2048];ULONG n=0;HRESULT h=cursor->GetText(cookie,TF_TF_MOVESTART,chunk,2048,&n);if(FAILED(h))return h;
   if(!n||n>2048||out.size()+n>MaxUnits)return E_FAIL;
   LONG progress=0,overshoot=0;if(FAILED(cursor->CompareStart(cookie,before.get(),TF_ANCHOR_START,&progress))||progress<=0||FAILED(cursor->CompareStart(cookie,source,TF_ANCHOR_END,&overshoot))||overshoot>0)return E_FAIL;
+  // Independently move a clone by the returned UTF-16 unit count. A moving
+  // GetText that silently skips units must not create a trustworthy snapshot.
+  LONG shifted=0,exact=1;
+  if(FAILED(before->ShiftStart(cookie,static_cast<LONG>(n),&shifted,nullptr))||shifted!=static_cast<LONG>(n)||FAILED(cursor->CompareStart(cookie,before.get(),TF_ANCHOR_START,&exact))||exact)return E_FAIL;
   out.append(chunk,n);
  }return E_FAIL;
 }

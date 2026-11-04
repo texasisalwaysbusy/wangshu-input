@@ -1,0 +1,30 @@
+package org.wangshu.ime;
+final class ClipboardStore {
+ static final class UnconfirmedSaveException extends Exception {UnconfirmedSaveException(){super("Synthetic pause");}}
+ static int gets,adds;static boolean blocked,refuse;static Runnable onGet,onAdd,onAllowed;static void reset(){gets=adds=0;blocked=refuse=false;onGet=onAdd=onAllowed=null;}
+ static ClipboardStore get(CaptureBoundaryChecks c)throws UnconfirmedSaveException{gets++;if(onGet!=null)onGet.run();if(blocked)throw new UnconfirmedSaveException();return new ClipboardStore();}
+ static String allowedText(String c,boolean e,boolean p){if(onAllowed!=null)onAllowed.run();return c;}
+ boolean add(String c,long n,int d){adds++;if(onAdd!=null)onAdd.run();return !refuse;}
+}
+public final class CaptureBoundaryChecks {
+ boolean clipboardListening=true,suppressClipboardUntilChange,clipboardPausedWarned,phrasesOpen,privateNow,enabled=true,shown=true;int inputSession=1,notices,rebuilds;String lastClipboardText;Object clipboardRegistration=new Object(),clipboardListener=new Object();Runnable onPrivate,onBoolean,onDays;
+ final class ClipboardManager {int reads;Runnable onRead;String getPrimaryClip(){reads++;if(onRead!=null)onRead.run();return "Synthetic";}}
+ ClipboardManager clipboardManager=new ClipboardManager();
+ final class Prefs {boolean getBoolean(String k,boolean d){if(onBoolean!=null){Runnable r=onBoolean;onBoolean=null;r.run();}return enabled;}int getInt(String k,int d){if(onDays!=null)onDays.run();return 7;}}
+ Prefs getSharedPreferences(String k,int m){return new Prefs();}boolean isInputViewShown(){return shown;}boolean privateInput(){if(onPrivate!=null){Runnable r=onPrivate;onPrivate=null;r.run();}return privateNow;}void toast(String s){notices++;}void rebuild(){rebuilds++;}
+ /*CURRENT*/
+ /*CAPTURE*/
+ static int checks;static void check(boolean v,String n){if(!v)throw new AssertionError(n);checks++;}interface Set{void run(CaptureBoundaryChecks c);}
+ static void blocks(String n,Set setup){ClipboardStore.reset();CaptureBoundaryChecks c=new CaptureBoundaryChecks();setup.run(c);c.captureClipboard(false);check(ClipboardStore.adds==0,n);}
+ public static void main(String[] args){
+  blocks("private capture stops before OS clipboard",c->c.privateNow=true);blocks("disabled capture stops before OS clipboard",c->c.enabled=false);blocks("hidden view stops capture",c->c.shown=false);blocks("listener unregistered stops capture",c->c.clipboardListening=false);blocks("null listener ticket stops capture",c->c.clipboardRegistration=null);blocks("suppression stops capture",c->c.suppressClipboardUntilChange=true);
+  blocks("store lookup session reentry stops OS clipboard read",c->ClipboardStore.onGet=()->c.inputSession++);
+  blocks("session switch during primary read stops save",c->c.clipboardManager.onRead=()->c.inputSession++);blocks("private transition during primary read stops save",c->c.clipboardManager.onRead=()->c.privateNow=true);blocks("consent revoked during primary read stops save",c->c.clipboardManager.onRead=()->c.enabled=false);blocks("listener ticket replaced during primary read stops save",c->c.clipboardManager.onRead=()->c.clipboardRegistration=new Object());blocks("manager replaced during primary read stops save",c->c.clipboardManager.onRead=()->c.clipboardManager=c.new ClipboardManager());blocks("listener identity replaced during primary read stops save",c->c.clipboardManager.onRead=()->c.clipboardListener=new Object());
+  blocks("admission callback transition stops save",c->ClipboardStore.onAllowed=()->c.privateNow=true);blocks("days read transition stops save",c->c.onDays=()->c.inputSession++);blocks("preference getter session transition stops save",c->c.onBoolean=()->c.inputSession++);blocks("private getter session transition stops save",c->c.onPrivate=()->c.inputSession++);
+  ClipboardStore.reset();CaptureBoundaryChecks c=new CaptureBoundaryChecks();ClipboardStore.blocked=true;c.captureClipboard(false);c.captureClipboard(false);check(c.clipboardManager.reads==0&&ClipboardStore.adds==0&&c.notices==1,"frozen storage never reads clipboard and warns only once");
+  ClipboardStore.reset();c=new CaptureBoundaryChecks();c.captureClipboard(false);c.captureClipboard(false);check(c.clipboardManager.reads==2&&ClipboardStore.adds==1&&"Synthetic".equals(c.lastClipboardText),"duplicate captured text not stored twice");
+  ClipboardStore.reset();c=new CaptureBoundaryChecks();final CaptureBoundaryChecks owner=c;ClipboardStore.onAdd=()->owner.inputSession++;c.captureClipboard(false);check(ClipboardStore.adds==1&&c.lastClipboardText==null,"already-started save may complete but old session cache is not retained");
+  ClipboardStore.reset();c=new CaptureBoundaryChecks();c.clipboardListening=false;c.clipboardRegistration=null;c.clipboardListener=null;c.captureClipboard(true);check(ClipboardStore.adds==1,"explicit capture can work without automatic listener");c.privateNow=true;c.captureClipboard(true);check(ClipboardStore.adds==1,"explicit capture never bypasses private guard");
+  System.out.println("PASS clipboard capture "+checks+" extracted checks; synthetic OS/store only");
+ }
+}

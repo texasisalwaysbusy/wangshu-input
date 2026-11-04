@@ -5,7 +5,7 @@ public final class VoiceHoldController {
     public enum Phase { IDLE, ARMED, HOLDING, WAITING_RESULT, UNAVAILABLE }
     public enum Target { CENTER, LEFT_DISCARD, RIGHT_ACTION }
     public enum RightAction { NEWLINE, KEEP_TEXT, CUSTOM }
-    public enum CancelReason { ACTION_CANCEL, INPUT_CHANGED, WINDOW_CHANGED, OTHER_INPUT, MULTI_POINTER, POINTER_LOST, PRE_HOLD_MOVED, LATE_HOLD_TIMER, START_REJECTED, RECOGNIZER_FAILURE, USER_ABORT }
+    public enum CancelReason { ACTION_CANCEL, INPUT_CHANGED, WINDOW_CHANGED, OTHER_INPUT, MULTI_POINTER, POINTER_LOST, PRE_HOLD_MOVED, LATE_HOLD_TIMER, START_REJECTED, RECOGNIZER_FAILURE, USER_ABORT, EMPTY_RESULT }
     public interface Handle {void cancel();}
     /** Schedule asynchronously on this controller's owner/UI thread using a monotonic clock. */
     public interface Scheduler {Handle after(long delayMillis,Runnable action);}
@@ -101,7 +101,7 @@ public final class VoiceHoldController {
     public void engineState(Token owned,String message){thread();if(!current(owned)||(phase!=Phase.HOLDING&&phase!=Phase.WAITING_RESULT)||finalReady)return;status=message==null?"":message;publish();}
     public void result(Token owned,String text){thread();if(!current(owned)||(phase!=Phase.HOLDING&&phase!=Phase.WAITING_RESULT)||finalReady)return;finalReady=true;preview=text==null?"":text;if(phase==Phase.WAITING_RESULT)complete(owned);else publish();}
     public void failure(Token owned,String message){thread();if(!current(owned)||(phase!=Phase.HOLDING&&phase!=Phase.WAITING_RESULT))return;String safe=message==null?"本地语音未完成":message;cancel(CancelReason.RECOGNIZER_FAILURE);if(token==null&&bound&&owned.inputSession==inputSession)host.failed(owned,safe);}
-    private void complete(Token owned){if(!current(owned)||phase!=Phase.WAITING_RESULT||!finalReady)return;String text=preview;Completion action=completion;reset();if(bound&&owned.inputSession==inputSession&&(text.length()>0||action.releasedAt==Target.RIGHT_ACTION))host.commitPreview(owned,text,action);publish();}
+    private void complete(Token owned){if(!current(owned)||phase!=Phase.WAITING_RESULT||!finalReady)return;if(preview.isEmpty()&&completion.releasedAt!=Target.RIGHT_ACTION){cancel(CancelReason.EMPTY_RESULT);return;}String text=preview;Completion action=completion;reset();if(bound&&owned.inputSession==inputSession)host.commitPreview(owned,text,action);publish();}
     public void cancel(Token owned,CancelReason reason){thread();if(current(owned))cancel(reason);}
     public void cancel(CancelReason reason){thread();Token old=token;boolean engine=engineAttempted;reset();if(old!=null){if(engine)host.cancelVoice(old,reason);host.discardPreview(old,reason);}publish();}
     private void reset(){if(timer!=null){timer.cancel();timer=null;}token=null;phase=Phase.IDLE;left=right=null;target=Target.CENTER;preview=status="";completion=null;finalReady=engineAttempted=finished=false;}

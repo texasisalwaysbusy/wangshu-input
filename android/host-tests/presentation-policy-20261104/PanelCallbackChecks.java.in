@@ -1,0 +1,69 @@
+package org.wangshu.ime;
+import java.util.*;
+
+/** Actual source methods; synthetic framework scheduling and editor identity. */
+public final class PanelCallbackChecks {
+    static class View {
+        interface OnLayoutChangeListener {void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob);}
+        OnLayoutChangeListener listener;Runnable posted;int left,right;
+        void addOnLayoutChangeListener(OnLayoutChangeListener value){listener=value;}
+        void removeOnLayoutChangeListener(OnLayoutChangeListener value){if(listener==value)listener=null;}
+        void post(Runnable value){posted=value;}
+        int getLeft(){return left;}int getRight(){return right;}
+        void layout(){if(listener!=null)listener.onLayoutChange(this,0,0,0,0,0,0,0,0);}
+        void deliver(){if(posted!=null){Runnable value=posted;posted=null;value.run();}}
+    }
+    static class HorizontalScrollView extends View {
+        int width=320,scroll,calls;int getWidth(){return width;}int getScrollX(){return scroll;}
+        void scrollTo(int x,int y){scroll=x;calls++;}
+    }
+    static class InputConnection {}
+    static class Button {
+        interface Click {void run(Button button);} Click click;String description;
+        void setOnClickListener(Click value){click=value;}void setContentDescription(String value){description=value;}void press(){click.run(this);}
+    }
+    int cancellations,invalidations,holdCancellations;class Before {void invalidate(){invalidations++;}}Before beforeCaret=new Before();
+    void cancelBackspace(){cancellations++;}void cancelHoldForOtherInput(){holdCancellations++;}
+    Button button(String text,Runnable action){Button b=new Button();b.setOnClickListener(v->{cancelBackspace();beforeCaret.invalidate();cancelHoldForOtherInput();action.run();});return b;}
+    static class DataFiles {static boolean ready;}
+    static class NativeBridge {static int calls;static String raw;static String voiceMath(String text){calls++;raw=text;return "converted:"+text;}}
+
+    int inputSession=1,commits;long emojiViewGeneration=1;
+    boolean math=true,editing,phrasesOpen,emoji,shown=true;
+    String committed;InputConnection editor=new InputConnection();HorizontalScrollView emojiOuterScroll;
+    InputConnection getCurrentInputConnection(){return editor;}boolean isInputViewShown(){return shown;}
+    boolean emojiPanelActive(){return emoji;}void commit(String text){commits++;committed=text;}
+    /* REVEAL */
+    /* CHOOSE */
+    /* SYMBOL_BUTTON */
+    /* CAPTURE */
+    /* FORMAT */
+    static int checks;static void check(boolean ok,String why){checks++;if(!ok)throw new AssertionError(why);}
+    static PanelCallbackChecks fixture(HorizontalScrollView tabs){PanelCallbackChecks h=new PanelCallbackChecks();h.emojiOuterScroll=tabs;return h;}
+    static void reveal(){
+        HorizontalScrollView tabs=new HorizontalScrollView();View selected=new View();selected.left=576;selected.right=648;
+        PanelCallbackChecks h=fixture(tabs);h.revealSymbolTab(tabs,selected,1,1);check(tabs.calls==0,"no early layout scroll");tabs.layout();check(tabs.listener==null&&tabs.calls==0,"listener removed once, work queued");tabs.deliver();check(tabs.calls==1&&tabs.scroll==328,"actual method exposes selected tab");tabs.layout();tabs.deliver();check(tabs.calls==1,"no duplicate scroll on repeated layout/delivery");
+        for(int stale=0;stale<7;stale++){
+            HorizontalScrollView t=new HorizontalScrollView();PanelCallbackChecks f=fixture(t);f.revealSymbolTab(t,selected,1,1);t.layout();
+            if(stale==0)f.inputSession++;if(stale==1)f.emojiViewGeneration++;if(stale==2)f.emojiOuterScroll=new HorizontalScrollView();if(stale==3)f.math=false;if(stale==4)f.editing=true;if(stale==5)f.phrasesOpen=true;if(stale==6)f.emoji=true;
+            t.deliver();check(t.calls==0,"stale view/owner/panel ignored "+stale);
+        }
+        HorizontalScrollView noSelection=new HorizontalScrollView();fixture(noSelection).revealSymbolTab(noSelection,null,1,1);check(noSelection.listener==null,"no selected tab registers nothing");
+    }
+    static void choose(){
+        for(String payload:new String[]{"_","\\","\"","，","α"}){PanelCallbackChecks h=new PanelCallbackChecks();h.symbolButton(payload,"name",true,1,1,h.editor).press();check(h.commits==1&&h.committed==payload,"exact one unchanged payload "+payload);check(h.cancellations==1&&h.invalidations==1&&h.holdCancellations==1,"current symbol keeps cancellation semantics once");}
+        for(int stale=0;stale<8;stale++){
+            PanelCallbackChecks h=new PanelCallbackChecks();InputConnection owner=h.editor;
+            if(stale==0)owner=null;if(stale==1)h.inputSession++;if(stale==2)h.emojiViewGeneration++;if(stale==3)h.editor=new InputConnection();if(stale==4)h.math=false;if(stale==5)h.editing=true;if(stale==6)h.phrasesOpen=true;if(stale==7)h.shown=false;
+            h.symbolButton("_","下划线",true,1,1,owner).press();check(h.commits==0,"stale symbol does not enter newer editor "+stale);check(h.cancellations==0&&h.invalidations==0&&h.holdCancellations==0,"stale symbol rejected before generic side effects "+stale);
+        }
+    }
+    static void format(){
+        PanelCallbackChecks h=new PanelCallbackChecks();h.math=true;VoiceResultPolicy first=h.captureVoiceResultPolicy();h.math=false;VoiceResultPolicy second=h.captureVoiceResultPolicy();DataFiles.ready=true;NativeBridge.calls=0;
+        check(h.formatVoiceResult(first,"根号").equals("converted:根号")&&NativeBridge.calls==1,"actual formatter uses captured math after panel switch");
+        check(h.formatVoiceResult(second,"根号").equals("根号")&&NativeBridge.calls==1,"actual formatter keeps raw without native call");
+        DataFiles.ready=false;check(h.formatVoiceResult(first,"根号").equals("根号")&&NativeBridge.calls==1,"actual formatter remains lazy without dictionary");
+        h.math=true;check(h.captureVoiceResultPolicy()==VoiceResultPolicy.MATH_SYMBOLS,"legacy adapter deliberately retains old math behavior");
+    }
+    public static void main(String[] args){reveal();choose();format();System.out.println("PASS "+checks+" actual panel callback checks with synthetic view/editor boundaries; no native Android execution.");}
+}

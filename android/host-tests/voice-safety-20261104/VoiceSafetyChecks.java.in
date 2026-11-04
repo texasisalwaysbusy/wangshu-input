@@ -1,0 +1,87 @@
+package org.wangshu.ime;
+import java.util.*;
+
+/** Every editor string is a generated fixture. This is not Android or Chrome. */
+public final class WangshuIme extends VoiceContext {
+    static int passed,failed;
+    static void check(boolean ok,String label){if(ok)passed++;else failed++;System.out.println((ok?"PASS ":"FAIL ")+label);}
+    static class ExtractedTextRequest {int hintMaxChars,hintMaxLines;}
+    static class ExtractedText {CharSequence text;int startOffset,partialStartOffset=-1,partialEndOffset=-1,selectionStart,selectionEnd;}
+    interface InputConnection {ExtractedText getExtractedText(ExtractedTextRequest q,int flags);boolean finishComposingText();boolean commitText(String text,int cursor);}
+    static final class Editor implements InputConnection {
+        String text="old|";int start=4,end=4,startOffset,partialStart=-1,partialEnd=-1,reads,finishes,writes;boolean nullSnapshot,throwRead,accept=true,apply=true,finishOk=true,throwFinish,throwWrite;
+        Runnable onRead,onFinish,onWrite;int callbackRead;
+        public ExtractedText getExtractedText(ExtractedTextRequest q,int flags){reads++;if(throwRead)throw new IllegalStateException("synthetic read");if(nullSnapshot)return null;ExtractedText x=new ExtractedText();x.text=text;x.selectionStart=start;x.selectionEnd=end;x.startOffset=startOffset;x.partialStartOffset=partialStart;x.partialEndOffset=partialEnd;if(onRead!=null&&(callbackRead==0||reads==callbackRead)){Runnable r=onRead;onRead=null;r.run();}return x;}
+        public boolean finishComposingText(){finishes++;if(onFinish!=null){Runnable r=onFinish;onFinish=null;r.run();}if(throwFinish)throw new IllegalStateException("synthetic finish");return finishOk;}
+        public boolean commitText(String value,int cursor){writes++;if(apply){text=text.substring(0,start)+value+text.substring(end);start+=value.length();end=start;}if(onWrite!=null){Runnable r=onWrite;onWrite=null;r.run();}if(throwWrite)throw new IllegalStateException("synthetic write");return accept;}
+    }
+    static class View {static final int GONE=8;int visibility;boolean selected;Object background;String description,tooltip;void setVisibility(int v){visibility=v;}void setSelected(boolean s){selected=s;}void setContentDescription(String v){description=v;}void setTooltipText(String v){tooltip=v;}void setBackgroundTintList(Object v){}void setBackground(Object v){background=v;}}
+    static class ImageButton extends View {ToolbarIcon.Kind icon;}
+    static class ToolbarIcon {enum Kind {MICROPHONE,STOP,BUSY}}
+    static class GradientDrawable {int color;void setColor(int c){color=c;}void setCornerRadius(float r){}}
+    static class InsetDrawable {GradientDrawable shape;InsetDrawable(GradientDrawable s,int n){shape=s;}}
+    static class RippleDrawable {InsetDrawable inset;RippleDrawable(Object c,InsetDrawable i,Object mask){inset=i;}}
+    static class ColorStateList {static Object valueOf(int v){return v;}}
+    static class KeyboardSkin {static int color(VoiceContext c,int n){return n;}/* SKIN */}
+    static class R {static class color {static final int selected=31,accent=32;}}
+    static class Handler {Runnable queued;void postDelayed(Runnable action,long delay){queued=action;}void removeCallbacks(Runnable action){if(queued==action)queued=null;}}
+    static class ViewConfiguration {static int getLongPressTimeout(){return 500;}static ViewConfiguration get(Object c){return new ViewConfiguration();}int getScaledTouchSlop(){return 8;}}
+    static class BuildConfig {static boolean BASIC_TYPING_PREVIEW;}
+    static class PreviewFeatures {static final String VOICE_UNAVAILABLE="unavailable";}
+    static class Manifest {static class permission {static final String RECORD_AUDIO="record";}}
+    static class PackageManager {static final int PERMISSION_GRANTED=0;}
+    static class VoiceModels {static boolean available(Object c){return true;}}
+    enum VoiceResultPolicy {RAW}
+    static class OfflineVoice {
+        interface Listener {void state(String text);void result(String text);void failure(String text);}
+        static class Task {final Listener listener;int starts,finishes,cancels;Runnable onCancel;Task(Object c,Listener l){listener=l;}void start(){starts++;}void finish(){finishes++;}void cancel(){cancels++;if(onCancel!=null){Runnable r=onCancel;onCancel=null;r.run();}}}
+    }
+    static class SpeechRecognizer {int cancels,destroys;void cancel(){cancels++;}void destroy(){destroys++;}}
+    private final StringBuilder buffer=new StringBuilder();private final Handler keyHandler=new Handler();
+    private int inputSession=1,reviewSession=-1;private boolean password,math,reviewCanInsert=true;private long voiceEditEpoch;
+    private InputConnection connection=new Editor(),reviewConnection;private Runnable onConnection;
+    private View root=new View(),voiceOverlay,voiceReviewPanel;private ImageButton voiceButton=new ImageButton();
+    private VoiceHoldController voiceHold;private HeldVoice heldVoice;private OfflineVoice.Task offlineTask;private SpeechRecognizer recognizer;
+    private String voiceReview,voiceReviewReason="",voiceState="",lastToast="";private int rebuilds,statusRefreshes;
+    InputConnection getCurrentInputConnection(){InputConnection old=connection;if(onConnection!=null){Runnable r=onConnection;onConnection=null;r.run();}return old;}
+    private void loadVoiceHoldSettings(){}private int checkSelfPermission(String p){return 0;}private void space(){}private void toast(String s){lastToast=s;}
+    private void rebuild(){rebuilds++;}private void showVoiceHold(VoiceHoldController.State s){voiceOverlay=new View();}
+    private void refreshCompositionStatus(){statusRefreshes++;}private void setToolIcon(ImageButton b,ToolbarIcon.Kind k){b.icon=k;}
+    private VoiceResultPolicy captureVoiceResultPolicy(){return VoiceResultPolicy.RAW;}private String formatVoiceResult(VoiceResultPolicy p,String text){return text;}
+    /* PRODUCTION */
+    static WangshuIme subject(){WangshuIme h=new WangshuIme();h.createVoiceHold();h.voiceHold.bindInputSession(h.inputSession);return h;}
+    static VoiceHoldController.Token hold(WangshuIme h,VoiceHoldController.RightAction action){h.voiceHold.rightAction(action,"action",action==VoiceHoldController.RightAction.CUSTOM?"custom":"");VoiceHoldController.Token t=h.voiceHold.down(1,150,180,0);h.keyHandler.queued.run();h.voiceHold.targets(t,new VoiceHoldController.Region(0,0,100,100),new VoiceHoldController.Region(200,0,300,100));return t;}
+    static void release(WangshuIme h,VoiceHoldController.Token t,String result){h.voiceHold.up(t,1,220,20,700);h.voiceHold.result(t,result);}
+    static void snapshots(){
+        Editor e=new Editor();check(connectionSnapshot(e)!=null,"complete legacy snapshot accepted");e.partialEnd=e.text.length();check(connectionSnapshot(e)!=null,"complete Chromium-style snapshot with end offset accepted");
+        e.partialEnd=-1;e.partialStart=-2;check(connectionSnapshot(e)==null,"unknown negative full-text sentinel rejected");e.partialStart=0;check(connectionSnapshot(e)==null,"partial snapshot remains rejected");e.partialStart=-1;e.startOffset=1;check(connectionSnapshot(e)==null,"nonzero start offset remains rejected");e.startOffset=0;e.start=-1;check(connectionSnapshot(e)==null,"negative selection rejected");e.start=0;e.end=99;check(connectionSnapshot(e)==null,"selection past text rejected");
+        e.text="a\uD83D\uDE00b";e.start=e.end=2;e.partialEnd=-1;check(connectionSnapshot(e)==null,"split surrogate caret rejected");e.text="a\u0301b";e.start=e.end=1;check(connectionSnapshot(e)==null,"split combining cluster rejected");e.text="x".repeat(32769);e.start=e.end=0;check(connectionSnapshot(e)==null,"oversized snapshot rejected");e.text="abc";e.start=e.end=3;e.throwRead=true;check(connectionSnapshot(e)==null,"snapshot exception is unavailable not permission to write");
+    }
+    static void toolbar(){
+        for(boolean system:new boolean[]{false,true}){WangshuIme h=subject();if(system)h.recognizer=new SpeechRecognizer();else h.offlineTask=new OfflineVoice.Task(h,null);h.voiceButton.setSelected(true);KeyboardSkin.tool(h,h.voiceButton,true);h.cancelVoice();check(!h.voiceButton.selected&&((RippleDrawable)h.voiceButton.background).inset.shape.color==0,"cancel clears selected flag and static microphone background "+(system?"system":"offline"));check(h.voiceButton.icon==ToolbarIcon.Kind.MICROPHONE&&"语音".equals(h.voiceButton.description),"cancel resets microphone icon and accessibility name");h.cancelVoice();check(!h.voiceButton.selected,"repeated cancellation remains idle");}
+        WangshuIme h=subject();h.voiceButton=null;h.cancelVoice();check(h.statusRefreshes==1,"null toolbar cancellation safe");
+    }
+    static void gestures(){
+        for(VoiceHoldController.RightAction a:new VoiceHoldController.RightAction[]{VoiceHoldController.RightAction.KEEP_TEXT,VoiceHoldController.RightAction.NEWLINE})for(boolean chromium:new boolean[]{false,true}){WangshuIme h=subject();Editor e=(Editor)h.connection;if(chromium)e.partialEnd=e.text.length();VoiceHoldController.Token t=hold(h,a);release(h,t,"synthetic");String expected="old|synthetic"+(a==VoiceHoldController.RightAction.NEWLINE?"\n":"");check(e.writes==1&&e.text.equals(expected),"actual adapter exact-once "+a+" "+(chromium?"Chromium-style":"legacy")+" complete snapshot");h.voiceHold.result(t,"late");check(e.writes==1,"duplicate engine result ignored");}
+        for(String reason:new String[]{"unavailable","partial","selected","moved","content","composition","sticky-move"}){WangshuIme h=subject();Editor e=(Editor)h.connection;if(reason.equals("unavailable"))e.nullSnapshot=true;if(reason.equals("partial"))e.partialStart=0;if(reason.equals("selected"))e.start=1;if(reason.equals("composition"))h.buffer.append("ni");VoiceHoldController.Token t=hold(h,VoiceHoldController.RightAction.KEEP_TEXT);if(reason.equals("moved"))e.start=e.end=1;if(reason.equals("content"))e.text="new|";if(reason.equals("sticky-move"))h.heldVoice.contextChanged=true;String before=e.text;release(h,t,"synthetic");check(e.writes==0&&before.equals(e.text)&&"synthetic".equals(h.voiceReview),"safety review without writing: "+reason);}
+        WangshuIme h=subject();Editor a=(Editor)h.connection,b=new Editor();VoiceHoldController.Token t=hold(h,VoiceHoldController.RightAction.KEEP_TEXT);h.connection=b;release(h,t,"stale");check(a.writes==0&&b.writes==0&&h.voiceReview==null,"different InputConnection cannot receive held result");
+        h=subject();a=(Editor)h.connection;t=hold(h,VoiceHoldController.RightAction.KEEP_TEXT);OfflineVoice.Task task=h.heldVoice.task;h.cancelVoice();a.commitText("8",1);task.listener.result("late");h.voiceHold.result(t,"late2");check(a.writes==1&&a.text.equals("old|8")&&task.cancels==1&&h.voiceReview==null,"other input cancels once then one ASCII 8 and no late speech");
+        h=subject();a=(Editor)h.connection;t=hold(h,VoiceHoldController.RightAction.NEWLINE);h.voiceHold.up(t,1,20,20,700);h.voiceHold.result(t,"discarded");check(a.writes==0&&a.text.equals("old|"),"left discard never deletes earlier host text");
+    }
+    static void additionalRaces(){
+        WangshuIme h=subject();Editor e=(Editor)h.connection;h.voiceReview="synthetic";h.reviewConnection=e;h.reviewSession=h.inputSession;e.onRead=h::cancelVoice;h.insertVoiceReview();check(e.writes==0&&h.voiceReview==null,"review insertion cannot outlive snapshot cancellation");
+        h=subject();e=(Editor)h.connection;h.onConnection=h::cancelVoice;h.showVoiceReview("synthetic","reason",e,h.inputSession,true);check(h.voiceReview==null,"review display cannot outlive identity-read cancellation");
+        for(boolean changeSession:new boolean[]{false,true}){WangshuIme begin=subject();Editor a=(Editor)begin.connection;a.onRead=()->{if(changeSession){begin.inputSession++;begin.connection=new Editor();}else begin.cancelVoice();};hold(begin,VoiceHoldController.RightAction.KEEP_TEXT);check(begin.heldVoice==null,"begin snapshot reentry cannot attach/start an obsolete capture: "+changeSession);}
+        h=subject();e=(Editor)h.connection;h.password=true;check(h.voiceSnapshot(e)==null,"password snapshot remains unavailable");
+        h=subject();e=(Editor)h.connection;SplitSelection.Snapshot before=connectionSnapshot(e);WangshuIme composing=h;e.callbackRead=e.reads+2;e.onRead=()->composing.buffer.append("ni");h.attemptVoiceCommit("synthetic",e,before,h.inputSession);check(e.writes==0,"new composition during last read blocks voice write");
+        h=subject();e=(Editor)h.connection;before=connectionSnapshot(e);e.callbackRead=e.reads+3;e.onRead=h::cancelVoice;h.attemptVoiceCommit("synthetic",e,before,h.inputSession);check(e.writes==1&&h.voiceReview==null,"post-write cancellation does not resurrect a review");
+    }
+    static void commitFaults(){
+        for(String fault:new String[]{"false-apply","false-noapply","true-noapply","throw-apply","finish-false","finish-throw"}){WangshuIme h=subject();Editor e=(Editor)h.connection;SplitSelection.Snapshot before=connectionSnapshot(e);e.accept=!fault.startsWith("false");e.apply=!fault.endsWith("noapply");e.throwWrite=fault.equals("throw-apply");e.finishOk=!fault.equals("finish-false");e.throwFinish=fault.equals("finish-throw");h.attemptVoiceCommit("synthetic",e,before,h.inputSession);int writes=e.writes;if(writes>0)h.insertVoiceReview();check(e.writes==writes&&(writes==0||!h.reviewCanInsert),"uncertain dispatch is copy-only and never retried: "+fault);}
+        for(String point:new String[]{"scope","initial-snapshot","finish","last-snapshot","cancel-last-snapshot","write"}){WangshuIme h=subject();Editor e=(Editor)h.connection,b=new Editor();SplitSelection.Snapshot before=connectionSnapshot(e);Runnable change=()->{h.inputSession++;h.connection=b;};switch(point){case "scope":h.onConnection=change;break;case "initial-snapshot":e.onRead=change;break;case "finish":e.onFinish=change;break;case "last-snapshot":e.callbackRead=e.reads+2;e.onRead=change;break;case "cancel-last-snapshot":e.callbackRead=e.reads+2;e.onRead=h::cancelVoice;break;case "write":e.onWrite=change;break;}
+            h.attemptVoiceCommit("synthetic",e,before,h.inputSession);check(e.writes==(point.equals("write")?1:0)&&b.writes==0&&h.voiceReview==null,"reentry cannot continue or leak review: "+point);}
+        WangshuIme h=subject();Editor e=(Editor)h.connection;VoiceHoldController.Token t=hold(h,VoiceHoldController.RightAction.KEEP_TEXT);h.heldVoice.task.onCancel=h::cancelVoice;release(h,t,"synthetic");check(e.writes==0&&h.voiceReview==null,"reentrant cancellation while releasing capture prevents commit");
+    }
+    public static void main(String[] args){snapshots();toolbar();gestures();commitFaults();additionalRaces();System.out.println("RESULT pass="+passed+" fail="+failed+"; synthetic host only, Android/Chrome/microphone NOT_RUN");if(failed>0)System.exit(1);}
+}
+class VoiceContext {static class Metrics {float density=1;}static class Resources {Metrics getDisplayMetrics(){return new Metrics();}}Resources getResources(){return new Resources();}}

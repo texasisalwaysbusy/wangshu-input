@@ -11,10 +11,12 @@ import java.util.*;
 
 /** Candidate production Activity. Root must register/launch it and connect enabledPairs to lookup. */
 public final class FuzzySettingsActivity extends Activity {
+    @Override public android.content.SharedPreferences getSharedPreferences(String name,int mode){return AppPreferences.managed(name)?AppPreferences.open(this,name):super.getSharedPreferences(name,mode);}
+
     public static final String PREFERENCES="fuzzy-pinyin-v1";
     private final EnumMap<FuzzyPinyin.Pair,Switch> switches=new EnumMap<>(FuzzyPinyin.Pair.class);
     private SharedPreferences preferences;private TextView status,preview;private EditText sample;private boolean restoring;
-    public static Set<FuzzyPinyin.Pair> enabledPairs(Context context){SharedPreferences values=context.getSharedPreferences(PREFERENCES,Context.MODE_PRIVATE);return FuzzyPinyin.enabledFrom(key->{try{return values.getBoolean(key,false);}catch(ClassCastException wrongType){return false;}});}
+    public static Set<FuzzyPinyin.Pair> enabledPairs(Context context){SharedPreferences values=AppPreferences.open(context,PREFERENCES);return FuzzyPinyin.enabledFrom(key->{try{return values.getBoolean(key,false);}catch(ClassCastException wrongType){return false;}});}
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(getColor(R.color.ink));view.setPadding(0,dp(6),0,dp(6));return view;}
     @Override public void onCreate(Bundle state){
@@ -27,7 +29,7 @@ public final class FuzzySettingsActivity extends Activity {
         String[] examples={"zan ↔ zhan","can ↔ chan","san ↔ shan","nan ↔ lan","fan ↔ han","ban ↔ bang","ben ↔ beng","bin ↔ bing"};
         Set<FuzzyPinyin.Pair> enabled=enabledPairs(this);int index=0;
         for(FuzzyPinyin.Pair pair:FuzzyPinyin.Pair.values()){
-            Switch toggle=new Switch(this);toggle.setText(pair.label+"\n"+examples[index++]);toggle.setTextColor(getColor(R.color.ink));toggle.setTextSize(17);toggle.setPadding(0,dp(12),0,dp(12));toggle.setMinHeight(dp(64));toggle.setContentDescription("模糊拼音 "+pair.label);toggle.setChecked(enabled.contains(pair));content.addView(toggle,new LinearLayout.LayoutParams(-1,-2));switches.put(pair,toggle);
+            Switch toggle=new Switch(this);toggle.setText(getString(R.string.fuzzy_pair_example,pair.label,examples[index++]));toggle.setTextColor(getColor(R.color.ink));toggle.setTextSize(17);toggle.setPadding(0,dp(12),0,dp(12));toggle.setMinHeight(dp(64));toggle.setContentDescription("模糊拼音 "+pair.label);toggle.setChecked(enabled.contains(pair));content.addView(toggle,new LinearLayout.LayoutParams(-1,-2));switches.put(pair,toggle);
             toggle.setOnCheckedChangeListener((button,checked)->{
                 if(restoring)return;boolean saved;
                 try{saved=preferences.edit().putBoolean(pair.preferenceKey,checked).commit();}catch(RuntimeException unavailable){saved=false;}
@@ -38,7 +40,7 @@ public final class FuzzySettingsActivity extends Activity {
         Button reset=new Button(this);reset.setText("全部关闭");reset.setAllCaps(false);reset.setOnClickListener(view->{SharedPreferences.Editor edit=preferences.edit();for(FuzzyPinyin.Pair pair:FuzzyPinyin.Pair.values())edit.putBoolean(pair.preferenceKey,false);boolean saved;try{saved=edit.commit();}catch(RuntimeException unavailable){saved=false;}reloadSwitches();status.setText(saved?"已全部关闭，恢复精确拼音。":"未能确认关闭设置已保存；界面显示当前会话状态，重启后可能恢复。");updatePreview();});content.addView(reset,new LinearLayout.LayoutParams(-1,dp(48)));
         content.addView(text("测试拼音（仅预览，不会输入到其他应用）",17));sample=new EditText(this);sample.setSingleLine(true);sample.setHint("例如 zhan、nan、bin");sample.setContentDescription("模糊拼音本地测试");sample.setSaveEnabled(false);sample.setFilters(new InputFilter[]{new InputFilter.LengthFilter(FuzzyPinyin.MAX_KEY_LENGTH)});sample.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);sample.setImeOptions(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING|EditorInfo.IME_ACTION_DONE);content.addView(sample,new LinearLayout.LayoutParams(-1,-2));
         preview=text("",16);preview.setContentDescription("模糊拼音变体预览");content.addView(preview);content.addView(text("只对可分段的常用全拼尝试少量变化，最多两处。不完整、歧义或较长拼音可能不展开；这不会改变原始输入。",14));
-        sample.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence value,int start,int count,int after){}public void onTextChanged(CharSequence value,int start,int before,int count){updatePreview();}public void afterTextChanged(Editable value){}});sample.setText("zhan");scroll.requestApplyInsets();
+        sample.addTextChangedListener(new TextWatcher(){public void beforeTextChanged(CharSequence value,int start,int count,int after){}public void onTextChanged(CharSequence value,int start,int before,int count){updatePreview();}public void afterTextChanged(Editable value){}});sample.setText(R.string.fuzzy_sample_pinyin);scroll.requestApplyInsets();
     }
     @Override protected void onResume(){super.onResume();if(preferences!=null){reloadSwitches();updatePreview();}}
     private void reloadSwitches(){Set<FuzzyPinyin.Pair> enabled=enabledPairs(this);restoring=true;for(Map.Entry<FuzzyPinyin.Pair,Switch> entry:switches.entrySet())entry.getValue().setChecked(enabled.contains(entry.getKey()));restoring=false;}

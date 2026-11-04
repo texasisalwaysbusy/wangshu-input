@@ -6,6 +6,6 @@
   "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63",
   "license_sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
   "new_download_or_install": "NONE",
-  "planned_scope": "Windows personal-data parser; referenced by staged personal-data source. Runtime verification pending.",
+  "planned_scope": "Windows personal-data parser; not yet used by Android or Windows production build",
   "utc": "2026-10-24T04:50:08.009670+00:00"
 }

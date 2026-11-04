@@ -5,7 +5,7 @@ import android.graphics.drawable.Drawable;
 
 /** Original 24dp line drawings. Names and help belong to the native button. */
 final class ToolbarIcon extends Drawable {
-    enum Kind { LANGUAGE, MATH, LETTERS, CLIPBOARD, MICROPHONE, STOP, BUSY, SETTINGS, HIDE }
+    enum Kind { MATH, LETTERS, CLIPBOARD, MICROPHONE, STOP, BUSY, SETTINGS, HIDE }
     private final Kind kind;
     private final Paint ink=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final int size;
@@ -20,9 +20,6 @@ final class ToolbarIcon extends Drawable {
         Rect bounds=getBounds();canvas.save();canvas.translate(bounds.left,bounds.top);
         canvas.scale(bounds.width()/24f,bounds.height()/24f);Path path=new Path();
         switch(kind){
-            case LANGUAGE:
-                canvas.drawCircle(12,12,8.5f,ink);canvas.drawOval(8,3.5f,16,20.5f,ink);
-                canvas.drawLine(3.5f,12,20.5f,12,ink);break;
             case MATH:
                 path.moveTo(19,4);path.lineTo(5,4);path.lineTo(12,12);path.lineTo(5,20);path.lineTo(19,20);break;
             case LETTERS:

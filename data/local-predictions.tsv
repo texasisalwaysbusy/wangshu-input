@@ -1,0 +1,117 @@
+# Wangshu editorial seed corpus v1. Original project-authored examples; CC0-1.0. Not user input.
+# language<TAB>explicit word units separated by |; spaces are literal.
+zh	今天|天气|很好|，|适合|散步|。
+zh	今天|下午|我们|一起|讨论|项目|。
+zh	今天|晚上|记得|早点|休息|。
+zh	明天|上午|我们|开会|。
+zh	明天|下午|可以|继续|讨论|。
+zh	明天|见|，|路上|注意|安全|。
+zh	我们|一起|讨论|这个|问题|。
+zh	我们|可以|先|检查|结果|。
+zh	我们|需要|更多|时间|。
+zh	我们|下次|再|讨论|细节|。
+zh	我们|已经|完成|初步|测试|。
+zh	我们|正在|整理|相关|资料|。
+zh	请|检查|一下|文件|。
+zh	请|确认|会议|时间|。
+zh	请|告诉|我|你的|想法|。
+zh	请|稍等|，|我|正在|查看|。
+zh	请|注意|保护|个人|信息|。
+zh	谢谢|你的|帮助|。
+zh	谢谢|你的|耐心|。
+zh	谢谢|提醒|，|我|会|核对|。
+zh	非常|感谢|你的|建议|。
+zh	很高兴|认识|你|。
+zh	收到|，|我|先|看一下|。
+zh	好的|，|稍后|回复|。
+zh	好的|，|我们|明天|再聊|。
+zh	这个|问题|需要|进一步|讨论|。
+zh	这个|结果|还|需要|验证|。
+zh	这个|方法|可以|继续|改进|。
+zh	这个|文件|已经|保存|。
+zh	目前|还|没有|最终|结果|。
+zh	目前|进展|顺利|。
+zh	如果|有|新的|消息|，|请|告诉|我|。
+zh	如果|时间|允许|，|我们|再|检查|一次|。
+zh	欢迎|提出|不同|意见|。
+zh	祝你|今天|一切|顺利|。
+zh	祝你|周末|愉快|。
+zh	记得|保存|文件|。
+zh	记得|检查|附件|。
+zh	会议|时间|已经|确认|。
+zh	会议|结束|后|再|讨论|。
+zh	项目|进展|需要|及时|更新|。
+zh	测试|结果|已经|整理|完成|。
+zh	数据|分析|还|需要|复核|。
+zh	研究|计划|可以|继续|完善|。
+zh	这篇|论文|讨论|了|相关|方法|。
+zh	这个|实验|需要|更多|数据|。
+zh	我|想|了解|更多|细节|。
+zh	我|正在|准备|会议|材料|。
+zh	我|稍后|发给|你|。
+zh	我|会|先|核对|一下|。
+en	I |would |like |to |discuss |the |project|.
+en	I |would |like |to |learn |more |about |this|.
+en	I |am |working |on |the |report|.
+en	I |am |looking |forward |to |our |meeting|.
+en	I |will |check |the |details|.
+en	I |will |get |back |to |you |soon|.
+en	I |think |we |should |review |the |results|.
+en	I |need |more |time |to |review |this|.
+en	We |can |discuss |this |tomorrow|.
+en	We |can |start |with |a |small |test|.
+en	We |should |check |the |results|.
+en	We |need |to |review |the |data|.
+en	We |have |completed |the |initial |tests|.
+en	We |are |working |on |the |next |steps|.
+en	We |are |ready |to |begin|.
+en	Please |let |me |know |what |you |think|.
+en	Please |check |the |attached |file|.
+en	Please |confirm |the |meeting |time|.
+en	Please |review |the |latest |version|.
+en	Please |take |your |time|.
+en	Thank |you |for |your |help|.
+en	Thank |you |for |your |patience|.
+en	Thank |you |for |the |update|.
+en	Thanks |for |letting |me |know|.
+en	Thanks |for |your |feedback|.
+en	Have |a |good |day|.
+en	Have |a |great |weekend|.
+en	See |you |tomorrow|.
+en	See |you |at |the |meeting|.
+en	Let |us |know |if |you |have |any |questions|.
+en	Let |us |review |the |details|.
+en	The |meeting |starts |tomorrow |morning|.
+en	The |results |need |further |review|.
+en	The |report |is |ready |for |review|.
+en	The |file |has |been |saved|.
+en	The |project |is |making |progress|.
+en	This |is |a |useful |starting |point|.
+en	This |approach |needs |more |testing|.
+en	This |question |requires |further |discussion|.
+en	That |sounds |good |to |me|.
+en	Could |you |please |check |this|?
+en	Could |you |share |more |details|?
+en	Would |you |like |to |discuss |the |results|?
+en	Good |morning|.
+en	Good |afternoon|.
+en	Good |evening|.
+en	How |are |you |doing|?
+en	It |is |nice |to |meet |you|.
+en	It |is |important |to |verify |the |data|.
+en	There |is |more |work |to |do|.
+mixed	今天|的 |meeting |安排|在|下午|。
+mixed	明天|的 |meeting |已经|确认|。
+mixed	这个 |project |需要|更多|测试|。
+mixed	这个 |API |还|需要|测试|。
+mixed	请|查看 |README |里的|说明|。
+mixed	请|检查 |test |结果|。
+mixed	我们|先|运行 |test |再|检查|结果|。
+mixed	我们|可以|用 |Python |分析|数据|。
+mixed	这个 |bug |已经|修复|。
+mixed	更新|后的 |report |需要|复核|。
+mixed	Please |检查|一下|文件|。
+mixed	The |测试|结果|还|需要|验证|。
+mixed	我们|在 |meeting |结束|后|继续|讨论|。
+mixed	新的 |version |已经|准备|好了|。
+mixed	请|先|保存 |draft |再|继续|编辑|。

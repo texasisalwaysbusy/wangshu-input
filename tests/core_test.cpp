@@ -11,6 +11,8 @@ int main(int argc,char**argv){
     try{
         auto loadStart=std::chrono::steady_clock::now();wangshu::Engine e;check(argc>1&&e.load(argv[1]),"load real shared dictionary and symbols");std::cout<<"METRIC dictionary load ms="<<std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-loadStart).count()<<"; Linux cloud only\n";check(e.entries()>100000,"full Chinese dictionary, not a tiny demo table");
         check(e.lookup("nihao").front().text=="你好","nihao chooses 你好");check(e.lookup("zhongwen").front().text=="中文","zhongwen chooses 中文");check(e.lookup("shi").front().text=="是","common single-syllable ranking");check(e.lookup("ZhongWen").front().text=="中文","case normalization shared");
+        check(e.lookup("'").empty()&&e.lookup("'''").empty(),"separator-only input has no unrelated candidates");
+        auto separated=e.lookup("ni'hao");check(!separated.empty()&&separated.front().text=="你好","pinyin separators still work within a query");
         auto phrase=e.lookup("nihaowoshishurufa");bool segmented=false;for(const auto& c:phrase)if(c.text=="你好我是输入法")segmented=true;check(segmented,"phrase segmentation without exact dictionary entry");
         check(e.lookup("\\alpha").front().text=="α","math alias alpha");check(e.lookup("\\Gamma").front().text=="Γ","math case preserved");check(e.lookup("\\X").front().text=="𝕏","non-BMP mathematical symbol");
         check(e.voiceMath("大于等于，小于等于，根号，乘以")=="≥，≤，√，×","longest mathematical voice phrases first");

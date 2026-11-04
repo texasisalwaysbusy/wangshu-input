@@ -201,13 +201,16 @@ bool LearningData::pinned(const std::string& input,const std::string& text)const
 LearningData LearningData::parse(const std::string& bytes){
     if(bytes.empty()||bytes.size()>MaxBytes)throw std::runtime_error("Learning file size is invalid");LearningJson root;
     try{root=LearningJson::parse(bytes,[](int depth,LearningJson::parse_event_t,LearningJson&){if(depth>8)throw std::runtime_error("Learning JSON depth exceeds schema");return true;});}catch(const LearningJson::exception&){throw std::runtime_error("Malformed learning JSON");}
-    learningFields(root,{"kind","version","enabled","entries"});if(learningString(root["kind"])!="wangshu-windows-learning"||learningNumber(root["version"],1)!=1||!root["enabled"].is_boolean()||!root["entries"].is_array()||root["entries"].size()>MaxEntries)throw std::runtime_error("Unsupported learning schema");
-    LearningData out;out.enabled=root["enabled"].get<bool>();std::set<std::pair<std::string,std::string>> seen;
+    auto version=root.contains("version")?learningNumber(root["version"],2):0;
+    if(version==2)learningFields(root,{"kind","version","enabled","entries","phraseAssociations"});else learningFields(root,{"kind","version","enabled","entries"});
+    if((version!=1&&version!=2)||learningString(root["kind"])!="wangshu-windows-learning"||!root["enabled"].is_boolean()||!root["entries"].is_array()||root["entries"].size()>MaxEntries)throw std::runtime_error("Unsupported learning schema");
+    LearningData out;out.enabled=root["enabled"].get<bool>();if(version==2){if(!root["phraseAssociations"].is_boolean())throw std::runtime_error("Invalid phrase association setting");out.phraseAssociations=root["phraseAssociations"].get<bool>();}std::set<std::pair<std::string,std::string>> seen;
     for(const auto& item:root["entries"]){learningFields(item,{"key","text","count","pinned","updated"});auto key=learningString(item["key"]),text=learningString(item["text"]);if(key!=candidateKey(key)||text!=candidateText(text)||!item["pinned"].is_boolean()||!seen.emplace(key,text).second)throw std::runtime_error("Noncanonical or duplicate learning entry");auto count=static_cast<unsigned>(learningNumber(item["count"],MaxCount));bool pin=item["pinned"].get<bool>();if(!count&&!pin)throw std::runtime_error("Learning entry has neither weight nor pin");out.entries.push_back({key,text,count,pin,learningNumber(item["updated"],static_cast<unsigned long long>(std::numeric_limits<long long>::max()))});}
     return out;
 }
 std::string LearningData::serialize()const{
     LearningJson root={{"kind","wangshu-windows-learning"},{"version",1},{"enabled",enabled},{"entries",LearningJson::array()}};for(const auto& value:entries)root["entries"].push_back({{"key",value.key},{"text",value.text},{"count",value.count},{"pinned",value.pinned},{"updated",value.updated}});
+    if(phraseAssociations){root["version"]=2;root["phraseAssociations"]=true;}
     std::string bytes;try{bytes=root.dump();}catch(const LearningJson::exception&){throw std::runtime_error("Invalid learning Unicode");}parse(bytes);return bytes;
 }
 std::vector<Candidate> LearningData::lookup(const Engine& base,const PersonalData& manual,const std::string& input,size_t page,unsigned long long now)const{

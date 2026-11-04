@@ -1,0 +1,180 @@
+{
+  "version": "0.1.0-beta.1",
+  "version_code": 2,
+  "source_archive": {
+    "filename": "wangshu-input-v0.1.0-beta.1-source.zip",
+    "bytes": 2507216,
+    "sha256": "63d49bbdc82e8b09c57055afd253e14928c302ad66f8e1a4745820ed17d3e863",
+    "source_files": 406,
+    "production_ime_sha256": "70f5da692ccf990f1ebd03482a2a3a1199ff9a470816252dc532bf5ba042e63e"
+  },
+  "host_regression": {
+    "status": "PASS",
+    "commands": 34,
+    "source_unchanged": true,
+    "checks": [
+      {
+        "name": "core-compile",
+        "returncode": 0
+      },
+      {
+        "name": "core",
+        "returncode": 0
+      },
+      {
+        "name": "local-predictions-compile",
+        "returncode": 0
+      },
+      {
+        "name": "local-predictions",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-structure-compile",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-structure",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-han-boundary-compile",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-han-boundary",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-sanitizers-compile",
+        "returncode": 0
+      },
+      {
+        "name": "prediction-sanitizers",
+        "returncode": 0
+      },
+      {
+        "name": "jni-context-guard",
+        "returncode": 0
+      },
+      {
+        "name": "android-alignment-fixtures",
+        "returncode": 0
+      },
+      {
+        "name": "settings",
+        "returncode": 0
+      },
+      {
+        "name": "editor-boundaries",
+        "returncode": 0
+      },
+      {
+        "name": "chromium-editor-preedit",
+        "returncode": 0
+      },
+      {
+        "name": "clipboard-boundaries",
+        "returncode": 0
+      },
+      {
+        "name": "settings-boundaries",
+        "returncode": 0
+      },
+      {
+        "name": "associations",
+        "returncode": 0
+      },
+      {
+        "name": "local-controller-compile",
+        "returncode": 0
+      },
+      {
+        "name": "local-controller",
+        "returncode": 0
+      },
+      {
+        "name": "mobile-presentation",
+        "returncode": 0
+      },
+      {
+        "name": "voice-ui",
+        "returncode": 0
+      },
+      {
+        "name": "voice-safety",
+        "returncode": 0
+      },
+      {
+        "name": "presentation-policies",
+        "returncode": 0
+      },
+      {
+        "name": "mixed-integration",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-buffer_order",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-completion_reentry",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-poll_reentry",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-range_progress",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-ready_deadline",
+        "returncode": 0
+      },
+      {
+        "name": "windows-voice-sapi_reentry",
+        "returncode": 0
+      },
+      {
+        "name": "windows-input-guard",
+        "returncode": 0
+      },
+      {
+        "name": "windows-build-portability",
+        "returncode": 0
+      },
+      {
+        "name": "windows-receipt-contracts",
+        "returncode": 0
+      }
+    ],
+    "sanitizers": "AddressSanitizer and UndefinedBehaviorSanitizer on fixed portable-C++ probes; LeakSanitizer disabled on this host"
+  },
+  "production_method_checks": {
+    "editor_and_local_preedit": 44,
+    "voice_and_cancellation": 56,
+    "scope": "Actual classes/extracted production methods with synthetic Android/editor/recognizer endpoints; Java regex graphemes are not Android ICU"
+  },
+  "additional_host_checks": {
+    "pinyin_regular_and_asan_ubsan": "PASS",
+    "batch_cleanup": {
+      "cases": 19,
+      "assertions": 147,
+      "failures": 0
+    },
+    "pending_text_commit": "PASS",
+    "split_selection": "PASS",
+    "emoji_reentry": "PASS",
+    "java_syntax_sources": 102,
+    "trial_reveal_listener_assertions": 33
+  },
+  "linux_native_jni": {
+    "status": "BLOCKED",
+    "reason": "Existing JDK lacks JNI header jni.h; no dependency installation performed"
+  },
+  "after_fix_manual_or_phone_retest": "NOT_RUN",
+  "real_windows_tsf_registration_microphone": "NOT_RUN",
+  "scope": "This is automated host evidence, not Android UI/Binder/microphone/device acceptance or general-language quality. Android compilation, lint and artifact static checks are recorded separately."
+}

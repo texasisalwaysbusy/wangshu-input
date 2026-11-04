@@ -1,0 +1,143 @@
+package org.wangshu.ime;
+import java.util.*;
+
+/** Synthetic host of extracted production methods. Not an Android renderer. */
+public final class VoiceUiChecks {
+    static int passed,failed;
+    static void check(boolean ok,String name){if(ok){passed++;System.out.println("PASS "+name);}else{failed++;System.out.println("FAIL "+name);}}
+    interface Click {void onClick(View v);}
+    interface Show {void shown(AlertDialog d);}
+    interface Choose {void chosen(AlertDialog d,int which);}
+    static class View {
+        static final int VISIBLE=0,GONE=8;int visibility=VISIBLE,id;Click click;List<View> children=new ArrayList<>();
+        void setVisibility(int value){visibility=value;}void setId(int value){id=value;}int getId(){return id;}
+        void setOnClickListener(Click value){click=value;}void tap(){if(click!=null)click.onClick(this);}
+        void setPadding(int l,int t,int r,int b){}void addView(View v){children.add(v);}
+    }
+    static class TextView extends View {String text="",description;int color,minHeight;float size;
+        TextView(Object c){}void setText(String t){text=t;}void setTextColor(int c){color=c;}void setMinHeight(int h){minHeight=h;}
+        void setTextSize(float s){size=s;}void setContentDescription(String s){description=s;}
+    }
+    static class Button extends TextView {Button(Object c){super(c);}}
+    static class RadioButton extends Button {RadioButton(Object c){super(c);}}
+    static class LinearLayout extends View {static final int VERTICAL=1;LinearLayout(Object c){}void setOrientation(int o){}}
+    static class ScrollView extends View {ScrollView(Object c){}}
+    static class RadioGroup extends LinearLayout {int checked=-1;RadioGroup(Object c){super(c);}void check(int id){checked=id;}int getCheckedRadioButtonId(){return checked;}}
+    static class SharedPreferences {
+        Object stored;int writes;boolean commitOk=true;
+        int getInt(String k,int fallback){return stored==null?fallback:(Integer)stored;}
+        Editor edit(){return new Editor();}
+        final class Editor {int pending;Editor putInt(String k,int v){pending=v;return this;}boolean commit(){writes++;stored=pending;return commitOk;}}
+    }
+    static class AlertDialog {
+        static final int BUTTON_POSITIVE=-1;static AlertDialog last;String message;String[] items;Choose choice;int selected;
+        View view;Button save=new Button(null);Show show;boolean dismissed;
+        void setOnShowListener(Show s){show=s;}Button getButton(int which){return save;}void dismiss(){dismissed=true;}
+        void show(){last=this;if(show!=null)show.shown(this);}
+        // AOSP setupContent installs the list only when mMessage is null.
+        int visibleChoiceCount(){return view!=null?radioButtons(view).size():message==null&&items!=null?items.length:0;}
+        int selectedIndex(){RadioGroup g=group(view);if(g!=null){List<RadioButton> r=radioButtons(view);return g.checked==r.get(1).id?1:0;}return selected;}
+        void choose(int index){RadioGroup g=group(view);if(g!=null)g.check(radioButtons(view).get(index).id);else {selected=index;choice.chosen(this,index);}}
+        static class Builder {AlertDialog d=new AlertDialog();Builder(Object c){}Builder setTitle(String t){return this;}
+            Builder setMessage(String m){d.message=m;return this;}Builder setSingleChoiceItems(String[] a,int current,Choose l){d.items=a;d.selected=current;d.choice=l;return this;}
+            Builder setView(View v){d.view=v;return this;}Builder setPositiveButton(String s,Object l){return this;}Builder setNegativeButton(String s,Object l){return this;}AlertDialog create(){return d;}}
+    }
+    static RadioGroup group(View v){if(v==null)return null;if(v instanceof RadioGroup)return (RadioGroup)v;for(View c:v.children){RadioGroup found=group(c);if(found!=null)return found;}return null;}
+    static List<RadioButton> radioButtons(View v){List<RadioButton> out=new ArrayList<>();if(v==null)return out;if(v instanceof RadioButton)out.add((RadioButton)v);for(View c:v.children)out.addAll(radioButtons(c));return out;}
+    static class Toast {static final int LENGTH_LONG=1;static int shown;static Toast makeText(Object c,String s,int n){return new Toast();}void show(){shown++;}}
+    static class R {static class color {static final int ink=1,muted=2,accent=3;}}
+    static class DataFiles {static boolean ready=true;static String failure="";}
+    static class MixedComposition {static String display(String text){return text;}}
+    static class BeforeCaret {boolean hasUndo(){return true;}}
+    static class OfflineVoice {static class Task {int cancels;void cancel(){cancels++;}}}
+    static class HeldVoice {OfflineVoice.Task task=new OfflineVoice.Task();}
+    static class SpeechRecognizer {int cancels,destroys;void cancel(){cancels++;}void destroy(){destroys++;}}
+    static class ToolbarIcon {enum Kind {MICROPHONE}}
+    static class Subject {
+        final SharedPreferences preferences=new SharedPreferences();
+        TextView composition=new TextView(this);StringBuilder buffer=new StringBuilder();
+        boolean editing,numbers,math,english,password;BeforeCaret beforeCaret;
+        OfflineVoice.Task offlineTask;HeldVoice heldVoice;SpeechRecognizer recognizer;
+        String voiceReview,voiceReviewReason="",voiceState="";Object reviewConnection;int reviewSession=-1;boolean reviewCanInsert=true;
+        View voiceReviewPanel;int holdCancels,toolUpdates;String tool;
+        SharedPreferences getSharedPreferences(String name,int mode){return preferences;}
+        int getColor(int color){return color;}int dp(int value){return value;}boolean compact(){return false;}void undoBeforeCaret(){}
+        void cancelHoldForOtherInput(){holdCancels++;}void voiceToolState(String text,ToolbarIcon.Kind kind){tool=text;toolUpdates++;}
+        // Calling whole refresh/rebuild while cancelling would restart unrelated work.
+        void refresh(){throw new AssertionError("Cancellation must only update status, not refresh candidates/associations");}
+        void rebuild(){throw new AssertionError("Cancellation must not rebuild keyboard");}
+        /* STATUS */
+        /* CANCEL */
+        /* SETTINGS */
+    }
+    static void ui(){
+        Subject s=new Subject();s.showVoiceRightActionSettings();AlertDialog d=AlertDialog.last;
+        check(d.visibleChoiceCount()==2,"both right-action rows are in the displayed content");
+        check(d.message==null||d.items==null,"no AlertDialog message/list precedence conflict");
+        check(d.selectedIndex()==0,"new setting defaults to NEWLINE");
+        d.choose(1);check(s.preferences.writes==0,"selecting a row does not save or affect current voice");
+        d.dismiss();check(s.preferences.writes==0&&s.preferences.stored==null,"Cancel/back/outside dismissal does not persist");
+        s.showVoiceRightActionSettings();d=AlertDialog.last;check(d.selectedIndex()==0,"cancelled choice is not restored on reopen");
+        d.choose(1);d.save.tap();check(s.preferences.writes==1&&(Integer)s.preferences.stored==1&&d.dismissed,"Save KEEP_TEXT persists once then dismisses");
+        s.showVoiceRightActionSettings();d=AlertDialog.last;check(d.selectedIndex()==1,"reopen reads persisted KEEP_TEXT");
+        d.choose(0);d.save.tap();check((Integer)s.preferences.stored==0,"switch back to NEWLINE persists");
+        s.preferences.commitOk=false;s.showVoiceRightActionSettings();d=AlertDialog.last;d.choose(1);int shown=Toast.shown;d.save.tap();
+        check(!d.dismissed&&Toast.shown==shown+1,"uncertain commit remains open and warns rather than claiming success");
+        s.preferences.stored="invalid";s.showVoiceRightActionSettings();check(AlertDialog.last.selectedIndex()==0,"wrong stored type falls back to NEWLINE");
+        s.preferences.stored=99;s.showVoiceRightActionSettings();check(AlertDialog.last.selectedIndex()==0,"unknown stored action falls back to NEWLINE");
+        List<RadioButton> rows=radioButtons(AlertDialog.last.view);check(rows.size()==2&&rows.get(0).id!=rows.get(1).id&&rows.get(0).minHeight>=48&&rows.get(1).minHeight>=48,"radio rows have distinct IDs and minimum touch heights");
+        check(AlertDialog.last.view instanceof ScrollView,"long explanation and choices share scrollable content");
+    }
+    static void cancellation(){
+        String[] modes={"pinyin","english","number","math","editing","pending","loading","failure","undo"};
+        for(String mode:modes){
+            Subject s=new Subject();DataFiles.ready=true;DataFiles.failure="";
+            switch(mode){case "english":s.english=true;break;case "number":s.numbers=true;break;case "math":s.math=true;break;case "editing":s.editing=true;break;case "pending":s.buffer.append("ni");break;case "loading":DataFiles.ready=false;break;case "failure":DataFiles.ready=false;DataFiles.failure="synthetic";break;case "undo":s.beforeCaret=new BeforeCaret();break;}
+            s.refreshCompositionStatus();String expected=s.composition.text;int expectedColor=s.composition.color;
+            s.offlineTask=new OfflineVoice.Task();OfflineVoice.Task task=s.offlineTask;
+            s.voiceState="本地聆听 · 点击完成";s.composition.setText(s.voiceState);s.composition.setTextColor(R.color.ink);s.cancelVoice();
+            check(s.composition.text.equals(expected)&&s.composition.color==expectedColor,"cancel restores current "+mode+" label and style without rebuild");
+            check(task.cancels==1&&s.offlineTask==null&&s.voiceState.isEmpty(),"cancel clears "+mode+" capture owner and state");
+        }
+        DataFiles.ready=true;DataFiles.failure="";
+        Subject s=new Subject();s.heldVoice=new HeldVoice();HeldVoice held=s.heldVoice;s.recognizer=new SpeechRecognizer();SpeechRecognizer system=s.recognizer;
+        s.voiceReview="synthetic";s.voiceReviewReason="reason";s.reviewConnection=new Object();s.reviewSession=4;s.reviewCanInsert=false;s.voiceReviewPanel=new View();s.cancelVoice();
+        check(held.task.cancels==1&&s.heldVoice==null&&system.cancels==1&&system.destroys==1&&s.recognizer==null,"held/system owners are cancelled once and detached");
+        check(s.voiceReview==null&&s.voiceReviewReason.isEmpty()&&s.reviewConnection==null&&s.reviewSession==-1&&s.reviewCanInsert&&s.voiceReviewPanel.visibility==View.GONE,"review text/owner/panel are cleared");
+        check("语音".equals(s.tool),"microphone toolbar restored");
+        s.cancelVoice();check(held.task.cancels==1&&system.cancels==1&&system.destroys==1,"repeated cancel does not repeat external cleanup");
+        s.composition=null;s.cancelVoice();check(s.composition==null,"lifecycle cancellation before view creation is safe");
+    }
+    static final class Clock implements VoiceHoldController.Scheduler {
+        Runnable queued;public VoiceHoldController.Handle after(long delay,Runnable r){queued=r;return ()->{};}
+    }
+    static final class Host implements VoiceHoldController.Host {
+        String written="sentinel|";int commits,cancels,finishes;
+        public boolean beginVoice(VoiceHoldController.Token t){return true;}
+        public void finishVoice(VoiceHoldController.Token t){finishes++;}
+        public void cancelVoice(VoiceHoldController.Token t,VoiceHoldController.CancelReason r){cancels++;}
+        public void tapSpace(long s){}
+        public void commitPreview(VoiceHoldController.Token t,String text,VoiceHoldController.Completion c){written+=text+(c.appendNewline()?"\n":"");commits++;}
+        public void discardPreview(VoiceHoldController.Token t,VoiceHoldController.CancelReason r){}
+        public void update(VoiceHoldController.State s){}public void failed(VoiceHoldController.Token t,String m){}
+    }
+    static VoiceHoldController.Token hold(VoiceHoldController c,Clock clock,long now){
+        VoiceHoldController.Token t=c.down(1,150,180,now);clock.queued.run();
+        c.targets(t,new VoiceHoldController.Region(0,0,100,100),new VoiceHoldController.Region(200,0,300,100));return t;
+    }
+    static void releasePolicy(){
+        for(int value:new int[]{VoiceHoldSettings.NEWLINE,VoiceHoldSettings.KEEP_TEXT,99}){
+            Host h=new Host();Clock clock=new Clock();VoiceHoldController c=new VoiceHoldController(h,clock,500,8);c.bindInputSession(1);VoiceHoldSettings.apply(c,value);
+            VoiceHoldController.Token t=hold(c,clock,0);c.result(t,"text");c.up(t,1,220,20,700);c.result(t,"duplicate");
+            check(h.written.equals(value==1?"sentinel|text":"sentinel|text\n")&&h.commits==1,"actual right-release policy for saved value "+value);
+        }
+        Host h=new Host();Clock clock=new Clock();VoiceHoldController c=new VoiceHoldController(h,clock,500,8);c.bindInputSession(1);VoiceHoldSettings.apply(c,0);
+        VoiceHoldController.Token t=hold(c,clock,0);VoiceHoldSettings.apply(c,1);c.result(t,"old");c.up(t,1,220,20,700);
+        check(h.written.equals("sentinel|old\n"),"changed setting cannot change already active gesture action");
+        t=hold(c,clock,1000);c.up(t,1,220,20,1700);c.result(t,"new");
+        check(h.written.equals("sentinel|old\nnew")&&h.commits==2,"next gesture uses KEEP_TEXT without a newline");
+        t=hold(c,clock,2000);c.up(t,1,150,180,2700);c.cancel(VoiceHoldController.CancelReason.OTHER_INPUT);c.result(t,"stale");
+        check(h.written.equals("sentinel|old\nnew")&&h.commits==2&&h.cancels==1,"cancel while waiting makes later callback inert");
+    }
+    public static void main(String[] args){ui();cancellation();releasePolicy();System.out.println("RESULT pass="+passed+" fail="+failed+"; synthetic host only, Android/mic NOT_RUN");if(failed>0)System.exit(1);}
+}

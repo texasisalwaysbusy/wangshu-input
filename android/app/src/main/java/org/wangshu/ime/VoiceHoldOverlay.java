@@ -17,6 +17,12 @@ public final class VoiceHoldOverlay extends LinearLayout {
     public interface RegionsListener {void changed(VoiceHoldController.Token token,VoiceHoldController.Region left,VoiceHoldController.Region right);}
     private final Palette colors;private final boolean compact;private final TextView status,preview,footer,left,right;private final LinearLayout targets;private final Button cancel;
     private final Level level;private VoiceHoldController.State state;private ViewGroup coordinates;private RegionsListener regions;
+    /** Standard constructor for Android view tools; production passes its palette explicitly. */
+    public VoiceHoldOverlay(Context context){this(context,defaultPalette(context),context.getResources().getConfiguration().orientation==android.content.res.Configuration.ORIENTATION_LANDSCAPE);}
+    private static Palette defaultPalette(Context context){
+        boolean dark=(context.getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        return new Palette(context.getColor(R.color.paper),context.getColor(R.color.surface),context.getColor(R.color.ink),context.getColor(R.color.muted),context.getColor(R.color.selected),dark?Color.rgb(244,147,147):Color.rgb(177,48,48));
+    }
     public VoiceHoldOverlay(Context context,Palette palette,boolean landscape){super(context);colors=palette;compact=landscape;setOrientation(VERTICAL);setPadding(dp(8),dp(compact?4:12),dp(8),dp(compact?4:12));setBackgroundColor(colors.background);setClickable(true);setMinimumHeight(dp(compact?120:210));
         status=text(compact?12:14,1);status.setTextColor(colors.muted);status.setGravity(Gravity.CENTER);addView(status,new LayoutParams(-1,-2));
         targets=new LinearLayout(context);targets.setGravity(Gravity.CENTER_VERTICAL);left=target("撤回");right=target("换行");level=new Level(context);targets.addView(left,new LayoutParams(0,-1,1));targets.addView(level,new LayoutParams(0,-1,1.1f));targets.addView(right,new LayoutParams(0,-1,1));addView(targets,new LayoutParams(-1,0,1));

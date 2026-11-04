@@ -1,0 +1,63 @@
+package org.wangshu.ime;
+
+// Test-only fake manager/prefs; extracted from committed source SHA-256 1bb324473acb198c5e14944a4b3468bdd3443f9ecc5f1bdde0a72373cc30e7e4.
+import java.util.*;
+class ClipboardFenceModel {
+ static class Clip {String value;boolean sensitive;Clip(String v,boolean s){value=v;sensitive=s;}}
+ static class ClipboardManager {interface OnPrimaryClipChangedListener{void onPrimaryClipChanged();}List<OnPrimaryClipChangedListener> listeners=new ArrayList<>();Clip clip;boolean throwAddBefore,throwAddAfter,throwRemove;Runnable addHook;int reads,adds,removes;
+  void addPrimaryClipChangedListener(OnPrimaryClipChangedListener l){adds++;if(throwAddBefore)throw new IllegalStateException("injected pre-add failure");listeners.add(l);if(addHook!=null)addHook.run();if(throwAddAfter)throw new IllegalStateException("injected add failure");}
+  void removePrimaryClipChangedListener(OnPrimaryClipChangedListener l){removes++;if(throwRemove)throw new IllegalStateException("injected remove failure");listeners.remove(l);} Clip getPrimaryClip(){reads++;return clip;}}
+ static class ClipboardStore {static List<String> saved=new ArrayList<>();static String allowedText(Clip c,boolean enabled,boolean priv){return enabled&&!priv&&c!=null&&!c.sensitive?c.value:null;}static ClipboardStore get(ClipboardFenceModel h){return new ClipboardStore();}boolean add(String s,long now,int days){saved.add(s);return true;}}
+ static class Prefs {boolean enabled;boolean getBoolean(String key,boolean def){return enabled;}int getInt(String k,int def){return 7;}}
+ ClipboardManager clipboardManager=new ClipboardManager();boolean clipboardListening,suppressClipboardUntilChange,phrasesOpen,priv,visible=true;String lastClipboardText;int inputSession,toasts;Prefs prefs=new Prefs();
+ Prefs getSharedPreferences(String n,int m){return prefs;}boolean privateInput(){return priv;}boolean isInputViewShown(){return visible;}void rebuild(){}void toast(String s){toasts++;}
+    private ClipboardManager.OnPrimaryClipChangedListener clipboardListener;
+    private Object clipboardRegistration; private boolean clipboardUnregisterUncertain;
+    private void stopClipboard(){
+        ClipboardManager.OnPrimaryClipChangedListener old=clipboardListener;ClipboardManager manager=clipboardManager;
+        clipboardRegistration=null;clipboardListener=null;clipboardListening=false; // invalidate queued callbacks before unregistering
+        if(old!=null&&manager!=null)try{manager.removePrimaryClipChangedListener(old);}catch(RuntimeException unavailable){clipboardUnregisterUncertain=true;/* Old callback remains inert. */}
+    }
+    private void syncClipboard(){
+        boolean enabled=clipboardManager!=null&&isInputViewShown()&&!privateInput()&&getSharedPreferences("clipboard",0).getBoolean("enabled",false);
+        if(!enabled){stopClipboard();return;}if(clipboardListening)return;if(clipboardUnregisterUncertain){toast("剪贴板监听暂不可用，历史未自动记录");return;}
+        ClipboardManager manager=clipboardManager;Object ticket=new Object();int session=inputSession;clipboardRegistration=ticket;
+        java.lang.ref.WeakReference<ClipboardFenceModel> owner=new java.lang.ref.WeakReference<>(this);
+        java.lang.ref.WeakReference<ClipboardManager> managerRef=new java.lang.ref.WeakReference<>(manager);
+        ClipboardManager.OnPrimaryClipChangedListener listener=()->{
+            ClipboardFenceModel live=owner.get();ClipboardManager source=managerRef.get();if(live==null||source==null)return;
+            if(live.clipboardRegistration!=ticket||!live.clipboardListening||live.inputSession!=session||live.clipboardManager!=source)return;
+            try{if(!live.isInputViewShown()||live.privateInput()||!live.getSharedPreferences("clipboard",0).getBoolean("enabled",false))return;}catch(RuntimeException unavailable){return;}
+            live.clipboardChanged();
+        };clipboardListener=listener;
+        try{manager.addPrimaryClipChangedListener(listener);
+            if(clipboardRegistration==ticket&&clipboardListener==listener&&inputSession==session)clipboardListening=true;
+            else try{manager.removePrimaryClipChangedListener(listener);}catch(RuntimeException unavailable){clipboardUnregisterUncertain=true;/* Invalid identity remains inert. */}
+        }catch(RuntimeException unavailable){
+            if(clipboardRegistration==ticket){clipboardRegistration=null;clipboardListener=null;clipboardListening=false;toast("剪贴板监听暂不可用，历史未自动记录");}
+            try{manager.removePrimaryClipChangedListener(listener);}catch(RuntimeException ignored){clipboardUnregisterUncertain=true;/* Invalid identity remains inert. */}
+        }
+    }
+    private void clipboardChanged(){if(privateInput()){suppressClipboardUntilChange=true;return;}suppressClipboardUntilChange=false;lastClipboardText=null;captureClipboard(false);}
+    private void captureClipboard(boolean userRequested){if((!userRequested&&(!clipboardListening||clipboardRegistration==null||clipboardListener==null))||clipboardManager==null||!isInputViewShown()||!getSharedPreferences("clipboard",0).getBoolean("enabled",false)||privateInput()||suppressClipboardUntilChange)return;try{String value=ClipboardStore.allowedText(clipboardManager.getPrimaryClip(),true,false);if(value!=null&&!value.equals(lastClipboardText)){if(ClipboardStore.get(this).add(value,System.currentTimeMillis(),getSharedPreferences("clipboard",0).getInt("days",7))){lastClipboardText=value;if(phrasesOpen)rebuild();}else if(phrasesOpen)toast("历史已满且全部置顶，请先取消置顶或删除一条");}}catch(Exception ignored){/* unavailable clipboard or corrupt store: no reset, no logging of contents */}}
+ void start(boolean value){stopClipboard(); inputSession++;priv=value;if(priv)suppressClipboardUntilChange=true;syncClipboard();}
+ static int pass;static void check(boolean x,String label){if(!x)throw new AssertionError(label);pass++;System.out.println("PASS "+label);}
+ public static void main(String[] args){
+  ClipboardStore.saved.clear();ClipboardFenceModel h=new ClipboardFenceModel();h.prefs.enabled=true;h.start(false);ClipboardManager.OnPrimaryClipChangedListener old=h.clipboardManager.listeners.get(0);h.start(true);h.clipboardManager.clip=new Clip("private-synthetic",false);h.start(false);int reads=h.clipboardManager.reads;old.onPrimaryClipChanged();check(h.clipboardManager.reads==reads&&h.suppressClipboardUntilChange&&ClipboardStore.saved.isEmpty(),"old pre-private queued callback cannot unlock or read private-period clipboard");
+  ClipboardManager.OnPrimaryClipChangedListener fresh=h.clipboardManager.listeners.get(h.clipboardManager.listeners.size()-1);boolean ownerStrong=false,managerStrong=false;try{for(java.lang.reflect.Field f:fresh.getClass().getDeclaredFields()){f.setAccessible(true);Object value=f.get(fresh);ownerStrong|=value==h;managerStrong|=value==h.clipboardManager;}}catch(ReflectiveOperationException e){throw new AssertionError(e);}check(!ownerStrong&&!managerStrong,"listener closure has no direct strong owner or manager reference");h.clipboardManager.clip=new Clip("fresh-normal",false);fresh.onPrimaryClipChanged();check(!h.suppressClipboardUntilChange&&ClipboardStore.saved.equals(List.of("fresh-normal")),"first fresh current-session event unlocks and records normal clip");
+  h.clipboardManager.clip=new Clip("marked",true);fresh.onPrimaryClipChanged();check(!ClipboardStore.saved.contains("marked"),"sensitive marked clip is not recorded");
+  h.prefs.enabled=false;reads=h.clipboardManager.reads;fresh.onPrimaryClipChanged();check(h.clipboardManager.reads==reads,"callback checks opt-out before preference listener runs");h.syncClipboard();reads=h.clipboardManager.reads;fresh.onPrimaryClipChanged();check(h.clipboardManager.reads==reads,"stale callback after opt-out does not read clipboard");
+  h.prefs.enabled=true;reads=h.clipboardManager.reads;h.captureClipboard(false);check(h.clipboardManager.reads==reads,"automatic direct capture after unregister stays blocked even if option changed");
+  h.prefs.enabled=true;h.syncClipboard();ClipboardManager.OnPrimaryClipChangedListener next=h.clipboardManager.listeners.get(h.clipboardManager.listeners.size()-1);reads=h.clipboardManager.reads;fresh.onPrimaryClipChanged();check(h.clipboardManager.reads==reads&&fresh!=next,"old same-session registration stays invalid after re-enable");
+  ClipboardFenceModel add=new ClipboardFenceModel();add.prefs.enabled=true;add.clipboardManager.throwAddAfter=true;boolean escaped=false;try{add.start(false);}catch(RuntimeException e){escaped=true;}check(!escaped&&!add.clipboardListening,"failed registration is not reported active");add.clipboardManager.clip=new Clip("unregistered",false);for(ClipboardManager.OnPrimaryClipChangedListener l:new ArrayList<>(add.clipboardManager.listeners))l.onPrimaryClipChanged();check(add.clipboardManager.reads==0&&!ClipboardStore.saved.contains("unregistered"),"failed registration callback cannot read or store");
+  add.clipboardManager.clip=new Clip("auto-after-failure",false);int autoReads=add.clipboardManager.reads;add.captureClipboard(false);check(add.clipboardManager.reads==autoReads&&!ClipboardStore.saved.contains("auto-after-failure"),"automatic capture after failed registration does not read or record");
+  add.suppressClipboardUntilChange=true;add.captureClipboard(true);check(add.clipboardManager.reads==autoReads,"explicit panel does not bypass private-period suppression");add.suppressClipboardUntilChange=false;
+  add.clipboardManager.clip=new Clip("user-opened",false);add.captureClipboard(true);check(add.clipboardManager.reads==autoReads+1&&ClipboardStore.saved.contains("user-opened"),"explicit opted-in panel opening retains user-triggered capture semantics");
+  ClipboardFenceModel before=new ClipboardFenceModel();before.prefs.enabled=true;before.clipboardManager.throwAddBefore=true;before.start(false);check(!before.clipboardListening&&before.clipboardManager.listeners.isEmpty(),"registration failure before add keeps history inactive");before.clipboardManager.throwAddBefore=false;before.syncClipboard();before.clipboardManager.clip=new Clip("normal-after-retry",false);before.clipboardManager.listeners.get(0).onPrimaryClipChanged();check(before.clipboardListening&&ClipboardStore.saved.contains("normal-after-retry"),"later successful registration resumes normal new-event history");
+  ClipboardFenceModel race=new ClipboardFenceModel();race.prefs.enabled=true;race.clipboardManager.addHook=()->{race.clipboardManager.addHook=null;race.start(true);};race.start(false);check(!race.clipboardListening&&race.priv,"privacy transition during registration cannot reactivate listener");race.clipboardManager.clip=new Clip("private-race",false);for(ClipboardManager.OnPrimaryClipChangedListener l:new ArrayList<>(race.clipboardManager.listeners))l.onPrimaryClipChanged();check(race.clipboardManager.reads==0&&!ClipboardStore.saved.contains("private-race"),"listener from interrupted registration stays inert");
+  ClipboardFenceModel both=new ClipboardFenceModel();both.prefs.enabled=true;both.clipboardManager.throwAddAfter=true;both.clipboardManager.throwRemove=true;both.start(false);both.clipboardManager.clip=new Clip("failed-both",false);for(ClipboardManager.OnPrimaryClipChangedListener l:new ArrayList<>(both.clipboardManager.listeners))l.onPrimaryClipChanged();check(!both.clipboardListening&&both.clipboardManager.reads==0&&!ClipboardStore.saved.contains("failed-both"),"add and remove failures still leave callback inert");
+  int attempted=both.clipboardManager.adds;both.clipboardManager.throwAddAfter=false;both.clipboardManager.throwRemove=false;both.syncClipboard();both.syncClipboard();check(both.clipboardManager.adds==attempted&&!both.clipboardListening,"uncertain unregister prevents repeated registration accumulation");
+  ClipboardFenceModel drop=new ClipboardFenceModel();drop.prefs.enabled=true;drop.start(false);ClipboardManager.OnPrimaryClipChangedListener past=drop.clipboardManager.listeners.get(0);drop.clipboardManager.throwRemove=true;escaped=false;try{drop.start(true);}catch(RuntimeException e){escaped=true;}drop.clipboardManager.clip=new Clip("private-again",false);drop.start(false);past.onPrimaryClipChanged();check(!escaped&&drop.clipboardManager.reads==0&&!ClipboardStore.saved.contains("private-again"),"failed unregister cannot revive older listener");int attemptedDrop=drop.clipboardManager.adds;drop.clipboardManager.throwRemove=false;drop.syncClipboard();check(drop.clipboardManager.adds==attemptedDrop,"failed removal remains quarantined for service lifetime");
+  System.out.println("RESULT "+pass+" assertions; actual methods, fake clipboard, no real clipboard; Android NOT_RUN");
+ }
+}

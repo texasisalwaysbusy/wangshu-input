@@ -1,16 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
-    <application android:label="望舒输入法" android:icon="@drawable/ic_ime" android:theme="@style/WangshuImeTheme" android:allowBackup="false">
-        <activity android:name=".SettingsActivity" android:exported="true" android:windowSoftInputMode="stateAlwaysHidden|adjustResize">
+    <application android:label="@string/app_name" android:icon="@drawable/ic_ime" android:theme="@style/WangshuImeTheme" android:allowBackup="false" android:fullBackupContent="@xml/backup_rules" android:dataExtractionRules="@xml/data_extraction_rules">
+        <activity android:name=".SettingsActivity" android:exported="true" android:windowSoftInputMode="stateHidden|adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
         <activity android:name=".LearningSettingsActivity" android:exported="false" />
         <activity android:name=".FuzzySettingsActivity" android:exported="false" />
         <activity android:name=".ClipboardEditActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
         <activity android:name=".ClipboardSettingsActivity" android:exported="false" />
+        <activity android:name=".SettingsBackupActivity" android:exported="false" />
         <activity android:name=".PersonalActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <service android:name=".WangshuIme" android:label="望舒中文 · 数学符号" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
+        <service android:name=".WangshuIme" android:label="@string/ime_name" android:permission="android.permission.BIND_INPUT_METHOD" android:exported="true">
             <intent-filter><action android:name="android.view.InputMethod" /></intent-filter>
             <meta-data android:name="android.view.im" android:resource="@xml/method" />
         </service>

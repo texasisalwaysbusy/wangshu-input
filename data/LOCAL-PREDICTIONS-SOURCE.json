@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "source": "Original project-authored synthetic editorial examples, written for Wangshu IME on 2026-11-03",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "private_or_user_data": false,
+  "network_required": false,
+  "model": false,
+  "ranking": "Longest matching bounded word context, then editorial row order; no empirical frequency claim",
+  "scope": "Finite Chinese, English, and mixed prose seed examples. Does not establish general language quality or semantic reasoning."
+}

@@ -1,0 +1,42 @@
+{
+  "version": "0.1.0-beta.1",
+  "version_code": 2,
+  "package": "org.wangshu.ime",
+  "source_archive": {
+    "filename": "wangshu-input-v0.1.0-beta.1-source.zip",
+    "bytes": 2507216,
+    "sha256": "63d49bbdc82e8b09c57055afd253e14928c302ad66f8e1a4745820ed17d3e863",
+    "source_files": 406,
+    "entries": 409,
+    "CRC": "PASS",
+    "source_member_hashes": "PASS",
+    "production_ime_sha256": "70f5da692ccf990f1ebd03482a2a3a1199ff9a470816252dc532bf5ba042e63e",
+    "versionCode": 2,
+    "versionName": "0.1.0-beta.1"
+  },
+  "android_full": {
+    "filename": "wangshu-input-full-0.1.0-beta.1.apk",
+    "bytes": 46524008,
+    "sha256": "729a253b05fad44aaa667502b9f298defaf87f4420b40dcc85137b40c0e595e9",
+    "git_blob": "6084cdb64a6d1b3e3a5f2ada4b2af5b401d281b5",
+    "CRC": "PASS",
+    "entries": 48,
+    "lib_abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86",
+      "x86_64"
+    ],
+    "forbidden_private_files": [],
+    "debug_signed": true,
+    "certificate_sha256": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
+    "distribution": "Built and privately delivered. Public GitHub binary upload currently blocked by the connector 16 MiB request-body limit; APK bytes are NOT in this repository."
+  },
+  "repository_binary_upload": {
+    "status": "BLOCKED",
+    "reason": "A 46,524,008-byte APK encodes to 62,032,012 base64 characters, exceeding the current GitHub connector 16 MiB request-body limit. No public APK object was created."
+  },
+  "optional_voice_model": "Not bundled in APK/source; see docs/voice-model-source.json and tools/package_voice.py",
+  "device_retest_after_fixes": "NOT_RUN",
+  "windows_binary": "NOT_PUBLISHED"
+}

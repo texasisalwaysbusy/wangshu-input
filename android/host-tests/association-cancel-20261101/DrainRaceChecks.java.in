@@ -1,0 +1,66 @@
+package org.wangshu.ime;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
+
+/** Actual extracted drained()/await(), real JDK executor, controlled scheduling only. */
+public class DrainRaceChecks {
+    static void check(boolean ok,String text){if(!ok)throw new AssertionError(text);}
+    static class Handler {static void pump(){}}
+    /* ACTUAL_AWAIT */
+    static void latch(CountDownLatch l,String label){try{check(l.await(2,TimeUnit.SECONDS),label);}catch(InterruptedException e){throw new AssertionError(e);}}
+    static void uninterrupted(CountDownLatch l){boolean done=false;while(!done)try{l.await();done=true;}catch(InterruptedException ignored){}}
+    static void until(BooleanSupplier yes,String label){long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(2);while(!yes.getAsBoolean()&&System.nanoTime()<deadline)Thread.yield();check(yes.getAsBoolean(),label);}
+    static class Queue extends ArrayBlockingQueue<Runnable> {
+        volatile boolean pause;CountDownLatch removed=new CountDownLatch(1),returnTask=new CountDownLatch(1);
+        Queue(){super(1);}
+        @Override public Runnable take()throws InterruptedException{
+            Runnable r=super.take();if(pause){pause=false;removed.countDown();uninterrupted(returnTask);}return r;
+        }
+    }
+    static class Executor extends ThreadPoolExecutor {
+        final Queue queue;final CountDownLatch bodyStarted;volatile boolean advanceAfterCount;
+        Executor(Queue q,CountDownLatch body){super(1,1,0,TimeUnit.MILLISECONDS,q,r->{Thread t=new Thread(r);t.setDaemon(true);return t;},new DiscardOldestPolicy());queue=q;bodyStarted=body;}
+        @Override public int getActiveCount(){
+            int observed=super.getActiveCount();
+            // Preserve the genuine observation, then schedule the legal transition
+            // before the caller reads queue.isEmpty(). No count is fabricated.
+            if(advanceAfterCount&&observed==0){advanceAfterCount=false;queue.returnTask.countDown();latch(bodyStarted,"dequeued request begins between independent idle reads");}
+            return observed;
+        }
+    }
+    static class Fixture {
+        final ThreadPoolExecutor worker;Fixture(ThreadPoolExecutor w){worker=w;}
+        /* ACTUAL_DRAINED */
+    }
+    static void handoff(boolean repaired)throws Exception{
+        Queue q=new Queue();CountDownLatch firstStarted=new CountDownLatch(1),firstRelease=new CountDownLatch(1),secondStarted=new CountDownLatch(1),secondRelease=new CountDownLatch(1);
+        AtomicInteger completed=new AtomicInteger();Executor w=new Executor(q,secondStarted);Fixture f=new Fixture(w);
+        AtomicBoolean returned=new AtomicBoolean();AtomicReference<Throwable> driverError=new AtomicReference<>();Thread driver=null;
+        try{
+            w.submit(()->{firstStarted.countDown();uninterrupted(firstRelease);});latch(firstStarted,"first worker active");
+            w.submit(()->{secondStarted.countDown();uninterrupted(secondRelease);completed.incrementAndGet();});q.pause=true;firstRelease.countDown();latch(q.removed,"next request removed from queue but not executing yet");
+            check(w.getActiveCount()==0&&q.isEmpty(),"real non-atomic idle snapshot can look empty with unfinished request");
+            if(!repaired){
+                w.advanceAfterCount=true;boolean failed=false;try{f.drained();returned.set(true);}catch(AssertionError expected){failed=true;System.out.println("REPRODUCED "+expected.getMessage());}
+                check(failed&&!returned.get()&&completed.get()==0,"old drained fails spuriously during live handoff");
+            }else{
+                driver=new Thread(()->{try{
+                    until(()->q.size()==1,"barrier queued without evicting real request");q.returnTask.countDown();latch(secondStarted,"actual request starts");
+                    check(!returned.get()&&completed.get()==0,"barrier cannot claim completion while request remains blocked");secondRelease.countDown();
+                }catch(Throwable e){driverError.set(e);q.returnTask.countDown();secondRelease.countDown();}});driver.start();
+                f.drained();returned.set(true);driver.join(3000);check(!driver.isAlive()&&driverError.get()==null,"controlled driver completed: "+driverError.get());
+                check(completed.get()==1,"barrier waited for earlier task's actual return");System.out.println("PASS deterministic task-handoff schedule; no premature drain");
+            }
+        }finally{q.returnTask.countDown();firstRelease.countDown();secondRelease.countDown();w.shutdownNow();check(w.awaitTermination(3,TimeUnit.SECONDS),"worker cleanup");if(driver!=null)driver.join(3000);}
+    }
+    static void blockedStillFails()throws Exception{
+        ThreadPoolExecutor w=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(1),r->{Thread t=new Thread(r);t.setDaemon(true);return t;},new ThreadPoolExecutor.DiscardOldestPolicy());
+        CountDownLatch entered=new CountDownLatch(1),release=new CountDownLatch(1);Fixture f=new Fixture(w);
+        try{w.submit(()->{entered.countDown();uninterrupted(release);});latch(entered,"blocked task entered");long start=System.nanoTime();boolean failed=false;
+            try{f.drained();}catch(AssertionError expected){failed=true;}
+            check(failed&&System.nanoTime()-start>=TimeUnit.SECONDS.toNanos(3),"real unfinished work still fails at original bounded wait");System.out.println("PASS non-returning task remains a failure, no suppressed assertion");
+        }finally{release.countDown();w.shutdownNow();check(w.awaitTermination(3,TimeUnit.SECONDS),"blocked-task cleanup");}
+    }
+    public static void main(String[] args)throws Exception {boolean repaired=Boolean.parseBoolean(args[0]);handoff(repaired);if(repaired)blockedStillFails();System.out.println("PASS deterministic drain regression; real JDK threads, synthetic request bodies only");}
+}

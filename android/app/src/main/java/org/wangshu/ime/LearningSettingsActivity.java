@@ -8,6 +8,8 @@ import android.widget.*;
 
 /** Real controls for automatic selection learning and temporary recording pause. */
 public final class LearningSettingsActivity extends Activity {
+    @Override public android.content.SharedPreferences getSharedPreferences(String name,int mode){return AppPreferences.managed(name)?AppPreferences.open(this,name):super.getSharedPreferences(name,mode);}
+
     private TextView status;private Button pause;private Switch enabled;private boolean restoring;
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     private TextView text(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextSize(size);view.setTextColor(getColor(R.color.ink));view.setPadding(0,dp(8),0,dp(8));return view;}
