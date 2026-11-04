@@ -18,7 +18,6 @@
     "filename": "wangshu-input-full-0.1.0-beta.1.apk",
     "bytes": 46524008,
     "sha256": "729a253b05fad44aaa667502b9f298defaf87f4420b40dcc85137b40c0e595e9",
-    "git_blob": "6084cdb64a6d1b3e3a5f2ada4b2af5b401d281b5",
     "CRC": "PASS",
     "entries": 48,
     "lib_abis": [
@@ -30,11 +29,24 @@
     "forbidden_private_files": [],
     "debug_signed": true,
     "certificate_sha256": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
-    "distribution": "Built and privately delivered. Public GitHub binary upload currently blocked by the connector 16 MiB request-body limit; APK bytes are NOT in this repository."
+    "distribution": "Published as a GitHub prerelease asset; APK bytes are not tracked as a Git file.",
+    "github_release_asset": {
+      "id": 708403498,
+      "name": "wangshu-input-full-0.1.0-beta.1.apk",
+      "bytes": 46524008,
+      "sha256": "729a253b05fad44aaa667502b9f298defaf87f4420b40dcc85137b40c0e595e9",
+      "download_url": "https://github.com/texasisalwaysbusy/wangshu-input/releases/download/v0.1.0-beta.1/wangshu-input-full-0.1.0-beta.1.apk",
+      "state": "uploaded"
+    }
   },
   "repository_binary_upload": {
-    "status": "BLOCKED",
-    "reason": "A 46,524,008-byte APK encodes to 62,032,012 base64 characters, exceeding the current GitHub connector 16 MiB request-body limit. No public APK object was created."
+    "status": "PUBLISHED_GITHUB_RELEASE",
+    "published_at": "2026-11-04T05:54:19Z",
+    "release_url": "https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.1",
+    "asset_id": 708403498,
+    "asset_size": 46524008,
+    "asset_sha256": "729a253b05fad44aaa667502b9f298defaf87f4420b40dcc85137b40c0e595e9",
+    "note": "GitHub Release asset upload completed and server digest matched the locally verified APK. APK bytes are not tracked in the repository tree."
   },
   "optional_voice_model": "Not bundled in APK/source; see docs/voice-model-source.json and tools/package_voice.py",
   "device_retest_after_fixes": "NOT_RUN",

@@ -1,6 +1,6 @@
 # 望舒输入法 Android 0.1.0-beta.1 / Wangshu Input
 
-**源码 beta 已保存；新版 APK 已构建，但公开二进制上传受接口体积限制。** 此目录当前没有可直接下载的 APK，不要把源码 ZIP 当作安装包，也不要把旧 APK 当作修复后版本。不是商店稳定版，亦不代表整体一期已完成。
+**Android Full 预发布已发布。** [下载 beta APK](https://github.com/texasisalwaysbusy/wangshu-input/releases/download/v0.1.0-beta.1/wangshu-input-full-0.1.0-beta.1.apk) · [GitHub Release](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.1)。APK 作为 Release 附件提供，不直接存放在此 Git 目录。不是商店稳定版，亦不代表整体一期已完成。
 
 ## 源码与构建 / Source and build
 
@@ -12,7 +12,7 @@
 - Full/Preview 及测试 APK 编译通过；两变体 lint 均 0 错误、0 警告；签名、权限、CRC、zipalign、四 ABI 与 16 KiB 静态检查通过。单元任务为 **NO-SOURCE**，不计作测试通过。
 - 406 份输入源码构建前后哈希一致。34 项云端主机命令通过；另有 44 项编辑/本地预编辑、56 项语音安全、43 项语音 UI 的合成边界断言。
 
-当前连接器的单次请求上限 16 MiB，无法上传 46.5 MB APK 的完整编码请求。APK 已私下交付，但没有公开文件链接；此处记录真实哈希，不伪造下载按钮。尚未创建 GitHub Release 页面。
+GitHub Release 已于 2026-11-04T05:54:19Z 发布为 pre-release；资产状态为 uploaded，服务器返回的 46,524,008 B 和 SHA-256 与本地 APK 一致。标签 v0.1.0-beta.1 指向已核验源码提交 f479b8bc446777173321f7c35d1d26fe793d8d29。
 
 ## 此版修复与行为变化
 
@@ -26,7 +26,7 @@
 
 ## English
 
-The reviewed **source beta** is preserved here. The new Full APK was built and privately delivered, but its public upload is blocked by the connector's 16 MiB request-body limit. **No APK bytes or public APK download are present in this directory.** A GitHub Release page has not been created. This is not a store-stable release or completion of the cross-platform first phase.
+The reviewed source beta is preserved here. The new Full APK is publicly available as an attachment to the [GitHub prerelease](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.1). Its server-reported size and SHA-256 match the verified local artifact. APK bytes are not tracked as a Git file in this directory. Tag v0.1.0-beta.1 points to reviewed source commit f479b8bc446777173321f7c35d1d26fe793d8d29. This is not a store-stable release or completion of the cross-platform first phase.
 
 The exact source archive and built APK hashes are listed above and in the manifests. All 406 source inputs stayed unchanged during the offline build. Full/Preview app and test-APK compilation passed; both lint reports had zero errors/warnings. Signature, permissions, CRC, zip alignment, four ABIs and 16 KiB static checks passed. Unit tasks were **NO-SOURCE**, not executed test passes.
 
