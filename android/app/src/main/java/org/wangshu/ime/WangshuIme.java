@@ -230,7 +230,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private void rebuild(){
         if(root==null)return;rememberEmojiScroll();emojiViewGeneration++;if(voiceHold!=null&&voiceHold.state().showVoiceLayer()){showVoiceHold(voiceHold.state());return;}voiceOverlay=null;if(landscapeViewport!=null)landscapeViewport.setVoiceLayer(null);if(inputSurface!=null){inputSurface.spaceKey(null);inputSurface.backspaceKey(null);}deleteKey=null;root.removeAllViews();root.addView(buildToolbar());
         composition=new TextView(this);composition.setTextSize(compact()?12:14);composition.setSingleLine(true);composition.setEllipsize(android.text.TextUtils.TruncateAt.START);composition.setTextColor(getColor(R.color.ink));composition.setPadding(dp(8),0,dp(8),0);
-        candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page>0){page--;refresh();}});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
+        candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page==CandidatePages.ALTERNATIVES||page>0)moveCandidatePage(-1);});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;if(!expandedCandidates&&page==CandidatePages.ALTERNATIVES)page=0;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
         voiceReviewPanel=null;
         if(voiceReview!=null){
             long revision=voiceReviewRevision;
@@ -322,13 +322,44 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         int total=current.length/2;
         for(int start=0;start<total;start+=3){LinearLayout line=row();for(int cell=0;cell<3;cell++){
             final int index=start+cell;
-            if(index<total){String value=current[index*2];Button b=candidateButton(value,index);bindCandidateOptions(b,index);b.setAutoSizeTextTypeUniformWithConfiguration(10,candidateTextSizeSp(),1,android.util.TypedValue.COMPLEX_UNIT_SP);b.setTooltipText(value);b.setContentDescription("展开候选 "+(index+1)+" "+value);line.addView(b,new LinearLayout.LayoutParams(0,dp(keyHeight()+4),1));}
+            if(index<total){String value=current[index*2];Button b=candidateButton(value,index);bindCandidateOptions(b,index);b.setAutoSizeTextTypeUniformWithConfiguration(10,candidateTextSizeSp(),1,android.util.TypedValue.COMPLEX_UNIT_SP);b.setTooltipText(shownFuzzy?current[index*2+1]:value);b.setContentDescription("展开候选 "+(index+1)+" "+value);line.addView(b,new LinearLayout.LayoutParams(0,dp(keyHeight()+4),1));}
             else line.addView(new Space(this),new LinearLayout.LayoutParams(0,dp(keyHeight()+4),1));
         }grid.addView(line);}
         scroll.addView(grid);keys.addView(scroll,new LinearLayout.LayoutParams(-1,dp(compact()?100:176)));
-        LinearLayout navigation=row();Button previous=button("上一组",()->{if(page>0){page--;refresh();}});previous.setEnabled(page>0);navigation.addView(previous,new LinearLayout.LayoutParams(0,dp(keyHeight()),1));
-        Button next=button("下一组",()->{if(DataFiles.ready&&lookup(buffer.toString(),page+1).length>0){page++;refresh();}});next.setEnabled(DataFiles.ready&&lookup(buffer.toString(),page+1).length>0);navigation.addView(next,new LinearLayout.LayoutParams(0,dp(keyHeight()),1));
+        LinearLayout navigation=row();
+        boolean alternatives=page==CandidatePages.ALTERNATIVES;
+        Button previous=button(getString(R.string.previous_candidate_group),()->moveCandidatePage(-1));
+        previous.setEnabled(!alternatives&&page>0);
+        navigation.addView(previous,new LinearLayout.LayoutParams(0,dp(keyHeight()),1));
+        Button next=button(getString(R.string.next_candidate_group),()->moveCandidatePage(1));
+        next.setEnabled(!alternatives&&DataFiles.ready&&lookup(buffer.toString(),page+1).length>0);
+        navigation.addView(next,new LinearLayout.LayoutParams(0,dp(keyHeight()),1));
+        if(alternatives||canOfferAlternativeCandidates()){
+            long generation=shownGeneration;
+            Button variants=button(getString(alternatives?R.string.first_candidate_group:R.string.fuzzy_candidate_label),
+                    ()->toggleAlternativeCandidates(generation));
+            navigation.addView(variants,new LinearLayout.LayoutParams(0,dp(keyHeight()),1.4f));
+        }
         addBackspace(navigation,1);keys.addView(navigation);
+    }
+    private void moveCandidatePage(int direction){
+        if(page==CandidatePages.ALTERNATIVES)page=0;
+        else if(direction<0&&page>0)page--;
+        else if(direction>0&&DataFiles.ready&&lookup(buffer.toString(),page+1).length>0)page++;
+        refresh();
+    }
+    private boolean canOfferAlternativeCandidates(){
+        return candidatePages!=null&&candidatePages.hasAlternativeSpellings()
+                &&buffer.toString().equals(candidateInput)&&!privateInput();
+    }
+    private void toggleAlternativeCandidates(long generation){
+        if(generation!=shownGeneration||!expandedCandidates||buffer.length()==0||privateInput())return;
+        if(page==CandidatePages.ALTERNATIVES){page=0;refresh();return;}
+        if(canOfferAlternativeCandidates()){
+            page=CandidatePages.ALTERNATIVES;
+            refresh();
+            if(page!=CandidatePages.ALTERNATIVES)toast(getString(R.string.no_new_fuzzy_candidates));
+        }
     }
     private void addCaseKey(LinearLayout row,float weight){ImageButton b=new ImageButton(this,null,android.R.attr.buttonStyle);b.setPadding(0,0,0,0);b.setMinimumWidth(0);b.setMinimumHeight(0);b.setScaleType(ImageView.ScaleType.CENTER);KeyboardSkin.function(this,b,caseMode==2);b.setSelected(caseMode==2);b.setImageDrawable(new CaseIcon(caseMode,getResources().getDisplayMetrics().density,getColor(R.color.ink)));b.setOnClickListener(v->{caseMode=(caseMode+1)%3;rebuild();});b.setContentDescription(caseMode==0?"小写":caseMode==1?"下一字母大写":"大写锁定");row.addView(b,new LinearLayout.LayoutParams(0,dp(keyHeight()),weight));}
     private void letters(){for(String letters:new String[]{"qwertyuiop","asdfghjkl","zxcvbnm"}){LinearLayout r=row();boolean last=letters.equals("zxcvbnm");if(last)addCaseKey(r,1.5f);for(char c:letters.toCharArray()){String key=String.valueOf(caseMode!=0?Character.toUpperCase(c):c);add(r,key,1,()->{key(key);if(caseMode==1){caseMode=0;rebuild();}});}if(last)addBackspace(r,1.5f);keys.addView(r);}bottom();}
@@ -460,10 +491,20 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(showVoiceUndo())return;
         composition.setText(offlineTask!=null?voiceState:buffer.length()>0?MixedComposition.display(buffer.toString()):editing?"光标与文本编辑 · 按住中央按钮左右移动":numbers?"数字与常用符号 · 左侧可滚动":DataFiles.ready?"本地中文 · "+(math?"数学符号":english||password?"英文直输":"拼音 / \\数学命令"):DataFiles.failure.isEmpty()?"本地词典正在加载…":"词典初始化失败 · 可切英文，请打开设置");if(beforeCaret!=null&&beforeCaret.hasUndo()&&buffer.length()==0){composition.setText("已删除光标前内容 · 点此撤销");composition.setContentDescription("撤销本次删除光标前内容");composition.setTextColor(getColor(R.color.accent));composition.setMinHeight(dp(36));composition.setOnClickListener(v->undoBeforeCaret());}else{composition.setContentDescription(null);composition.setTextColor(getColor(buffer.length()>0||offlineTask!=null?R.color.ink:R.color.muted));composition.setTextSize(compact()?12:buffer.length()>0?14:12);composition.setMinHeight(0);composition.setOnClickListener(null);}
     }
-    private void refresh(){if(root==null||composition==null||candidates==null)return;if(expandedCandidates&&buffer.length()==0){expandedCandidates=false;rebuild();return;}if(toolbar!=null)toolbar.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);if(candidateLine!=null)candidateLine.setVisibility(buffer.length()>0?View.VISIBLE:View.GONE);if(candidateScroll!=null)candidateScroll.setVisibility(expandedCandidates?View.GONE:View.VISIBLE);if(expandedSummary!=null){expandedSummary.setVisibility(expandedCandidates?View.VISIBLE:View.GONE);expandedSummary.setText(getString(R.string.candidate_page_summary,getString(R.string.candidate_label),String.valueOf(page+1)));}if(candidateToggle!=null){candidateToggle.setText(expandedCandidates?"⌃":"⌄");candidateToggle.setContentDescription(expandedCandidates?"收回候选框":"展开候选框");}if(hideButton!=null)hideButton.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);refreshCompositionStatus();candidates.removeAllViews();shownDictionaryReady=DataFiles.ready;current=!password&&shownDictionaryReady&&buffer.length()>0?lookup(buffer.toString(),page):new String[0];snapshotCandidateDisplay();if(expandedSummary!=null)expandedSummary.setText(getString(R.string.candidate_page_summary,getString(currentPageFuzzy?R.string.fuzzy_candidate_label:R.string.candidate_label),String.valueOf(page+1)));for(int i=0;i<current.length;i+=2){int n=i/2;Button b=candidateButton(current[i],n);bindCandidateOptions(b,n);b.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE);b.setTextSize(candidateTextSizeSp());b.setPadding(dp(12),0,dp(12),0);b.setMinWidth(dp(48));b.setMinimumWidth(dp(48));b.setContentDescription("候选 "+(n+1)+" "+current[i]);if(currentPageFuzzy)b.setTooltipText(current[i+1]);candidates.addView(b,new LinearLayout.LayoutParams(-2,dp(keyHeight())));}if(expandedCandidates)expandedKeys();if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();}
+    private void refresh(){if(root==null||composition==null||candidates==null)return;if(expandedCandidates&&buffer.length()==0){expandedCandidates=false;rebuild();return;}if(toolbar!=null)toolbar.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);if(candidateLine!=null)candidateLine.setVisibility(buffer.length()>0?View.VISIBLE:View.GONE);if(candidateScroll!=null)candidateScroll.setVisibility(expandedCandidates?View.GONE:View.VISIBLE);if(expandedSummary!=null)expandedSummary.setVisibility(expandedCandidates?View.VISIBLE:View.GONE);if(candidateToggle!=null){candidateToggle.setText(expandedCandidates?"⌃":"⌄");candidateToggle.setContentDescription(expandedCandidates?"收回候选框":"展开候选框");}if(hideButton!=null)hideButton.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);refreshCompositionStatus();candidates.removeAllViews();shownDictionaryReady=DataFiles.ready;current=!password&&shownDictionaryReady&&buffer.length()>0?lookup(buffer.toString(),page):new String[0];if(page==CandidatePages.ALTERNATIVES&&current.length==0){
+            page=0;
+            if(!password&&shownDictionaryReady&&buffer.length()>0)current=lookup(buffer.toString(),page);
+        }
+        snapshotCandidateDisplay();
+        if(expandedSummary!=null){
+            expandedSummary.setText(page==CandidatePages.ALTERNATIVES?getString(R.string.fuzzy_candidate_label):
+                    getString(R.string.candidate_page_summary,getString(currentPageFuzzy?R.string.fuzzy_candidate_label:R.string.candidate_label),String.valueOf(page+1)));
+        }for(int i=0;i<current.length;i+=2){int n=i/2;Button b=candidateButton(current[i],n);bindCandidateOptions(b,n);b.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE);b.setTextSize(candidateTextSizeSp());b.setPadding(dp(12),0,dp(12),0);b.setMinWidth(dp(48));b.setMinimumWidth(dp(48));b.setContentDescription("候选 "+(n+1)+" "+current[i]);if(currentPageFuzzy)b.setTooltipText(current[i+1]);candidates.addView(b,new LinearLayout.LayoutParams(-2,dp(keyHeight())));}if(expandedCandidates)expandedKeys();if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();}
     private void clearCandidatePages(){candidatePages=null;candidateInput=null;candidatePersonal=null;candidateRules=null;currentPageFuzzy=false;candidateRevision=-1;candidateLearningRevision=-1;candidateLearned=null;}
     private String[] lookup(String input,int requestedPage){
         currentPageFuzzy=false;
+        boolean alternatives=requestedPage==CandidatePages.ALTERNATIVES;
+        if(alternatives&&(privateInput()||input.startsWith("\\")||MixedComposition.present(input)))return new String[0];
         if(input.startsWith("\\")){candidateRevision=-1;return NativeBridge.lookup(input,requestedPage);}
         if(MixedComposition.present(input)){candidateRevision=personalRevision();candidateLearningRevision=learningRevision();candidateRules=FuzzySettingsActivity.enabledPairs(this);return NativeBridge.lookup(input,requestedPage);}
         try{
@@ -477,8 +518,13 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                 candidatePages=new CandidatePages(initial,n->NativeBridge.lookup(input,n),variants,key->fuzzyCandidates(key));
                 candidateLearningRevision=learning;candidateLearned=learned.clone();candidateRevision=revision;candidateInput=input;candidatePersonal=personal.clone();candidateRules=rules;candidateSession=inputSession;candidateModes=modes;
             }
-            String[] values=candidatePages.page(requestedPage);currentPageFuzzy=candidatePages.isFuzzyPage(requestedPage);return values;
-        }catch(java.io.IOException|RuntimeException unavailable){clearCandidatePages();return NativeBridge.lookup(input,requestedPage);}
+            String[] values=alternatives?candidatePages.alternatives():candidatePages.page(requestedPage);
+            currentPageFuzzy=alternatives?values.length>0:candidatePages.isFuzzyPage(requestedPage);
+            return values;
+        }catch(java.io.IOException|RuntimeException unavailable){
+            clearCandidatePages();
+            return alternatives?new String[0]:NativeBridge.lookup(input,requestedPage);
+        }
     }
     private String[] fuzzyCandidates(String key){
         LinkedHashMap<String,String> values=new LinkedHashMap<>();
@@ -945,7 +991,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(event.isCtrlPressed()||event.isAltPressed()){if(isHardwareEnter(keyCode)&&event.getRepeatCount()==0)hardwareEnterSequences.abandon(event.getDeviceId(),keyCode);return super.onKeyDown(keyCode,event);}
         if(getCurrentInputConnection()==null)return super.onKeyDown(keyCode,event);
         if(keyCode==KeyEvent.KEYCODE_ESCAPE&&buffer.length()>0){if(commitPending(""))refresh();return true;}
-        if((keyCode==KeyEvent.KEYCODE_PAGE_UP||keyCode==KeyEvent.KEYCODE_PAGE_DOWN)&&buffer.length()>0){if(keyCode==KeyEvent.KEYCODE_PAGE_UP&&page>0)page--;else if(keyCode==KeyEvent.KEYCODE_PAGE_DOWN&&DataFiles.ready&&lookup(buffer.toString(),page+1).length>0)page++;refresh();return true;}
+        if((keyCode==KeyEvent.KEYCODE_PAGE_UP||keyCode==KeyEvent.KEYCODE_PAGE_DOWN)&&buffer.length()>0){moveCandidatePage(keyCode==KeyEvent.KEYCODE_PAGE_UP?-1:1);return true;}
         if(keyCode==KeyEvent.KEYCODE_DEL){backspace();return true;}
         if(keyCode==KeyEvent.KEYCODE_SPACE){if(event.isShiftPressed()){if(!finishRaw())return true;english=!english;rebuild();}else space();return true;}
         if(isHardwareEnter(keyCode)){hardwareEnterSequences.own(event.getDeviceId(),keyCode,event.getDownTime());enter(event.isShiftPressed());return true;}

@@ -6,12 +6,14 @@ from pathlib import Path
 import hashlib,json,subprocess,sys,xml.etree.ElementTree as ET
 project,out=map(lambda x:Path(x).resolve(),sys.argv[1:3]);out.mkdir(parents=True,exist_ok=False)
 here=Path(__file__).resolve().parent;java=project/'android/app/src/main/java/org/wangshu/ime'
-sources=[java/'SymbolPanelCatalog.java',java/'VoiceResultPolicy.java',java/'VoiceNumberFormat.java',here/'PresentationPolicyChecks.java']
+sources=[java/'SymbolPanelCatalog.java',java/'VoiceResultPolicy.java',java/'VoiceNumberFormat.java',java/'CandidatePages.java',here/'PresentationPolicyChecks.java',here/'AlternativeCandidatePageChecks.java']
 result={'scope':'Direct production pure classes, extracted real callbacks with fake views, XML/source wiring. No Android build/layout/TalkBack/phone or ASR acceptance.','checks':[]}
 def run(name,cmd):
     r=subprocess.run([str(x) for x in cmd],text=True,capture_output=True);(out/(name+'.txt')).write_text(r.stdout+r.stderr);print(r.stdout+r.stderr,end='');result['checks'].append({'name':name,'returncode':r.returncode});return r.returncode==0
 classes=out/'classes';classes.mkdir()
-if run('compile',['java','-m','jdk.compiler/com.sun.tools.javac.Main','-proc:none','-d',classes,*sources]):run('policies',['java','-cp',classes,'org.wangshu.ime.PresentationPolicyChecks'])
+if run('compile',['java','-m','jdk.compiler/com.sun.tools.javac.Main','-proc:none','-d',classes,*sources]):
+    run('policies',['java','-cp',classes,'org.wangshu.ime.PresentationPolicyChecks'])
+    run('alternative-candidate-page',['java','-cp',classes,'org.wangshu.ime.AlternativeCandidatePageChecks'])
 ime=(java/'WangshuIme.java').read_text()
 def extract(signature):
     assert ime.count(signature)==1, signature

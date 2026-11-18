@@ -172,7 +172,7 @@ class TextService;
 struct CandidateProof {
     std::string input,voice,calculation,personalRevision,learningRevision,learningWord;size_t page=0;unsigned modes=0;
     wangshu::context_math::Kind calculationKind=wangshu::context_math::Kind::Value;
-    bool association=false,builtin=false,personal=false,readable=false,ranking=false,rankingReadable=false,autoLearn=false,fuzzy=false;ITfContext* context=nullptr;unsigned long long epoch=0,voiceGeneration=0,calculationGeneration=0;
+    bool association=false,builtin=false,personal=false,readable=false,ranking=false,rankingReadable=false,autoLearn=false,fuzzy=false,fuzzyShortcut=false;ITfContext* context=nullptr;unsigned long long epoch=0,voiceGeneration=0,calculationGeneration=0;
     std::uint64_t clipboardGeneration=0;
 };
 // A separately reference-counted snapshot may outlive its service in a host.
@@ -377,25 +377,34 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     std::string buffer;size_t page=0;std::vector<wangshu::Candidate> candidates;std::wstring status;
     ISpRecognizer* recognizer=nullptr;ISpRecoContext* recoContext=nullptr;ISpRecoGrammar* grammar=nullptr;ITfContext* voiceTarget=nullptr;
     const wangshu::Engine& dictionary()const{static const wangshu::Engine empty;return sharedEngine?*sharedEngine:empty;}
+    static constexpr size_t QuickFuzzyPage=static_cast<size_t>(-1);
     std::vector<wangshu::Candidate> pinyinPage(const std::string& input,size_t requested,
             const wangshu::PersonalData& personal,const wangshu::LearningData& learning,CandidateProof* proof){
         constexpr size_t PageSize=9,MaxScanPages=16;
         const auto now=wangshu::WindowsPersonalStore::learningNow();
         auto exact=[&](size_t index){return learning.lookup(dictionary(),personal,input,index,now);};
-        auto current=exact(requested);
-        if(!current.empty()||!chinese||math||!learning.fuzzyMask||requested>MaxScanPages)return current;
+        const bool quick=requested==QuickFuzzyPage;
+        auto current=quick?std::vector<wangshu::Candidate>{}:exact(requested);
+        const bool fuzzyEnabled=chinese&&!math&&learning.fuzzyMask!=0;
+        if(proof)proof->fuzzyShortcut=fuzzyEnabled;
+        if(!fuzzyEnabled||(!quick&&(!current.empty()||requested>MaxScanPages)))return current;
         const auto variants=wangshu::fuzzy_pinyin::variants(input,learning.fuzzyMask);
         if(variants.empty())return current;
         std::set<std::string> seen;
-        size_t firstFuzzy=0;
-        for(size_t i=0;i<requested;++i){
-            auto prior=exact(i);
-            if(prior.empty())break;
-            for(const auto& word:prior)seen.insert(word.text);
-            firstFuzzy=i+1;
-            if(prior.size()<PageSize)break;
+        size_t skip=0;
+        if(quick){
+            for(const auto& word:exact(0))seen.insert(word.text);
+        }else{
+            size_t firstFuzzy=0;
+            for(size_t i=0;i<requested;++i){
+                auto prior=exact(i);
+                if(prior.empty())break;
+                for(const auto& word:prior)seen.insert(word.text);
+                firstFuzzy=i+1;
+                if(prior.size()<PageSize)break;
+            }
+            skip=(requested-firstFuzzy)*PageSize;
         }
-        const auto skip=(requested-firstFuzzy)*PageSize;
         size_t accepted=0;
         for(const auto& key:variants){
             const auto normalized=wangshu::LearningData::candidateKey(key);
@@ -422,15 +431,18 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     }
     std::vector<wangshu::Candidate> personalLookup(const std::string& input,size_t candidatePage=0,CandidateProof* proof=nullptr){
         if(wangshu::symbol_panel::active(input))
-            return wangshu::symbol_panel::lookup(dictionary(),input,candidatePage);
-        if(input.empty()||input[0]=='\\'||input.find('`')!=std::string::npos||privateInput||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE)))return dictionary().lookup(input,9,candidatePage);
+            return candidatePage==QuickFuzzyPage?std::vector<wangshu::Candidate>{}:wangshu::symbol_panel::lookup(dictionary(),input,candidatePage);
+        if(input.empty()||input[0]=='\\'||input.find('`')!=std::string::npos||privateInput||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE))){
+            if(candidatePage==QuickFuzzyPage)return {};
+            return dictionary().lookup(input,9,candidatePage);
+        }
         if(proof)proof->personal=true;
         wangshu::PersonalSnapshot snapshot;
         try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();snapshot=personalStore->read();if(proof){proof->readable=true;proof->personalRevision=snapshot.revision;}if(snapshot.fromBackup&&status.empty())status=L"个人词库正在使用有效备份；请在本地管理程序确认恢复";}
-        catch(...){if(status.empty())status=L"个人词库暂不可读，文件保留；内置候选仍可用";return dictionary().lookup(input,9,candidatePage);}
+        catch(...){if(status.empty())status=L"个人词库暂不可读，文件保留；内置候选仍可用";if(candidatePage==QuickFuzzyPage)return {};return dictionary().lookup(input,9,candidatePage);}
         if(proof)proof->ranking=true;
         try{auto weights=personalStore->readLearningFresh();if(proof){proof->rankingReadable=true;proof->learningRevision=weights.revision;proof->autoLearn=weights.data.enabled&&!noLearn&&!weights.fromBackup;}if(weights.fromBackup&&status.empty())status=L"个人排序使用备份；恢复前暂停自动学习";return pinyinPage(input,candidatePage,snapshot.data,weights.data,proof);}
-        catch(...){if(status.empty())status=L"个人排序不可读，未重置；原词库仍可用";return snapshot.data.lookup(dictionary(),input,candidatePage);}
+        catch(...){if(status.empty())status=L"个人排序不可读，未重置；原词库仍可用";if(candidatePage==QuickFuzzyPage)return {};return snapshot.data.lookup(dictionary(),input,candidatePage);}
     }
     unsigned candidateModes()const{return activationFlags^(chinese?0x10000000u:0)^(math?0x20000000u:0)^(noLearn?0x40000000u:0)^(privateInput?0x08000000u:0);}
     void captureCandidates(){
@@ -449,7 +461,14 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(!voiceReview.empty())candidates={{voiceReview,"语音待核对"}};
         else if(displayed.builtin)candidates=builtinCandidates;
         else if(!calculation.empty())candidates={{calculation,calculationAssociation?"常用语联想":calculationKind==wangshu::context_math::Kind::Substitution?"计算 · 代入":"计算 · 精确结果"}};
-        else candidates=personalLookup(buffer,page,&displayed);
+        else{
+            candidates=personalLookup(buffer,page,&displayed);
+            if(page==QuickFuzzyPage&&candidates.empty()){
+                page=0;
+                captureCandidates();
+                return;
+            }
+        }
         ITfContext* next=composingContext?composingContext:!voiceReview.empty()?voiceTarget:!calculation.empty()?calculationTarget:nullptr;if(next)next->AddRef();else next=focused();drop(candidateContext);candidateContext=next;displayed.context=next;
     }
     bool validCandidate(ITfContext* context,const CandidateProof& proof){
@@ -679,6 +698,8 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
             if(buffer=="\\")hint=L"再按一次 \\ 打开符号分类";
             else if(buffer==wangshu::symbol_panel::Prefix)hint=L"1–9打开分类 · 输入 clip 再按 Enter 打开剪贴板";
             else if(wangshu::symbol_panel::active(buffer))hint=L"1–9插入符号 · PgUp/PgDn翻页 · Esc取消";
+            else if(page==QuickFuzzyPage)hint=L"模糊候选 · 1–9选词 · PgUp返回首组";
+            else if(displayed.fuzzyShortcut)hint=L"1–9选词 · PgUp/PgDn翻页 · Shift+PgDn查看模糊";
             else hint=L"1–9选词 · 空格确认 · PgUp/PgDn翻页 · 右键个人排序";
         }
         TextOutW(dc,10,showSpeech?184:48+static_cast<int>(candidates.size())*30,hint.c_str(),static_cast<int>(hint.size()));SelectObject(dc,old);EndPaint(w,&p);
@@ -1606,7 +1627,14 @@ public:
         if(listening)stopVoice();
         if(ctrl()&&shift()&&k=='M'){math=!math;status=math?L"数学模式 · \\alpha 符号 · 算式 = 后点选精确结果":L"";update();return S_OK;}
         if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
-        if(k==VK_NEXT||k==VK_PRIOR){if(k==VK_PRIOR&&page)page--;if(k==VK_NEXT&&!personalLookup(buffer,page+1).empty())page++;update();return S_OK;}
+        if(k==VK_NEXT||k==VK_PRIOR){
+            if(page==QuickFuzzyPage)page=0;
+            else if(k==VK_NEXT&&shift()&&displayed.fuzzyShortcut)page=QuickFuzzyPage;
+            else if(k==VK_PRIOR&&page)page--;
+            else if(k==VK_NEXT&&!personalLookup(buffer,page+1).empty())page++;
+            update();
+            return S_OK;
+        }
         char mixedKey=character(k);
         if((buffer.empty()||buffer[0]!='\\')&&(mixedKey=='`'||(wangshu::mixed::active(buffer)&&mixedKey>=32&&mixedKey<=126))){
             if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(mixedKey);page=0;status=L"中英分段：反引号切换原文英段；关闭英段后空格确认，Enter原文";if(mixedKey=='`'){update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;

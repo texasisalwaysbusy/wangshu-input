@@ -5,6 +5,7 @@ import java.util.*;
 /** Bounded lazy exact-then-fuzzy pages. Contains only caller-supplied, instance-local data. */
 public final class CandidatePages {
     public static final int PAGE_SIZE=9,MAX_INITIAL_PAIRS=3072,MAX_EXACT_PAIRS=4096,MAX_NATIVE_PAGE=100,MAX_REQUESTED_PAGE=512,MAX_VARIANTS=7,MAX_VARIANT_KEY_LENGTH=64;
+    static final int ALTERNATIVES = -1;
     public interface PageSource {String[] page(int index);}
     public interface VariantSource {String[] page(String key);}
     private static final class Entry {
@@ -18,6 +19,8 @@ public final class CandidatePages {
     private final PageSource exactSource;private final VariantSource variantSource;private final List<String> keys;
     private final ArrayList<Entry> exact=new ArrayList<>(),fuzzy=new ArrayList<>();
     private final HashSet<String> exactSeen=new HashSet<>(),fuzzySeen=new HashSet<>();
+    private final String[][] variantPages;
+    private String[] alternatives;
     private int nextExact,nextVariant;private boolean exactEnded,exactCut,loading;private RuntimeException failure;
 
     public CandidatePages(String[] initialExactPairs,PageSource exact,List<String> variantKeys,VariantSource variants){
@@ -27,6 +30,7 @@ public final class CandidatePages {
         if(variantKeys!=null){if(variantKeys.size()>MAX_VARIANTS)throw new IllegalArgumentException("Too many variant keys");for(String key:variantKeys){if(key==null||key.isEmpty()||key.length()>MAX_VARIANT_KEY_LENGTH)throw new IllegalArgumentException("Invalid variant key");distinct.add(key);}}
         if(!distinct.isEmpty()&&variants==null)throw new IllegalArgumentException("Missing variant page source");
         keys=Collections.unmodifiableList(new ArrayList<>(distinct));variantSource=variants;
+        variantPages=new String[keys.size()][];
         for(int i=0;i<initial.length;i+=2)if(exactSeen.add(initial[i]))this.exact.add(new Entry(initial[i],initial[i+1]));
     }
     /** Each returned array is independent. Invalid indices and malformed provider arrays fail closed. */
@@ -35,6 +39,32 @@ public final class CandidatePages {
     public synchronized boolean isFuzzyPage(int index){return resolve(index).fuzzy;}
     /** Pure read: true only for known exact native/cap cutoff; does not probe any source. */
     public synchronized boolean truncated(){return exactCut;}
+
+    boolean hasAlternativeSpellings(){return !keys.isEmpty();}
+
+    /**
+     * A separate view of up to nine alternatives. Deduplicate against the
+     * first exact page only. Deeper exact pages remain independently available.
+     */
+    synchronized String[] alternatives(){
+        if(failure!=null)throw failure;
+        if(loading)throw new IllegalStateException("Reentrant candidate query");
+        if(alternatives!=null)return alternatives.clone();
+        if(keys.isEmpty())return new String[0];
+
+        while(!exactEnded&&!exactCut&&exact.size()<PAGE_SIZE)readExact();
+        Set<String> seen=new HashSet<>();
+        for(int i=0;i<Math.min(PAGE_SIZE,exact.size());i++)seen.add(exact.get(i).text);
+        List<Entry> result=new ArrayList<>();
+        for(int index=0;index<keys.size()&&result.size()<PAGE_SIZE;index++){
+            String[] pairs=variantPage(index);
+            for(int i=0;i<pairs.length&&result.size()<PAGE_SIZE;i+=2){
+                if(seen.add(pairs[i]))result.add(new Entry(pairs[i],pairs[i+1]));
+            }
+        }
+        alternatives=slice(result,0);
+        return alternatives.clone();
+    }
 
     private Resolved resolve(int index){
         if(index<0||index>MAX_REQUESTED_PAGE)throw new IllegalArgumentException("Candidate page out of range");
@@ -66,12 +96,21 @@ public final class CandidatePages {
         else if(index==MAX_NATIVE_PAGE)exactCut=true; // Never query 101 and mistake its forced empty result for completion.
     }
     private void readVariant(){
-        String key=keys.get(nextVariant);String[] pairs;loading=true;
-        try{pairs=checked(variantSource.page(key),PAGE_SIZE);}
-        catch(RuntimeException invalid){failure=invalid instanceof IllegalArgumentException?new IllegalArgumentException("Malformed fuzzy candidate page"):new IllegalStateException("Fuzzy candidate source failed");throw failure;}
-        finally{loading=false;}
+        String[] pairs=variantPage(nextVariant);
         nextVariant++;
         for(int i=0;i<pairs.length;i+=2)if(!exactSeen.contains(pairs[i])&&fuzzySeen.add(pairs[i]))fuzzy.add(new Entry(pairs[i],pairs[i+1]));
+    }
+    private String[] variantPage(int index){
+        if(variantPages[index]!=null)return variantPages[index];
+        loading=true;
+        try{
+            String[] pairs=checked(variantSource.page(keys.get(index)),PAGE_SIZE);
+            variantPages[index]=pairs;
+            return pairs;
+        }catch(RuntimeException invalid){
+            failure=invalid instanceof IllegalArgumentException?new IllegalArgumentException("Malformed fuzzy candidate page"):new IllegalStateException("Fuzzy candidate source failed");
+            throw failure;
+        }finally{loading=false;}
     }
     private static String[] checked(String[] pairs,int max){
         if(pairs==null||(pairs.length&1)!=0||pairs.length/2>max)throw new IllegalArgumentException("Invalid candidate array");

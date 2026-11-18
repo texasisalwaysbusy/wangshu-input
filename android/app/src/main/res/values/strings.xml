@@ -20,4 +20,8 @@
     <string name="candidate_page_summary">"%1$s · 第 %2$s 组"</string>
     <string name="candidate_label">"候选"</string>
     <string name="fuzzy_candidate_label">"模糊候选"</string>
+    <string name="previous_candidate_group">上一组</string>
+    <string name="next_candidate_group">下一组</string>
+    <string name="first_candidate_group">返回首组</string>
+    <string name="no_new_fuzzy_candidates">没有额外的模糊候选</string>
 </resources>

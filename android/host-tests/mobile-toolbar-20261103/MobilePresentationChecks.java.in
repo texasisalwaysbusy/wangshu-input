@@ -41,7 +41,23 @@ public final class MobilePresentationChecks {
         static void function(Object ignored,Node b,boolean selected){b.skin="function";}
     }
     static class android {static class util {static class TypedValue {static final int COMPLEX_UNIT_SP=2;}}}
-    static class R {static class color {static final int ink=0;}}
+    static class R {
+        static class color {static final int ink=0;}
+        static class string {
+            static final int previous_candidate_group=1,next_candidate_group=2,first_candidate_group=3,
+                    fuzzy_candidate_label=4,no_new_fuzzy_candidates=5;
+        }
+    }
+    String getString(int value){
+        return switch(value){
+            case R.string.previous_candidate_group -> "上一组";
+            case R.string.next_candidate_group -> "下一组";
+            case R.string.first_candidate_group -> "返回首组";
+            case R.string.fuzzy_candidate_label -> "模糊候选";
+            case R.string.no_new_fuzzy_candidates -> "没有额外的模糊候选";
+            default -> throw new AssertionError("missing resource");
+        };
+    }
     static class BuildConfig {static boolean BASIC_TYPING_PREVIEW;}
     static class PreviewFeatures {static final String VOICE_UNAVAILABLE="preview voice unavailable";}
     static class SettingsActivity {}
@@ -52,6 +68,11 @@ public final class MobilePresentationChecks {
     static class PersonalPanel {void open(){}}
     static class DataFiles {static boolean ready=true;}
     boolean math,numbers,english,password,phrasesOpen,editing,isCompact,finish=true,currentPageFuzzy;
+    boolean expandedCandidates,shownFuzzy,privateField;
+    long shownGeneration;
+    CandidatePages candidatePages;
+    String candidateInput;
+    boolean privateInput(){return privateField;}
     int inputSession;long emojiViewGeneration;Object inputOwner=new Object();Object getCurrentInputConnection(){return inputOwner;}
     int position,page,chosen=-1,longPressed=-1,rebuilds,refreshes,voiceStarts,hides;
     Object offlineTask,recognizer;Intent launched;
@@ -85,6 +106,7 @@ public final class MobilePresentationChecks {
     /*EXTRACT_CANDIDATE_BUTTON*/
     void renderStrip(){/*EXTRACT_STRIP*/}
     /*EXTRACT_EXPANDED*/
+    /*EXTRACT_ALTERNATIVES*/
     /*EXTRACT_BOTTOM*/
     /*EXTRACT_ENTER*/
     /*EXTRACT_LANGUAGE*/
@@ -101,7 +123,7 @@ public final class MobilePresentationChecks {
 
     static void candidateChecks(boolean expanded){
         for(boolean compact:new boolean[]{false,true})for(boolean fuzzy:new boolean[]{false,true})for(int page=0;page<2;page++){
-            MobilePresentationChecks h=new MobilePresentationChecks();h.isCompact=compact;h.currentPageFuzzy=fuzzy;h.page=page;
+            MobilePresentationChecks h=new MobilePresentationChecks();h.isCompact=compact;h.currentPageFuzzy=fuzzy;h.shownFuzzy=fuzzy;h.page=page;
             h.pages=new String[][]{VALUES,new String[]{"空格","kongge","3D","3d","2 号","erhao","最后","last"}};h.current=h.pages[page];
             Button realSpace=h.button("空格",()->{});check(h.inputSurface.space==realSpace,"fixture real space binds");
             if(expanded)h.expandedKeys();else h.renderStrip();
@@ -116,7 +138,8 @@ public final class MobilePresentationChecks {
                 check(b.options==i,"long press index unchanged");b.press();check(h.chosen==i,"tap selects original page-local index");
                 b.longClick.run();check(h.longPressed==i,"long press keeps original index");
                 check(b.description.equals((expanded?"展开候选 ":"候选 ")+(i+1)+" "+value),"accessibility ordinal and literal text retained");
-                if(!expanded){check(b.minWidth==48&&b.minimumWidth==48,"candidate minimum touch width unchanged");if(fuzzy)check(b.tooltip.equals(h.current[i*2+1]),"fuzzy tooltip metadata retained");}
+                if(!expanded){check(b.minWidth==48&&b.minimumWidth==48,"candidate minimum touch width unchanged");}
+                if(fuzzy)check(b.tooltip.equals(h.current[i*2+1]),"fuzzy tooltip metadata retained");
             }
             if(expanded){
                 Button previous=label(h.keys,"上一组"),next=label(h.keys,"下一组");
@@ -126,6 +149,33 @@ public final class MobilePresentationChecks {
                 else{previous.press();check(h.page==0&&h.refreshes==1,"previous group mapping unchanged");}
             }
         }
+    }
+
+    static void alternativeControls(){
+        MobilePresentationChecks host=new MobilePresentationChecks();
+        host.expandedCandidates=true;
+        host.candidateInput=host.buffer.toString();
+        host.candidatePages=new CandidatePages(host.current,index->new String[0],
+                List.of("variant"),key->new String[]{"内容","模糊"});
+        host.expandedKeys();
+        Button entry=label(host.keys,"模糊候选");
+        host.shownGeneration++;
+        entry.press();
+        check(host.page==0&&host.refreshes==0,"old expansion button cannot change candidate view");
+        host.expandedKeys();
+        label(host.keys,"模糊候选").press();
+        check(host.page==CandidatePages.ALTERNATIVES&&host.refreshes==1,"current alternative button selects explicit view");
+        host.expandedKeys();
+        check(!label(host.keys,"上一组").enabled&&!label(host.keys,"下一组").enabled,"normal navigation disabled in alternative view");
+        label(host.keys,"返回首组").press();
+        check(host.page==0&&host.refreshes==2,"return restores the first normal page");
+        host.privateField=true;
+        host.expandedKeys();
+        check(allButtons(host.keys).stream().noneMatch(b->b.text.equals("模糊候选")),"private editor has no alternative entry");
+        host.privateField=false;
+        host.buffer.append('q');
+        host.expandedKeys();
+        check(allButtons(host.keys).stream().noneMatch(b->b.text.equals("模糊候选")),"old spelling expansions do not appear for a new key");
     }
 
     static void toolbarChecks(){
@@ -187,6 +237,7 @@ public final class MobilePresentationChecks {
     public static void main(String[] args){
         test("candidate strip: literal text, real space binding, indices and accessibility",()->candidateChecks(false));
         test("expanded grid: literal text, real space binding, indices and paging",()->candidateChecks(true));
+        test("explicit alternatives, return and stale view guards",MobilePresentationChecks::alternativeControls);
         test("toolbar: single Settings corner, no language action, uniform seven-slot structure",MobilePresentationChecks::toolbarChecks);
         test("bottom language key: left/right, corrupt settings, passwords and pending input",MobilePresentationChecks::bottomChecks);
         test("mixed segment existing-key entry",MobilePresentationChecks::mixedEntryChecks);

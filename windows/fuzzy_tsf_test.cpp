@@ -101,7 +101,28 @@ int wmain(int argc,wchar_t** argv){
                   "production selection inserts fuzzy text without learning under the original key");
         }
         {
-            Fixture fixture(root);fixture.fuzzy(1);fixture.type("ZANG");fixture.toFuzzyPage();
+            Fixture on(root),off(root);on.fuzzy(4);
+            on.type("SUOHUA");off.type("SUOHUA");
+            const auto first=off.candidates();
+            check(on.candidates()==first,"s/sh quick access preserves the real exact first page");
+            on.key(VK_NEXT);off.key(VK_NEXT);
+            check(on.candidates()==off.candidates(),"plain PgDn still shows the same next exact page");
+            const auto before=on.context->doc.value;
+            check(on.key(VK_NEXT,true)&&WindowsPersonalTestAccess::fuzzy(on.service)&&
+                    on.candidates()==std::vector<std::string>{u8"说话"}&&on.context->doc.value==before,
+                  "Shift+PgDn immediately shows 说话 without submitting or learning");
+            check(on.key(VK_PRIOR)&&WindowsPersonalTestAccess::page(on.service)==0&&on.candidates()==first,
+                  "PgUp from alternatives returns to the original first page");
+            on.key(VK_NEXT,true);
+            check(on.key('1')&&on.context->doc.value==L"before说话after"&&
+                    on.store->readLearningFresh().data.entries.empty(),
+                  "selecting an alternative writes once under the original editor and skips learning");
+            check(off.key(VK_NEXT,true)&&!WindowsPersonalTestAccess::fuzzy(off.service),
+                  "disabled rules leave shifted pagination on the normal exact path");
+        }
+        {
+            Fixture fixture(root);fixture.fuzzy(1);fixture.type("ZANG");fixture.key(VK_NEXT,true);
+            expect(WindowsPersonalTestAccess::fuzzy(fixture.service));
             auto* candidate=fixture.manager->element;
             ITfCandidateListUIElementBehavior* ui=nullptr;
             expect(candidate&&SUCCEEDED(candidate->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&ui))));
@@ -109,7 +130,9 @@ int wmain(int argc,wchar_t** argv){
             const auto before=fixture.context->doc.value;
             const auto rejected=ui->Finalize();
             ui->Release();
-            check(FAILED(rejected)&&fixture.context->doc.value==before,"a stale fuzzy candidate cannot commit after a rule change");
+            check(FAILED(rejected)&&fixture.context->doc.value==before,"a stale fuzzy alternative cannot commit after a rule change");
+            check(WindowsPersonalTestAccess::page(fixture.service)==0&&!WindowsPersonalTestAccess::fuzzy(fixture.service),
+                  "disabled rules restore the first exact page on refresh");
         }
         {
             Fixture fixture(root);fixture.fuzzy(1);WindowsPersonalTestAccess::setMath(fixture.service);

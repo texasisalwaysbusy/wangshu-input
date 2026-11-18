@@ -43,6 +43,14 @@ final class FuzzyCandidateChecks {
             check(Arrays.equals(pager.page(exactPages),flat(expectedFuzzy))&&pager.isFuzzyPage(exactPages),"actual JNI fuzzy page appends after all exact text with global exact dedup");int calls=variantCalls.size();pager.page(exactPages);pager.isFuzzyPage(exactPages);
             check(calls==1&&variantCalls.equals(List.of("zhen"))&&pager.page(exactPages+1).length==0&&!pager.isFuzzyPage(exactPages+1),"repeated/native fuzzy tail reads query that variant once only");
             ArrayList<Integer> expectedIndices=new ArrayList<>();for(int i=0;i<=lastNative;i++)expectedIndices.add(i);check(exactCalls.equals(expectedIndices)&&!pager.truncated(),"actual native raw pages are queried once in order without a forced empty sentinel");
+            CandidatePages rightAway=new CandidatePages(new String[0],page->NativeBridge.lookup("suohua",page),
+                    List.of("shuohua"),key->NativeBridge.lookup(key,0));
+            String[] normal=rightAway.page(0);
+            String[] alternatives=rightAway.alternatives();
+            boolean reachable=false;
+            for(int i=0;i<alternatives.length;i+=2)reachable|=alternatives[i].equals("说话");
+            check(reachable&&alternatives.length<=18&&Arrays.equals(normal,rightAway.page(0)),
+                    "native s/sh alternative is available immediately with no first-page change");
             CandidatePages manual=new CandidatePages(new String[]{nativeFirst[0],"manual-first","𝕏","manual-math"},page->NativeBridge.lookup("zen",page),List.of(),null);String[] merged=manual.page(0);check(merged.length>=4&&merged[0].equals(nativeFirst[0])&&merged[1].equals("manual-first")&&merged[2].equals("𝕏")&&merged[3].equals("manual-math"),"initial manual identity/annotation/math text precedes real native duplicates");
             check(original.equals(actual.getAll()),"real application fuzzy preferences remain unchanged by the isolated test namespace");
             return "PASS "+count+" actual JNI / isolated preference protocol checks\n"+log+"Scope: existing native dictionary and production preference reader/expander/pager only. Not registered-IME candidate UI, editor insertion, visible switch interaction, screenshot, ASR, microphone or real-phone acceptance.\n";

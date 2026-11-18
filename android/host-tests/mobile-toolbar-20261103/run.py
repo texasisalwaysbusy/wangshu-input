@@ -80,6 +80,10 @@ else:
 parts = {
     'STRIP': balanced(source, source.index(strip_signature)),
     'EXPANDED': method(source, 'private void expandedKeys()'),
+    'ALTERNATIVES': '\n'.join(method(source, signature) for signature in (
+        'private void moveCandidatePage(', 'private boolean canOfferAlternativeCandidates(',
+        'private void toggleAlternativeCandidates(',
+    )),
     'BOTTOM': method(source, 'private void bottom()'),
     'ENTER': method(source, 'private void addEnterKey('),
     'LANGUAGE': method(source, 'private void addLanguageKey('),
@@ -100,7 +104,7 @@ generated.write_text(template)
     'project': str(project),
     'kind': 'actual extracted Java methods/fragments with fake Android views',
     'sources': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in
-                [java / 'WangshuIme.java', java / 'ToolbarIcon.java', java / 'LanguageKeyPosition.java']},
+                [java / 'WangshuIme.java', java / 'ToolbarIcon.java', java / 'LanguageKeyPosition.java', java / 'CandidatePages.java']},
     'fragments': {k: hashlib.sha256(v.encode()).hexdigest() for k, v in parts.items()},
 }, indent=2) + '\n')
 
@@ -120,7 +124,8 @@ classes = out / 'classes'
 classes.mkdir()
 compiled = run('host-compile', ['java', '-m', 'jdk.compiler/com.sun.tools.javac.Main',
                               '-source', '17', '-target', '17', '-d', classes,
-                              generated, java / 'LanguageKeyPosition.java', java / 'MixedComposition.java'])
+                              generated, java / 'LanguageKeyPosition.java', java / 'MixedComposition.java',
+                              java / 'CandidatePages.java'])
 if compiled == 0:
     run('host', ['java', '-cp', classes, 'org.wangshu.ime.MobilePresentationChecks'])
 
