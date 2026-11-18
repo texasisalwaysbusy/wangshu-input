@@ -14,7 +14,174 @@ struct Fixture {
  bool enter(){BOOL eat=FALSE;s->OnKeyDown(c,VK_RETURN,0,&eat);return eat;}
  void unchanged(){auto text=c->doc.value;auto cursor=c->doc.cursor;auto end=c->doc.selectionEnd;enter();expect(c->doc.value==text&&c->doc.cursor==cursor&&c->doc.selectionEnd==end);}
 };
-int main(){
+static void waitForPreview(Fixture& fixture,const std::filesystem::path& folder){
+ expect(TextServiceTestAccess::beginVoicePreviewFixture(fixture.s,fixture.c,folder));
+ const auto deadline=GetTickCount64()+5000;
+ while(TextServiceTestAccess::voicePreview(fixture.s)!=L"你好"&&GetTickCount64()<deadline){
+  TextServiceTestAccess::voiceTick(fixture.s);
+  Sleep(10);
+ }
+ expect(TextServiceTestAccess::voicePreview(fixture.s)==L"你好");
+}
+static void livePreviewSuite(const std::filesystem::path& folder){
+ test("live preview belongs to the speech session; modifier down and repeats do not finalize",[&]{
+  Fixture f;waitForPreview(f,folder);
+  expect(!f.m->element&&!TextServiceTestAccess::hasVoice(f.s)&&f.c->doc.value==L"beforeafter");
+  ScriptedKeyboardState chord(true,true);BOOL eat=TRUE;
+  expect(SUCCEEDED(f.s->OnTestKeyDown(f.c,VK_CONTROL,0,&eat))&&!eat);
+  expect(SUCCEEDED(f.s->OnTestKeyDown(f.c,VK_SHIFT,0,&eat))&&!eat);
+  expect(SUCCEEDED(f.s->OnTestKeyDown(f.c,'V',0x40000000,&eat))&&eat);
+  expect(SUCCEEDED(f.s->OnKeyDown(f.c,'V',0x40000000,&eat))&&eat);
+  expect(TextServiceTestAccess::voicePreview(f.s)==L"你好");
+  expect(SUCCEEDED(f.s->OnTestKeyDown(f.c,'V',0,&eat))&&eat);
+  expect(SUCCEEDED(f.s->OnKeyDown(f.c,'V',0,&eat))&&eat);
+  expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Finishing);
+  expect(TextServiceTestAccess::voicePreview(f.s).empty());
+  const auto deadline=GetTickCount64()+5000;
+  while(!TextServiceTestAccess::hasVoice(f.s)&&GetTickCount64()<deadline){
+   TextServiceTestAccess::voiceTick(f.s);Sleep(10);
+  }
+  expect(TextServiceTestAccess::hasVoice(f.s)&&f.c->doc.value==L"beforeafter");
+  expect(f.enter()&&f.c->doc.value==L"beforefinishedafter");
+  f.unchanged();
+ });
+ test("Escape consumes cancellation and clears uncommitted preview",[&]{
+  Fixture f;waitForPreview(f,folder);BOOL eat=FALSE;
+  expect(SUCCEEDED(scriptedTestKeyDown(f.s,f.c,VK_ESCAPE,&eat))&&eat);
+  expect(SUCCEEDED(scriptedKeyDown(f.s,f.c,VK_ESCAPE,&eat))&&eat);
+  TextServiceTestAccess::voiceTick(f.s);
+  expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Idle&&
+         TextServiceTestAccess::voicePreview(f.s).empty()&&!TextServiceTestAccess::recovery(f.s)&&
+         f.c->doc.value==L"beforeafter");
+ });
+ test("new top context erases partial and has no speech candidate or recovery",[&]{
+  Fixture f;waitForPreview(f,folder);
+  auto other=new Context;drop(f.m->document);f.m->document=new DocumentManager(other);
+  f.s->OnPushContext(other);
+  TextServiceTestAccess::voiceTick(f.s);
+  expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Idle&&
+         TextServiceTestAccess::voicePreview(f.s).empty()&&!TextServiceTestAccess::recovery(f.s)&&
+         f.c->doc.value==L"beforeafter"&&other->doc.value==L"beforeafter");
+  other->Release();
+ });
+ test("private scope transition discards partial and stops the synthetic child",[&]{
+  Fixture f;waitForPreview(f,folder);f.c->scope=IS_PASSWORD;
+  TextServiceTestAccess::voiceTick(f.s);
+  expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Idle&&
+         TextServiceTestAccess::voicePreview(f.s).empty()&&!TextServiceTestAccess::hasVoice(f.s)&&
+         !TextServiceTestAccess::recovery(f.s)&&f.c->doc.value==L"beforeafter");
+ });
+}
+static bool claimUndo(Fixture& fixture,LPARAM message=0){
+ ScriptedKeyboardState chord(true,true);BOOL eat=FALSE;
+ expect(SUCCEEDED(fixture.s->OnTestKeyDown(fixture.c,'Z',message,&eat)));
+ return eat!=FALSE;
+}
+static bool dispatchUndo(Fixture& fixture,ITfContext* target,LPARAM message=0){
+ ScriptedKeyboardState chord(true,true);BOOL eat=FALSE;
+ expect(SUCCEEDED(fixture.s->OnKeyDown(target,'Z',message,&eat)));
+ return eat!=FALSE;
+}
+static void voiceUndoSuite(){
+ test("voice undo removes only the latest confirmed UTF-16 insertion",[]{
+  Fixture f;f.c->doc.value=L"语音原有语音";f.c->doc.cursor=4;
+  expect(TextServiceTestAccess::stageVoice(f.s,f.c,u8"语音🎈")&&f.enter());
+  expect(f.c->doc.value==L"语音原有语音🎈语音"&&TextServiceTestAccess::canUndoSpeech(f.s));
+  expect(claimUndo(f)&&dispatchUndo(f,f.c)&&f.c->doc.value==L"语音原有语音"&&f.c->doc.cursor==4);
+  expect(claimUndo(f,0x40000000)&&dispatchUndo(f,f.c,0x40000000));
+  expect(!claimUndo(f)&&f.c->doc.textWrites==2);
+ });
+ test("mouse or programmatic selection and document changes refuse voice undo",[]{
+  for(int scenario:{0,1,2}){
+   Fixture f;f.stage();expect(f.enter()&&TextServiceTestAccess::canUndoSpeech(f.s));
+   if(scenario==0)f.c->doc.cursor=1;
+   if(scenario==1)f.c->doc.selectionEnd=2;
+   if(scenario==2)f.c->doc.value[0]=L'X';
+   const auto before=f.c->doc.value;
+   expect(claimUndo(f)&&dispatchUndo(f,f.c)&&f.c->doc.value==before&&f.c->doc.textWrites==1);
+  }
+ });
+ test("voice undo claimed in first field cannot dispatch in second",[]{
+  Fixture f;f.stage();expect(f.enter()&&claimUndo(f));
+  auto other=new Context;drop(f.m->document);f.m->document=new DocumentManager(other);
+  f.s->OnSetFocus(FALSE);
+  expect(dispatchUndo(f,other)&&other->doc.textWrites==0&&f.c->doc.textWrites==1);
+  other->Release();
+ });
+ test("duplicate preflight and late dispatch cannot undo a newer voice write",[]{
+  Fixture f;f.stage();expect(f.enter()&&claimUndo(f,4));
+  f.s->OnSetFocus(FALSE);
+  expect(TextServiceTestAccess::stageVoice(f.s,f.c,"new")&&f.enter());
+  const auto newer=f.c->doc.value;
+  expect(TextServiceTestAccess::canUndoSpeech(f.s)&&claimUndo(f,4)&&dispatchUndo(f,f.c,4));
+  expect(f.c->doc.value==newer&&f.c->doc.textWrites==2&&TextServiceTestAccess::canUndoSpeech(f.s));
+  expect(claimUndo(f,5)&&dispatchUndo(f,f.c,5)&&f.c->doc.value==L"beforespeechafter"&&f.c->doc.textWrites==3);
+ });
+ test("password transition refuses undo before reading any document text",[]{
+  Fixture f;f.stage();expect(f.enter());
+  const auto reads=f.c->fullReads;
+  f.c->scope=IS_PASSWORD;
+  expect(claimUndo(f)&&dispatchUndo(f,f.c)&&f.c->doc.textWrites==1&&f.c->fullReads==reads);
+ });
+ test("ambiguous undo write consumes the command without retry",[]{
+  Fixture f;f.stage();expect(f.enter());f.c->doc.writeThenFail=true;
+  expect(claimUndo(f)&&dispatchUndo(f,f.c)&&f.c->doc.value==L"beforeafter"&&f.c->doc.textWrites==2);
+  expect(!claimUndo(f)&&!TextServiceTestAccess::canUndoSpeech(f.s));
+ });
+ test("host refusing caret placement suppresses possible voice undo",[]{
+  Fixture f;f.stage();f.c->doc.denySelection=true;
+  expect(f.enter()&&f.c->doc.value==L"beforespeechafter"&&!TextServiceTestAccess::canUndoSpeech(f.s));
+ });
+ test("only modifier keys preserve the shortcut until another text action",[]{
+  Fixture f;f.stage();expect(f.enter());BOOL eat=TRUE;
+  expect(SUCCEEDED(scriptedTestKeyDown(f.s,f.c,VK_SHIFT,&eat))&&!eat);
+  expect(TextServiceTestAccess::canUndoSpeech(f.s));
+  expect(SUCCEEDED(scriptedTestKeyDown(f.s,f.c,'N',&eat))&&eat);
+  expect(!claimUndo(f)&&f.c->doc.value==L"beforespeechafter");
+ });
+}
+static void formatSuite(const std::filesystem::path& folder){
+ using Mode=wangshu::voice_format::Mode;
+ test("bounded Windows number formatting matches six Android reference pairs",[]{
+  const std::wstring ambiguous=L"一点点，下午三点五分，一百二个，一万二个，二〇二三年二月二十九日，编号为零九号，型号A三米，001个";
+  const std::wstring prose=L"他说等一等。已经看过了吗？";
+  const std::pair<std::wstring,std::wstring> examples[]={
+   {L"二〇二四年二月二十九日，称了两千零六克。",L"2024年2月29日，称了2006克。"},
+   {L"序列号为〇〇四五，备件二十个。",L"序列号为0045，备件20个。"},
+   {L"仓库里有两百零七个零件，缺口为零点五毫米。",L"仓库里有207个零件，缺口为0.5毫米。"},
+   {L"它值一亿零五万元，另付十二点五元。",L"它值100050000元，另付12.5元。"},
+   {ambiguous,ambiguous},{prose,prose}};
+  for(const auto& entry:examples)expect(wangshu::voice_format::numbers(entry.first)==entry.second);
+ });
+ test("format setting survives reopen, remains independent from math panel and binds per recording",[&]{
+  const auto path=(folder/L"voice-format-personal.json").wstring();
+  wangshu::WindowsPersonalStore store(path);
+  auto base=store.readLearningFresh();
+  expect(base.data.speechFormat==Mode::Raw);
+  auto numbers=store.modifyLearning(base.revision,[](wangshu::LearningData& data){data.speechFormat=Mode::Numbers;});
+  wangshu::WindowsPersonalStore reopened(path);
+  expect(reopened.readLearningFresh().data.speechFormat==Mode::Numbers);
+  Fixture numeric;expect(TextServiceTestAccess::beginVoice(numeric.s,numeric.c));
+  TextServiceTestAccess::mathPanel(numeric.s,true);
+  TextServiceTestAccess::loadSpeechFormat(numeric.s,path);
+  auto math=reopened.modifyLearning(numbers.revision,[](wangshu::LearningData& data){data.speechFormat=Mode::Math;});
+  TextServiceTestAccess::recognizeSpeech(numeric.s,u8"两千克，根号。");
+  expect(numeric.enter()&&numeric.c->doc.value==L"before2000克，根号。after");
+  Fixture maths;expect(TextServiceTestAccess::beginVoice(maths.s,maths.c));
+  TextServiceTestAccess::loadSpeechFormat(maths.s,path);
+  const std::string spoken=u8"根号";
+  TextServiceTestAccess::recognizeSpeech(maths.s,spoken);
+  expect(maths.enter()&&maths.c->doc.value==L"before√after");
+  auto raw=reopened.modifyLearning(math.revision,[](wangshu::LearningData& data){data.speechFormat=Mode::Raw;});
+  expect(raw.revision==base.revision);
+  Fixture original;expect(TextServiceTestAccess::beginVoice(original.s,original.c));
+  TextServiceTestAccess::mathPanel(original.s,true);
+  TextServiceTestAccess::loadSpeechFormat(original.s,path);
+  TextServiceTestAccess::recognizeSpeech(original.s,spoken);
+  expect(original.enter()&&original.c->doc.value==L"before根号after");
+ });
+}
+int main(int argc,char** argv){
  test("unchanged preview commits once",[]{Fixture f;f.stage();expect(f.enter()&&f.c->doc.value==L"beforespeechafter");});
  test("caret moved before original position refuses old speech",[]{Fixture f;f.stage();f.c->doc.cursor=1;f.unchanged();});
  test("caret moved after original position refuses old speech",[]{Fixture f;f.stage();f.c->doc.cursor=10;f.unchanged();});
@@ -56,6 +223,7 @@ int main(){
  test("PRIVATE change during initial capture refuses binding",[]{Fixture f;bool fired=false;f.c->doc.onRead=[&]{fired=true;f.c->scope=IS_PRIVATE;};expect(!TextServiceTestAccess::beginVoice(f.s,f.c)&&fired);});
  test("PRIVATE change during completion capture discards recognized result",[]{Fixture f;expect(TextServiceTestAccess::beginVoice(f.s,f.c));bool fired=false;f.c->doc.onRead=[&]{fired=true;f.c->scope=IS_PRIVATE;};TextServiceTestAccess::resultVoice(f.s,"heard");expect(fired&&!TextServiceTestAccess::hasVoice(f.s)&&!TextServiceTestAccess::recovery(f.s));});
  test("unreadable selection is unknown and retains recoverable result",[]{Fixture f;f.stage();f.c->doc.noSelection=true;f.unchanged();expect(!TextServiceTestAccess::hasVoice(f.s)&&TextServiceTestAccess::recovery(f.s));});
+ if(argc==2){const std::filesystem::path folder(argv[1]);livePreviewSuite(folder);voiceUndoSuite();formatSuite(folder);}
  test("fixture COM references release",[]{expect(objectCount==0);});
  std::cout<<"RESULT passed="<<passed<<" failed="<<failed<<" total="<<passed+failed<<"; production PE/mock TSF, generated speech; real Windows/microphone NOT_RUN"<<std::endl;return failed?1:0;
 }

@@ -10,7 +10,19 @@
 class VoiceProcess {
     HANDLE process=nullptr,job=nullptr,input=nullptr,output=nullptr;
     std::string pending;ULONGLONG deadline=0;
+    std::wstring partial;
     static void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
+    void readPreview(const std::string& line){
+        constexpr size_t prefixSize=8;
+        partial.clear();
+        const auto size=line.size()-prefixSize;
+        if(!size||size>2048||line.find_first_of("\r\n\t\0",prefixSize,4)!=std::string::npos)return;
+        const char* bytes=line.data()+prefixSize;
+        const int units=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,bytes,static_cast<int>(size),nullptr,0);
+        if(!units)return;
+        partial.resize(units);
+        if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,bytes,static_cast<int>(size),partial.data(),units))partial.clear();
+    }
 public:
     enum State{Idle,Starting,Recording,Finishing,Complete,Failed};State state=Idle;
     std::string text,error;
@@ -18,7 +30,8 @@ public:
     VoiceProcess()=default;VoiceProcess(const VoiceProcess&)=delete;VoiceProcess& operator=(const VoiceProcess&)=delete;
     DWORD processId()const{return process?GetProcessId(process):0;}
     bool active()const{return state==Starting||state==Recording||state==Finishing;}
-    void cancel(){if(job)TerminateJobObject(job,3);if(process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT)TerminateProcess(process,3);close(input);close(output);close(process);close(job);state=Idle;pending.clear();text.clear();error.clear();}
+    const std::wstring& preview()const{return partial;}
+    void cancel(){if(job)TerminateJobObject(job,3);if(process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT)TerminateProcess(process,3);close(input);close(output);close(process);close(job);state=Idle;pending.clear();partial.clear();text.clear();error.clear();}
     bool start(const std::filesystem::path& folder,const std::wstring& fixtureArgs=L""){
         cancel();HANDLE childInput=nullptr,childOutput=nullptr,nullError=nullptr;LPPROC_THREAD_ATTRIBUTE_LIST attrs=nullptr;PROCESS_INFORMATION info{};bool ok=false;
         SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES),nullptr,TRUE};
@@ -45,7 +58,7 @@ public:
         if(!ok){DWORD code=GetLastError();cancel();state=Failed;error="Unable to start owned local voice process ("+std::to_string(code)+")";return false;}
         state=Starting;deadline=GetTickCount64()+120000;return true;
     }
-    void finish(){if((state!=Starting&&state!=Recording)||!input)return;DWORD written=0;char c='F';if(!WriteFile(input,&c,1,&written,nullptr)||written!=1){fail("Unable to finish local recording");return;}state=Finishing;deadline=GetTickCount64()+60000;}
+    void finish(){if((state!=Starting&&state!=Recording)||!input)return;DWORD written=0;char c='F';if(!WriteFile(input,&c,1,&written,nullptr)||written!=1){fail("Unable to finish local recording");return;}partial.clear();state=Finishing;deadline=GetTickCount64()+60000;}
     void fail(const std::string& message){cancel();state=Failed;error=message;}
     void poll(){
         if(!active()||!output)return;
@@ -54,6 +67,7 @@ public:
         if(peek&&available){char b[4096];DWORD n=0;if(ReadFile(output,b,std::min<DWORD>(sizeof(b),available),&n,nullptr)){pending.append(b,n);if(pending.size()>32768){fail("Local voice response too large");return;}
             size_t pos=0;while((pos=pending.find('\n'))!=std::string::npos){std::string line=pending.substr(0,pos);pending.erase(0,pos+1);if(!line.empty()&&line.back()=='\r')line.pop_back();
                 if(line=="READY"){if(state!=Finishing){state=Recording;deadline=GetTickCount64()+60000;}}
+                else if(state==Recording&&line.rfind("PREVIEW ",0)==0)readPreview(line);
                 else if(line.rfind("RESULT ",0)==0){std::string value=line.substr(7);cancel();text=value;state=Complete;return;}
                 else if(line.rfind("ERROR ",0)==0){fail(line.substr(6));return;}
             }

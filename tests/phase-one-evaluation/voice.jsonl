@@ -1,0 +1,36 @@
+{"id":"holdout-zh-1","language":"zh","reference":"把右边第二个抽屉里的白色电池取出来。"}
+{"id":"holdout-zh-2","language":"zh","reference":"这张收据需要盖章，然后放进蓝色文件夹。"}
+{"id":"holdout-zh-3","language":"zh","reference":"公交车临时改道，我们得提前一站下车。"}
+{"id":"holdout-zh-4","language":"zh","reference":"请在听完提示音后按下绿色按钮。"}
+{"id":"holdout-zh-5","language":"zh","reference":"水壶烧开以后，让茶叶浸泡两分钟。"}
+{"id":"holdout-zh-6","language":"zh","reference":"雨已经停了，窗台上的纸还是湿的。"}
+{"id":"holdout-zh-7","language":"zh","reference":"我改了三处拼写，并保留了原始版本。"}
+{"id":"holdout-zh-8","language":"zh","reference":"这台小秤最多称五公斤，先把托盘归零。"}
+{"id":"holdout-zh-9","language":"zh","reference":"先检查插头，再沿着桌沿整理电源线。"}
+{"id":"holdout-zh-10","language":"zh","reference":"如果灯闪了两次，就重新检查接头。"}
+{"id":"holdout-en-1","language":"en","reference":"The courier left a small parcel beside the stairs."}
+{"id":"holdout-en-2","language":"en","reference":"Can you check whether the blue folder is still on the shelf?"}
+{"id":"holdout-en-3","language":"en","reference":"Save a separate copy before you change the heading."}
+{"id":"holdout-en-4","language":"en","reference":"We need two short cables and one spare battery."}
+{"id":"holdout-en-5","language":"en","reference":"The crossing is closed until Thursday afternoon."}
+{"id":"holdout-en-6","language":"en","reference":"Turn the knob gently until you hear a click."}
+{"id":"holdout-en-7","language":"en","reference":"Read the first line aloud, then pause for a second."}
+{"id":"holdout-en-8","language":"en","reference":"The new filter fits the smaller bottle."}
+{"id":"holdout-en-9","language":"en","reference":"There is a note under the empty coffee cup."}
+{"id":"holdout-en-10","language":"en","reference":"I moved the appointment because the train was delayed."}
+{"id":"holdout-mixed-1","language":"mixed","reference":"请把 invoice 放进共享文件夹，再发给我。"}
+{"id":"holdout-mixed-2","language":"mixed","reference":"打开 debug 模式后，先运行一次 smoke test。"}
+{"id":"holdout-mixed-3","language":"mixed","reference":"今天的 meeting 改到下午四点。"}
+{"id":"holdout-mixed-4","language":"mixed","reference":"这个 backup 需要保留旧版本。"}
+{"id":"holdout-mixed-5","language":"mixed","reference":"把 status 改成 pending，等确认后再提交。"}
+{"id":"holdout-mixed-6","language":"mixed","reference":"请用英文写 subject，正文还是用中文。"}
+{"id":"holdout-mixed-7","language":"mixed","reference":"这段 Python 代码先别运行。"}
+{"id":"holdout-mixed-8","language":"mixed","reference":"点击 refresh 以后，页面显示 offline。"}
+{"id":"holdout-mixed-9","language":"mixed","reference":"把 final draft 发给 Alex，然后关掉窗口。"}
+{"id":"holdout-mixed-10","language":"mixed","reference":"先连接 Bluetooth，再调整耳机音量。"}
+{"id":"format-decimal","language":"zh","reference":"温度降到零下三点五度。","formatted":"温度降到零下3.5度。"}
+{"id":"format-date","language":"zh","reference":"交件日期是二零二六年十一月三日。","formatted":"交件日期是2026年11月3日。"}
+{"id":"format-integer","language":"zh","reference":"一共需要一百二十三个零件。","formatted":"一共需要123个零件。"}
+{"id":"format-leading-zero","language":"zh","reference":"验证码是零零七二。","formatted":"验证码是0072。"}
+{"id":"format-prose","language":"zh","reference":"我们一心一意把它做好。","formatted":"我们一心一意把它做好。"}
+{"id":"format-punctuation","language":"zh","reference":"你到门口了吗？我在台阶旁边。","formatted":"你到门口了吗？我在台阶旁边。"}

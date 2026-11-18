@@ -18,7 +18,7 @@ for name in ['text_service.cpp','context_candidates.h','numeric_candidates.h','n
 (out/'tsf_edit_test.cpp').write_bytes((PROJECT/'tests/tsf_edit_test.cpp').read_bytes())
 target=os.path.relpath(PROJECT/'data',out);(out/'data').symlink_to(target,target_is_directory=True);record['data_symlink']=target
 cxx=ROOT/'.tools/mingw/usr/bin/x86_64-w64-mingw32-g++-posix';exe=out/'context-tsf-checks.exe';record['compiler_sha256']=sha(cxx)
-command=[str(cxx),'-std=c++17','-Os','-s','-Wall','-Wextra','-Wno-unused-parameter','-static',str(BASE/'context_tsf_test.cpp'),str(BASE/'personal_store.cpp'),str(PROJECT/'staging/personal-native/personal_data.cpp'),str(PROJECT/'core/engine.cpp'),'-o',str(exe),'-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lwinpthread']
+command=[str(cxx),'-std=c++17','-Os','-s','-Wall','-Wextra','-Wno-unused-parameter','-static',str(BASE/'context_tsf_test.cpp'),str(BASE/'personal_store.cpp'),str(BASE/'clipboard_store.cpp'),str(PROJECT/'staging/personal-native/personal_data.cpp'),str(PROJECT/'core/engine.cpp'),'-o',str(exe),'-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lcrypt32','-lwinpthread']
 code=0
 try:
     for stage,cmd,bound in [('compile',command,180),('runtime',['bash',str(PROJECT/'tools/run_wine.sh'),str(exe)],150)]:

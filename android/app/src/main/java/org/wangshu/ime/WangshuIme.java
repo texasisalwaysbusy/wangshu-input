@@ -25,11 +25,9 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private final StringBuilder buffer=new StringBuilder();
     private boolean english=false,password=false,math=false,numbers=false;
     private boolean pendingCommitInFlight;
-    // Unconfirmed preedit stays in the keyboard, never in host composing text.
-    private InputConnection preeditConnection;
-    private int preeditSession;
+    private final PreeditSelection preeditSelection=new PreeditSelection();
+    private InputConnection preeditOwner;
     private SplitSelection.Snapshot preeditSnapshot;
-    private boolean localCommitInFlight;
     private final EditorActions editorActions=new EditorActions(this);
     private boolean editing=false,phrasesOpen=false;
     private PersonalPanel personalPanel;
@@ -84,13 +82,16 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private View deleteKey;
     private VoiceHoldController voiceHold;
     private VoiceHoldTouchSurface inputSurface;
+    private LandscapeKeyboardViewport landscapeViewport;
     private VoiceHoldOverlay voiceOverlay;
     private HeldVoice heldVoice;
-    private long voiceEditEpoch; // Invalidates a result across reentrant cancellation or other input.
+    private VoiceCommitUndo voiceUndo;
     private int reviewSession=-1;
     private InputConnection reviewConnection;
     private String voiceReviewReason="";
     private boolean reviewCanInsert=true;
+    private boolean voiceCommitInFlight;
+    private long voiceReviewRevision;
     private String symbolCategory=SymbolPanelCatalog.DEFAULT_CATEGORY, emojiCategory="笑脸";
     private long emojiViewGeneration=0, emojiSelectionRevision=0;
     private final EmojiScrollMemory emojiScrollMemory=new EmojiScrollMemory();
@@ -107,24 +108,34 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(voiceHold!=null)voiceHold.cancel(VoiceHoldController.CancelReason.WINDOW_CHANGED);
         cancelBackspace();if(mathAssociation!=null)mathAssociation.clear();if(beforeCaret!=null)beforeCaret.invalidate();
         inputSurface=new VoiceHoldTouchSurface(this);inputSurface.controller(voiceHold);inputSurface.backspaceController(backspaceGesture);
-        root=column();root.setLayoutParams(new android.widget.FrameLayout.LayoutParams(-1,-2));root.setBackgroundColor(getColor(R.color.paper));root.setPadding(dp(4),dp(3),dp(4),dp(3));inputSurface.addView(root);voiceOverlay=null;
-        if(Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.navigationBars());v.setPadding(dp(4)+bars.left,dp(3),dp(4)+bars.right,dp(3)+bars.bottom);return insets;});
-        rebuild();root.requestApplyInsets();return inputSurface;
+        root=column();
+        root.setBackgroundColor(getColor(R.color.paper));
+        root.setPadding(dp(4),dp(3),dp(4),dp(3));
+        landscapeViewport=compact()?new LandscapeKeyboardViewport(this):null;
+        if(landscapeViewport==null){
+            inputSurface.addView(root,new android.widget.FrameLayout.LayoutParams(-1,-2));
+        }else{
+            landscapeViewport.setKeyboard(root);
+            inputSurface.addView(landscapeViewport,new android.widget.FrameLayout.LayoutParams(-1,-2));
+        }
+        voiceOverlay=null;
+        if(landscapeViewport==null&&Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.navigationBars());v.setPadding(dp(4)+bars.left,dp(3),dp(4)+bars.right,dp(3)+bars.bottom);return insets;});
+        rebuild();inputSurface.requestApplyInsets();return inputSurface;
     }
-    @Override public void onStartInput(EditorInfo info,boolean restarting){inputSession++;stopClipboard();super.onStartInput(info,restarting);if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();emojiScrollMemory.reset(inputSession);editing=false;phrasesOpen=false;if(personalPanel!=null)personalPanel.resetSplit();editorActions.reset();cancelVoice();buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;int type=info.inputType&InputType.TYPE_MASK_CLASS,variation=info.inputType&InputType.TYPE_MASK_VARIATION;password=(type==InputType.TYPE_CLASS_TEXT&&(variation==InputType.TYPE_TEXT_VARIATION_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD))||(type==InputType.TYPE_CLASS_NUMBER&&variation==InputType.TYPE_NUMBER_VARIATION_PASSWORD);numbers=type==InputType.TYPE_CLASS_NUMBER||type==InputType.TYPE_CLASS_PHONE;math=false;if(voiceHold!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null)backspaceGesture.bind(inputSession);if(beforeCaret!=null)beforeCaret.invalidate();if(privateInput())suppressClipboardUntilChange=true;rebuild();syncClipboard();}
-    @Override public void onFinishInput(){inputSession++;editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();emojiScrollMemory.reset(inputSession);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();keyHandler.removeCallbacksAndMessages(null);cancelVoice();buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;current=new String[0];super.onFinishInput();}
-    @Override public void onWindowShown(){super.onWindowShown();loadVoiceHoldSettings();clearCandidatePages();refresh();if(voiceHold!=null&&getCurrentInputConnection()!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null&&getCurrentInputConnection()!=null)backspaceGesture.bind(inputSession);keyHandler.post(()->{showLearningNotice();syncClipboard();captureClipboard(false);if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();});if(getWindow()!=null)ThemeBars.navigation(this,getWindow().getWindow());}
-    @Override public void onWindowHidden(){inputSession++;buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();cancelVoice();super.onWindowHidden();}
+    @Override public void onStartInput(EditorInfo info,boolean restarting){inputSession++;discardPreedit();preeditSelection.reset(info.initialSelStart,info.initialSelEnd);stopClipboard();super.onStartInput(info,restarting);if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();emojiScrollMemory.reset(inputSession);editing=false;phrasesOpen=false;if(personalPanel!=null)personalPanel.resetSplit();editorActions.reset();cancelVoice();int type=info.inputType&InputType.TYPE_MASK_CLASS,variation=info.inputType&InputType.TYPE_MASK_VARIATION;password=(type==InputType.TYPE_CLASS_TEXT&&(variation==InputType.TYPE_TEXT_VARIATION_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD))||(type==InputType.TYPE_CLASS_NUMBER&&variation==InputType.TYPE_NUMBER_VARIATION_PASSWORD);numbers=type==InputType.TYPE_CLASS_NUMBER||type==InputType.TYPE_CLASS_PHONE;math=false;if(voiceHold!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null)backspaceGesture.bind(inputSession);if(beforeCaret!=null)beforeCaret.invalidate();if(privateInput())suppressClipboardUntilChange=true;rebuild();syncClipboard();}
+    @Override public void onFinishInput(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();emojiScrollMemory.reset(inputSession);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();keyHandler.removeCallbacksAndMessages(null);cancelVoice();current=new String[0];super.onFinishInput();}
+    @Override public void onWindowShown(){super.onWindowShown();loadVoiceHoldSettings();clearCandidatePages();if(voiceHold!=null&&getCurrentInputConnection()!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null&&getCurrentInputConnection()!=null)backspaceGesture.bind(inputSession);refresh();keyHandler.post(()->{showLearningNotice();syncClipboard();captureClipboard(false);if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();});if(getWindow()!=null)ThemeBars.navigation(this,getWindow().getWindow());}
+    @Override public void onWindowHidden(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();cancelVoice();super.onWindowHidden();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)OfflineVoice.trimMemory();}
-    @Override public void onDestroy(){inputSession++;buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;editorActions.reset();if(phraseAssociation!=null)phraseAssociation.close();learningOwnerDestroyed=true;LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.close();stopClipboard();getSharedPreferences("clipboard",0).unregisterOnSharedPreferenceChangeListener(clipboardPreferences);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();OfflineVoice.trimMemory();keyHandler.removeCallbacksAndMessages(null);cancelVoice();super.onDestroy();}
+    @Override public void onDestroy(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.close();learningOwnerDestroyed=true;LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.close();stopClipboard();getSharedPreferences("clipboard",0).unregisterOnSharedPreferenceChangeListener(clipboardPreferences);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();OfflineVoice.trimMemory();keyHandler.removeCallbacksAndMessages(null);cancelVoice();super.onDestroy();}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setGravity(Gravity.CENTER);return l;}
     private boolean mathAssociationsEnabled(){try{return getSharedPreferences("associations",0).getBoolean("math",true);}catch(ClassCastException invalid){return false;}}
     private void createMathAssociation(){mathAssociation=new MathAssociation(new MathAssociation.Host(){
-        public boolean allowed(){return !privateInput()&&buffer.length()==0&&!phrasesOpen&&!emojiPanelActive()&&!hasVoiceWork()&&isInputViewShown()&&mathAssociationsEnabled()&&(backspaceGesture==null||backspaceGesture.phase()==BackspaceGesture.Phase.IDLE)&&(voiceHold==null||voiceHold.state().phase==VoiceHoldController.Phase.IDLE);}
+        public boolean allowed(){return phraseEditorAllowed()&&buffer.length()==0&&!phrasesOpen&&!emojiPanelActive()&&!hasVoiceWork()&&isInputViewShown()&&mathAssociationsEnabled()&&(backspaceGesture==null||backspaceGesture.phase()==BackspaceGesture.Phase.IDLE)&&(voiceHold==null||voiceHold.state().phase==VoiceHoldController.Phase.IDLE);}
         public int session(){return inputSession;}
         public InputConnection connection(){return getCurrentInputConnection();}
-        public SplitSelection.Snapshot read(InputConnection owner){return connectionSnapshot(owner);}
+        public SplitSelection.Snapshot read(InputConnection owner){return connectionSnapshot(owner,true);}
         public void show(MathAssociation.Display display){showMathSuggestion(display);}
         public boolean insert(String value){return commit(value);}
         public void unavailable(){toast("候选已过期或编辑器未确认，请核对当前位置；未自动重试");}
@@ -142,14 +153,28 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     }
     private boolean phraseAssociationsEnabled(){try{return getSharedPreferences("associations",0).getBoolean(english?"phraseEnglish":"phraseChinese",false);}catch(ClassCastException invalid){return false;}}
     private boolean builtinPredictionsEnabled(){try{return getSharedPreferences("associations",0).getBoolean("builtinPredictions",false);}catch(ClassCastException invalid){return false;}}
+    private boolean numericPredictionsEnabled(){try{return getSharedPreferences("associations",0).getBoolean("numericPredictions",false);}catch(ClassCastException invalid){return false;}}
     private void createPhraseAssociation(){phraseAssociation=new PersonalPhraseAssociation(new PersonalPhraseAssociation.Host(){
-        public boolean allowed(){return phraseEditorAllowed()&&!math&&!editing&&buffer.length()==0&&!phrasesOpen&&!emojiPanelActive()&&!hasVoiceWork()&&isInputViewShown()&&(phraseAssociationsEnabled()||(builtinPredictionsEnabled()&&DataFiles.ready&&!LearningStore.paused()))&&(backspaceGesture==null||backspaceGesture.phase()==BackspaceGesture.Phase.IDLE)&&(voiceHold==null||voiceHold.state().phase==VoiceHoldController.Phase.IDLE);}
+        public boolean allowed(){return phraseEditorAllowed()&&!math&&!editing&&buffer.length()==0&&!phrasesOpen&&!emojiPanelActive()&&!hasVoiceWork()&&isInputViewShown()&&(savedEnabled()||localEnabled())&&(backspaceGesture==null||backspaceGesture.phase()==BackspaceGesture.Phase.IDLE)&&(voiceHold==null||voiceHold.state().phase==VoiceHoldController.Phase.IDLE);}
         public int session(){return inputSession;}public InputConnection connection(){return getCurrentInputConnection();}
         public PersonalPhraseSuggestions.Language language(){return english?PersonalPhraseSuggestions.Language.ENGLISH:PersonalPhraseSuggestions.Language.CHINESE;}
-        public SplitSelection.Snapshot read(InputConnection owner){return connectionSnapshot(owner);}
+        public SplitSelection.Snapshot read(InputConnection owner){return connectionSnapshot(owner,true);}
         public PersonalPhraseAssociation.PhraseData phrases()throws Exception{return PersonalStore.get(WangshuIme.this).associationPhrases();}
-        public boolean savedEnabled(){return phraseAssociationsEnabled();}public boolean localEnabled(){return builtinPredictionsEnabled()&&DataFiles.ready&&!LearningStore.paused();}
-        public List<PersonalPhraseAssociation.Choice> localSuggestions(String before,String after,PersonalPhraseSuggestions.Language language){String[] rows=NativeBridge.predict(before,after,language==PersonalPhraseSuggestions.Language.ENGLISH);List<PersonalPhraseAssociation.Choice> values=new ArrayList<>();for(int i=0;i+1<rows.length;i+=2)values.add(new PersonalPhraseAssociation.Choice(rows[i],rows[i+1],true));return values;}
+        public boolean savedEnabled(){return (!numbers||numericPredictionsEnabled())&&phraseAssociationsEnabled();}
+        public boolean localEnabled(){return (numbers?numericPredictionsEnabled():builtinPredictionsEnabled())&&DataFiles.ready&&!LearningStore.paused();}
+        public boolean numericPanel(){return numbers;}
+        public boolean cursorEnabled(){
+            try{return getSharedPreferences("associations",0).getBoolean("cursorPredictions",true);}
+            catch(ClassCastException invalid){return false;}
+        }
+        public List<PersonalPhraseAssociation.Choice> localSuggestions(String before,String after,
+                PersonalPhraseSuggestions.Language language,boolean numericPanel){
+            boolean useEnglish=language==PersonalPhraseSuggestions.Language.ENGLISH;
+            String[] rows=numericPanel?NativeBridge.predictInNumbers(before,after,useEnglish):NativeBridge.predict(before,after,useEnglish);
+            List<PersonalPhraseAssociation.Choice> values=new ArrayList<>();
+            for(int i=0;i+1<rows.length;i+=2)values.add(new PersonalPhraseAssociation.Choice(rows[i],rows[i+1],true));
+            return values;
+        }
         public boolean retract(InputConnection owner,int session,int units){if(beforeCaret!=null)beforeCaret.invalidate();return session==inputSession&&owner==getCurrentInputConnection()&&session==inputSession&&buffer.length()==0&&!privateInput()&&owner.deleteSurroundingText(units,0);}
         public long revision(){try{return PersonalStore.get(WangshuIme.this).phraseRevision();}catch(java.io.IOException unavailable){return -1;}}
         public void show(PersonalPhraseAssociation.Display display){showPhraseSuggestion(display);}
@@ -203,10 +228,30 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private Button candidateButton(String text,int index){Button b=button("",displayedCandidate(index));b.setText(text);return b;}
     private void add(LinearLayout r,String label,float weight,Runnable action){r.addView(button(label,action),new LinearLayout.LayoutParams(0,dp(keyHeight()),weight));}
     private void rebuild(){
-        if(root==null)return;rememberEmojiScroll();emojiViewGeneration++;if(voiceHold!=null&&voiceHold.state().showVoiceLayer()){showVoiceHold(voiceHold.state());return;}voiceOverlay=null;if(inputSurface!=null){inputSurface.spaceKey(null);inputSurface.backspaceKey(null);}deleteKey=null;root.removeAllViews();root.addView(buildToolbar());
+        if(root==null)return;rememberEmojiScroll();emojiViewGeneration++;if(voiceHold!=null&&voiceHold.state().showVoiceLayer()){showVoiceHold(voiceHold.state());return;}voiceOverlay=null;if(landscapeViewport!=null)landscapeViewport.setVoiceLayer(null);if(inputSurface!=null){inputSurface.spaceKey(null);inputSurface.backspaceKey(null);}deleteKey=null;root.removeAllViews();root.addView(buildToolbar());
         composition=new TextView(this);composition.setTextSize(compact()?12:14);composition.setSingleLine(true);composition.setEllipsize(android.text.TextUtils.TruncateAt.START);composition.setTextColor(getColor(R.color.ink));composition.setPadding(dp(8),0,dp(8),0);
         candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page>0){page--;refresh();}});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
-        voiceReviewPanel=null;if(voiceReview!=null){voiceReviewPanel=column();root.addView(voiceReviewPanel);TextView transcript=new TextView(this);transcript.setText(voiceReviewReason.isEmpty()?getString(R.string.voice_review_default,voiceReview):getString(R.string.voice_review_reason,voiceReviewReason,voiceReview));transcript.setTextSize(16);transcript.setTextColor(getColor(R.color.ink));transcript.setTextIsSelectable(false);ScrollView voiceScroll=new ScrollView(this);voiceScroll.addView(transcript);voiceReviewPanel.addView(voiceScroll,new LinearLayout.LayoutParams(-1,dp(compact()?55:90)));LinearLayout review=row();Button insert=button("插入语音结果",this::insertVoiceReview);insert.setEnabled(reviewCanInsert);review.addView(insert,new LinearLayout.LayoutParams(0,dp(keyHeight()),1.6f));add(review,"复制结果",1.2f,this::copyVoiceReview);add(review,"取消",.8f,()->{cancelVoice();rebuild();});voiceReviewPanel.addView(review);}
+        voiceReviewPanel=null;
+        if(voiceReview!=null){
+            long revision=voiceReviewRevision;
+            voiceReviewPanel=column();
+            root.addView(voiceReviewPanel);
+            TextView transcript=new TextView(this);
+            transcript.setText(voiceReviewReason.isEmpty()?getString(R.string.voice_review_default,voiceReview):getString(R.string.voice_review_reason,voiceReviewReason,voiceReview));
+            transcript.setTextSize(16);
+            transcript.setTextColor(getColor(R.color.ink));
+            transcript.setTextIsSelectable(false);
+            ScrollView voiceScroll=new ScrollView(this);
+            voiceScroll.addView(transcript);
+            voiceReviewPanel.addView(voiceScroll,new LinearLayout.LayoutParams(-1,dp(compact()?55:90)));
+            LinearLayout review=row();
+            Button insert=button("插入语音结果",()->insertVoiceReview(revision));
+            insert.setEnabled(reviewCanInsert);
+            review.addView(insert,new LinearLayout.LayoutParams(0,dp(keyHeight()),1.6f));
+            add(review,"复制结果",1.2f,()->{if(revision==voiceReviewRevision)copyVoiceReview();});
+            add(review,"取消",.8f,()->{if(revision==voiceReviewRevision){cancelVoice();rebuild();}});
+            voiceReviewPanel.addView(review);
+        }
         keys=column();root.addView(keys);
         if(phrasesOpen){phraseKeys();}else if(editing){editorKeys();}else if(!expandedCandidates||buffer.length()==0){if(math)mathKeys();else if(numbers)numberKeys();else letters();}refresh();
     }
@@ -218,7 +263,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         tool(toolbar,math?ToolbarIcon.Kind.LETTERS:ToolbarIcon.Kind.MATH,math?"字母":"符号",math?"返回字母键盘":"打开常用、英文标点和数学符号",1,math,()->{if(!finishRaw())return;math=!math;numbers=false;phrasesOpen=false;rebuild();});
         tool(toolbar,ToolbarIcon.Kind.CLIPBOARD,"剪贴板与常用语","剪贴板与常用语",1,phrasesOpen,()->{if(!finishRaw())return;editing=false;phrasesOpen=!phrasesOpen;if(phrasesOpen){personalPanel.open();captureClipboard(true);}rebuild();});
         toolbar.addView(cursorButton(),new LinearLayout.LayoutParams(0,dp(48),1));
-        voiceButton=tool(toolbar,offlineTask!=null||recognizer!=null?ToolbarIcon.Kind.STOP:ToolbarIcon.Kind.MICROPHONE,offlineTask!=null?"完成":recognizer!=null?"停止":math?"数学语音":"语音","本地语音输入；也可按住空格说话",1,offlineTask!=null||recognizer!=null,()->{if(password){toast("密码字段不启用语音");return;}startVoice();});voiceButton.setEnabled(!password);if(BuildConfig.BASIC_TYPING_PREVIEW){voiceButton.setContentDescription("语音未包含 · Basic Typing Preview");voiceButton.setTooltipText(PreviewFeatures.VOICE_UNAVAILABLE);}
+        voiceButton=tool(toolbar,offlineTask!=null||recognizer!=null?ToolbarIcon.Kind.STOP:ToolbarIcon.Kind.MICROPHONE,offlineTask!=null?"完成":recognizer!=null?"停止":"语音","本地语音输入；也可按住空格说话",1,offlineTask!=null||recognizer!=null,()->{if(password){toast("密码字段不启用语音");return;}startVoice();});voiceButton.setEnabled(!password);if(BuildConfig.BASIC_TYPING_PREVIEW){voiceButton.setContentDescription("语音未包含 · Basic Typing Preview");voiceButton.setTooltipText(PreviewFeatures.VOICE_UNAVAILABLE);}
         // Empty slot balances the three tools left of the center without adding an action.
         toolbar.addView(new Space(this),new LinearLayout.LayoutParams(0,dp(48),1));
         hideButton=tool(toolbar,ToolbarIcon.Kind.HIDE,"收起输入键盘","收起输入键盘",1,false,()->requestHideSelf(0));return toolbar;
@@ -234,7 +279,15 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         b.setImageDrawable(new ToolbarIcon(icon,getResources().getDisplayMetrics().density,getColor(R.color.ink)));
         b.setImageTintList(new android.content.res.ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{getColor(R.color.muted),getColor(R.color.ink)}));
     }
-    private void voiceToolState(String name,ToolbarIcon.Kind icon){if(voiceButton!=null){boolean active=offlineTask!=null||recognizer!=null;voiceButton.setSelected(active);KeyboardSkin.tool(this,voiceButton,active);voiceButton.setContentDescription(name);voiceButton.setTooltipText(name);setToolIcon(voiceButton,icon);}}
+    private void voiceToolState(String name,ToolbarIcon.Kind icon){
+        if(voiceButton==null)return;
+        boolean active=icon!=ToolbarIcon.Kind.MICROPHONE;
+        voiceButton.setSelected(active);
+        KeyboardSkin.tool(this,voiceButton,active);
+        voiceButton.setContentDescription(name);
+        voiceButton.setTooltipText(name);
+        setToolIcon(voiceButton,icon);
+    }
     private ImageButton cursorButton(){
         CursorControlButton b=new CursorControlButton(this);b.setImageDrawable(new CursorIcon(getResources().getDisplayMetrics().density,getColor(R.color.ink)));b.setScaleType(ImageView.ScaleType.CENTER);b.setPadding(0,0,0,0);b.setMinimumWidth(0);b.setMinimumHeight(0);b.setContentDescription("光标与文本编辑");b.setSelected(editing);b.setTooltipText("单击编辑面板；按住后左右拖动移动光标");KeyboardSkin.tool(this,b,editing);
         b.setOnClickListener(v->{if(!finishRaw())return;phrasesOpen=false;editing=!editing;editorActions.reset();rebuild();});
@@ -316,16 +369,6 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         }
         if(!compact()){LinearLayout control=row();add(control,"\\ 命令",1,this::startLocalCommand);addBackspace(control,1);keys.addView(control);}bottom();
     }
-    private void startLocalCommand(){
-        if(inputEntryInFlight||pendingCommitInFlight||candidateChoiceInFlight)return;
-        inputEntryInFlight=true;
-        try{
-            TextWrite selected=new TextWrite(this);
-            if(selected.owner==null||!prepareTextWrite(selected,true))return;
-            math=false;buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;buffer.append('\\');
-            updateEntryComposition(new TextWrite(selected,buffer.toString(),candidateModes()));rebuild();
-        }finally{inputEntryInFlight=false;}
-    }
     private Button symbolButton(String symbol,String alias,boolean builtin,int session,long generation,InputConnection owner){
         Button button=button(symbol,()->{});
         button.setContentDescription(builtin?alias+" "+symbol:symbol+" \\"+alias);
@@ -372,7 +415,6 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             char c=key.length()==1?key.charAt(0):0;
             if(!command&&(c=='`'||(MixedComposition.active(selected.raw)&&MixedComposition.literalKey(key)))){
                 if(buffer.length()+key.length()<=128){buffer.append(key);page=0;
-                    // Delimiters and raw text are local preedit until confirmation.
                     updateEntryComposition(new TextWrite(selected,buffer.toString()));
                 }return;
             }
@@ -405,14 +447,17 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         }catch(RuntimeException uncertain){textWriteWarning(PendingTextCommit.Result.UNCERTAIN);}
         finally{inputEntry=null;inputEntryInFlight=false;}
     }
-    private void updateComposition(){
-        if(buffer.length()==0){preeditConnection=null;preeditSnapshot=null;}
-        refresh();
+    private void discardPreedit(){
+        preeditOwner=null;preeditSnapshot=null;
+        buffer.setLength(0);
+        page=0;
+        shownGeneration++;
     }
     // UI-only: cancellation must clear the listening label even for direct commits
     // that do not rebuild candidates. Do not query editors or restart associations here.
     private void refreshCompositionStatus(){
         if(composition==null)return;
+        if(showVoiceUndo())return;
         composition.setText(offlineTask!=null?voiceState:buffer.length()>0?MixedComposition.display(buffer.toString()):editing?"光标与文本编辑 · 按住中央按钮左右移动":numbers?"数字与常用符号 · 左侧可滚动":DataFiles.ready?"本地中文 · "+(math?"数学符号":english||password?"英文直输":"拼音 / \\数学命令"):DataFiles.failure.isEmpty()?"本地词典正在加载…":"词典初始化失败 · 可切英文，请打开设置");if(beforeCaret!=null&&beforeCaret.hasUndo()&&buffer.length()==0){composition.setText("已删除光标前内容 · 点此撤销");composition.setContentDescription("撤销本次删除光标前内容");composition.setTextColor(getColor(R.color.accent));composition.setMinHeight(dp(36));composition.setOnClickListener(v->undoBeforeCaret());}else{composition.setContentDescription(null);composition.setTextColor(getColor(buffer.length()>0||offlineTask!=null?R.color.ink:R.color.muted));composition.setTextSize(compact()?12:buffer.length()>0?14:12);composition.setMinHeight(0);composition.setOnClickListener(null);}
     }
     private void refresh(){if(root==null||composition==null||candidates==null)return;if(expandedCandidates&&buffer.length()==0){expandedCandidates=false;rebuild();return;}if(toolbar!=null)toolbar.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);if(candidateLine!=null)candidateLine.setVisibility(buffer.length()>0?View.VISIBLE:View.GONE);if(candidateScroll!=null)candidateScroll.setVisibility(expandedCandidates?View.GONE:View.VISIBLE);if(expandedSummary!=null){expandedSummary.setVisibility(expandedCandidates?View.VISIBLE:View.GONE);expandedSummary.setText(getString(R.string.candidate_page_summary,getString(R.string.candidate_label),String.valueOf(page+1)));}if(candidateToggle!=null){candidateToggle.setText(expandedCandidates?"⌃":"⌄");candidateToggle.setContentDescription(expandedCandidates?"收回候选框":"展开候选框");}if(hideButton!=null)hideButton.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);refreshCompositionStatus();candidates.removeAllViews();shownDictionaryReady=DataFiles.ready;current=!password&&shownDictionaryReady&&buffer.length()>0?lookup(buffer.toString(),page):new String[0];snapshotCandidateDisplay();if(expandedSummary!=null)expandedSummary.setText(getString(R.string.candidate_page_summary,getString(currentPageFuzzy?R.string.fuzzy_candidate_label:R.string.candidate_label),String.valueOf(page+1)));for(int i=0;i<current.length;i+=2){int n=i/2;Button b=candidateButton(current[i],n);bindCandidateOptions(b,n);b.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE);b.setTextSize(candidateTextSizeSp());b.setPadding(dp(12),0,dp(12),0);b.setMinWidth(dp(48));b.setMinimumWidth(dp(48));b.setContentDescription("候选 "+(n+1)+" "+current[i]);if(currentPageFuzzy)b.setTooltipText(current[i+1]);candidates.addView(b,new LinearLayout.LayoutParams(-2,dp(keyHeight())));}if(expandedCandidates)expandedKeys();if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();}
@@ -532,12 +577,11 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             &&selected.page==shownPage&&page==(committed?0:selected.page)&&selected.modes==shownModes&&selected.modes==candidateModes()
             &&selected.raw.equals(shownInput)&&(committed?buffer.length()==0:selected.raw.equals(buffer.toString()))
             &&selected.rows==current&&Arrays.equals(selected.values,current)&&selected.personalRevision==shownRevision&&selected.learningRevision==shownLearningRevision
-            &&selected.fuzzy==shownFuzzy&&selected.rules!=null&&selected.rules.equals(shownRules)
-            &&(committed||preeditConnection==null||(preeditConnection==selected.owner&&preeditSession==selected.session));
+            &&selected.fuzzy==shownFuzzy&&selected.rules!=null&&selected.rules.equals(shownRules);
     }
     private boolean candidateClickCurrent(CandidateClick selected){
-        if(selected.owner==null||!candidateClickFields(selected,false))return false;
-        InputConnection now=getCurrentInputConnection();return now==selected.owner&&candidateClickFields(selected,false);
+        if(selected.owner==null||selected.owner!=preeditOwner||!candidateClickFields(selected,false))return false;
+        InputConnection now=getCurrentInputConnection();return now==selected.owner&&now==preeditOwner&&candidateClickFields(selected,false);
     }
     private boolean candidateAfterCommitCurrent(CandidateClick selected){
         if(selected.owner==null||!candidateClickFields(selected,true))return false;
@@ -602,7 +646,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         refreshAfterCandidate(accepted);return accepted;
     }
     private void refreshAfterCandidate(boolean accepted){
-        try{refresh();}
+        try{refresh();if(accepted&&phraseAssociation!=null)phraseAssociation.textEdited();}
         catch(RuntimeException unavailable){try{toast(accepted?"文字已输入，候选显示暂不可用":"候选显示暂不可用，请核对编辑器");}catch(RuntimeException ignored){/* Keep the already-established commit outcome. */}}
     }
     private boolean commitCandidate(CandidateClick selected,String value){
@@ -618,18 +662,13 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                         if(candidateClickCurrent(selected))result=PendingTextCommit.sendBound(new PendingTextCommit.BoundHost(){
                             public boolean current(){return candidateClickCurrent(selected);}
                             public boolean commit(String text){
-                                // Empty confirmation/cancellation is local only.
-                                // No host text exists to erase, even with a selection.
-                                if(text.isEmpty())return true;
-                                localCommitInFlight=true;
-                                try{return selected.owner.commitText(text,1);}
-                                finally{localCommitInFlight=false;}
+                                return text.isEmpty()||insertEditorText(selected.owner,text);
                             }
                             public boolean clearPendingIfCurrent(){
                                 if(!candidateClickCurrent(selected))return false;
                                 // No external call between the final ownership check
                                 // and these local changes to our pending composition.
-                                buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;return true;
+                                preeditOwner=null;preeditSnapshot=null;buffer.setLength(0);page=0;return true;
                             }
                         },value);
                     }
@@ -641,9 +680,10 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         return true;
     }
     static boolean verifiedCandidateInsertion(SplitSelection.Snapshot before,SplitSelection.Snapshot after,String raw,String word){
-        if(before==null||after==null||raw==null||word==null||before.start!=before.end||after.start!=after.end)return false;
-        int start=before.start;
-        String expected=before.text.substring(0,start)+word+before.text.substring(before.end);
+        if(before==null||after==null||raw==null||word==null||after.start!=after.end)return false;
+        int start=Math.min(before.start,before.end),end=Math.max(before.start,before.end);
+        if(start<0||end>before.text.length())return false;
+        String expected=before.text.substring(0,start)+word+before.text.substring(end);
         return after.text.equals(expected)&&after.start==start+word.length();
     }
     private void bindCandidateOptions(Button button,int index){long generation=shownGeneration;button.setOnLongClickListener(view->{showCandidateOptions(button,index,generation);return true;});}
@@ -682,18 +722,36 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         PendingTextCommit.Result result=writeBound(selected,value,false);
         if(result!=PendingTextCommit.Result.ACCEPTED){textWriteWarning(result);return;}
         if(hadUndo)refreshAfterCandidate(true);
+        else if(phraseAssociation!=null)phraseAssociation.textEdited();
+    }
+    private void startLocalCommand(){
+        if(inputEntryInFlight||pendingCommitInFlight||candidateChoiceInFlight)return;
+        inputEntryInFlight=true;
+        try{
+            TextWrite selected=new TextWrite(this);
+            if(selected.owner==null||!prepareTextWrite(selected,true))return;
+            discardPreedit();
+            math=false;
+            buffer.append('\\');
+            updateEntryComposition(new TextWrite(selected,buffer.toString(),candidateModes()));rebuild();
+        }finally{inputEntryInFlight=false;}
     }
     private void updateEntryComposition(TextWrite selected){
+        // The candidate strip owns preedit until the user confirms it.
         if(!textWriteCurrent(selected,selected.raw))return;
-        if(preeditConnection==null){
-            SplitSelection.Snapshot before=snapshotFrom(selected.owner);
-            if(!textWriteCurrent(selected,selected.raw))return;
-            preeditSnapshot=before;
+        if(preeditOwner==null){
+            SplitSelection.Snapshot expected=snapshotFrom(selected.owner);
+            if(!textWriteCurrent(selected,selected.raw)||preeditOwner!=null)return;
+            preeditSnapshot=expected;
+            preeditOwner=selected.owner;
         }
-        preeditConnection=selected.owner;preeditSession=selected.session;
-        // A host may commit composing text on blur before lifecycle callbacks.
-        // Keep raw text in the candidate strip so there is nothing to retract.
         refreshAfterCandidate(false);
+    }
+    private boolean insertEditorText(InputConnection owner,String text){
+        PreeditSelection.Insertion insertion=preeditSelection.expect(text.length());
+        boolean accepted=false;
+        try{accepted=owner.commitText(text,1);return accepted;}
+        finally{if(!accepted)preeditSelection.refused(insertion);}
     }
     private static final class TextWrite {
         final long generation;final int session,modes;final String raw;final InputConnection owner;
@@ -703,11 +761,13 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             owner=host.getCurrentInputConnection();
         }
         // Local continuation after a known append/clear: preserve provenance.
-        TextWrite(TextWrite source,String pending){generation=source.generation;session=source.session;modes=source.modes;owner=source.owner;raw=pending;}
-        // A local mode transition retains the original editor/session capability.
         TextWrite(TextWrite source,String pending,int currentModes){generation=source.generation;session=source.session;modes=currentModes;owner=source.owner;raw=pending;}
+        TextWrite(TextWrite source,String pending){generation=source.generation;session=source.session;modes=source.modes;owner=source.owner;raw=pending;}
     }
-    private boolean textWriteFields(TextWrite selected,String pending){return selected.session==inputSession&&selected.modes==candidateModes()&&pending.equals(buffer.toString())&&(pending.isEmpty()||preeditConnection==null||(preeditConnection==selected.owner&&preeditSession==selected.session));}
+    private boolean textWriteFields(TextWrite selected,String pending){
+        return selected.session==inputSession&&selected.modes==candidateModes()&&pending.equals(buffer.toString())
+                &&(preeditOwner==null||preeditOwner==selected.owner);
+    }
     private boolean textWriteCurrent(TextWrite selected,String pending){
         if(!textWriteFields(selected,pending))return false;
         InputConnection now=getCurrentInputConnection();return now==selected.owner&&textWriteFields(selected,pending);
@@ -727,17 +787,10 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(!prepareTextWrite(selected,true))return PendingTextCommit.Result.STALE;
         return PendingTextCommit.sendBound(new PendingTextCommit.BoundHost(){
             public boolean current(){return textWriteCurrent(selected,selected.raw);}
-            public boolean commit(String text){
-                                // Empty confirmation/cancellation is local only.
-                                // No host text exists to erase, even with a selection.
-                                if(text.isEmpty())return true;
-                                localCommitInFlight=true;
-                                try{return selected.owner.commitText(text,1);}
-                                finally{localCommitInFlight=false;}
-                            }
+            public boolean commit(String text){return text.isEmpty()||insertEditorText(selected.owner,text);}
             public boolean clearPendingIfCurrent(){
                 if(!textWriteCurrent(selected,selected.raw))return false;
-                if(clearPending){buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;}
+                if(clearPending){preeditOwner=null;preeditSnapshot=null;buffer.setLength(0);page=0;}
                 return true;
             }
         },value);
@@ -760,6 +813,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             }catch(RuntimeException uncertain){result=PendingTextCommit.Result.UNCERTAIN;}
             if(result!=PendingTextCommit.Result.ACCEPTED){textWriteWarning(result);return false;}
             if(!clearPending&&hadUndo)refreshAfterCandidate(true);
+            else if(!value.isEmpty()&&phraseAssociation!=null)phraseAssociation.textEdited();
             return true;
         }finally{pendingCommitInFlight=false;}
     }
@@ -807,9 +861,13 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         boolean hadUndo=beforeCaret!=null&&beforeCaret.hasUndo(),selected=editorActions.selecting;
         if(beforeCaret!=null)beforeCaret.invalidate();if(hasVoiceWork())cancelVoice();
         if(buffer.length()>0){buffer.deleteCharAt(buffer.length()-1);page=0;
-            updateComposition();
+            if(buffer.length()==0){preeditOwner=null;preeditSnapshot=null;}
+            refresh();
             return new BackspaceGesture.DeleteResult(true,false);}
-        EditorActions.Deletion result=editorActions.deleteDetails(false);if(!result.accepted)toast("编辑器未确认本次删除，请核对原文；未自动重试");if(selected&&editing)rebuild();else if(hadUndo)refresh();return new BackspaceGesture.DeleteResult(result.changed,result.newline);
+        EditorActions.Deletion result=editorActions.deleteDetails(false);
+        if(!result.accepted)toast(result.failure.message+"。请核对原文");
+        if(selected&&editing)rebuild();else if(hadUndo)refresh();
+        return new BackspaceGesture.DeleteResult(result.changed,result.newline);
     }
     private void enter(){enter(false);}
     private void enter(boolean forceNewline){
@@ -838,7 +896,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                     :EnterPolicy.decide(enabled,offered,navigation,noEnterAction,multiline);
             if(decision==EnterPolicy.Decision.BLOCK){toast("当前单行输入框的回车动作已关闭，请使用应用内按钮");return;}
             boolean editorAction=decision==EnterPolicy.Decision.ACTION;
-            boolean accepted=editorAction?selected.owner.performEditorAction(action):selected.owner.commitText("\n",1);
+            boolean accepted=editorAction?selected.owner.performEditorAction(action):insertEditorText(selected.owner,"\n");
             if(!textWriteCurrent(selected,"")){textWriteWarning(PendingTextCommit.Result.STALE);return;}
             if(!accepted){textWriteWarning(PendingTextCommit.Result.REJECTED);return;}
             // A successful editor action need not insert any text. Only a
@@ -847,19 +905,36 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         }catch(RuntimeException uncertain){textWriteWarning(PendingTextCommit.Result.UNCERTAIN);}
         finally{inputEntry=null;inputEntryInFlight=false;}
     }
-    private void reconcileLocalPreeditSelection(){
-        SplitSelection.Snapshot expected=preeditSnapshot;TextWrite selected=new TextWrite(this);
-        if(!textWriteCurrent(selected,selected.raw)||expected!=preeditSnapshot)return;
-        SplitSelection.Snapshot actual=snapshotFrom(selected.owner);
-        // Readback may reenter lifecycle or start newer pending text. Never let
-        // an old notification clear replacement state, even if raw text matches.
-        if(!textWriteCurrent(selected,selected.raw)||expected!=preeditSnapshot)return;
-        if(expected!=null&&actual!=null&&expected.start==actual.start&&expected.end==actual.end&&expected.text.equals(actual.text))return;
-        // A delayed notification is ignored only when current text and selection
-        // still match the captured origin. Unavailable/changed state fails closed.
-        buffer.setLength(0);page=0;preeditConnection=null;preeditSnapshot=null;refresh();
+    private boolean reconcilePreeditSelection(){
+        SplitSelection.Snapshot expected=preeditSnapshot;
+        TextWrite selected=new TextWrite(this);
+        if(expected!=preeditSnapshot||!textWriteCurrent(selected,selected.raw))return false;
+        long selection=emojiSelectionRevision;
+        SplitSelection.Snapshot actual=expected==null?null:snapshotFrom(selected.owner);
+        if(expected!=preeditSnapshot||!textWriteCurrent(selected,selected.raw)
+                ||selection!=emojiSelectionRevision)return false;
+        if(sameVoiceSnapshot(expected,actual))return false;
+        discardPreedit();
+        return true;
     }
-    @Override public void onUpdateSelection(int oldStart,int oldEnd,int newStart,int newEnd,int candidatesStart,int candidatesEnd){super.onUpdateSelection(oldStart,oldEnd,newStart,newEnd,candidatesStart,candidatesEnd);boolean moved=oldStart!=newStart||oldEnd!=newEnd;if(moved)emojiSelectionRevision++;if(mathAssociation!=null&&(oldStart!=newStart||oldEnd!=newEnd))mathAssociation.request();if(phraseAssociation!=null&&(oldStart!=newStart||oldEnd!=newEnd))phraseAssociation.request();editorActions.selection(newStart,newEnd);if(backspaceGesture!=null&&backspaceGesture.phase()==BackspaceGesture.Phase.BULK_PREVIEW&&(oldStart!=newStart||oldEnd!=newEnd))cancelBackspace();if(heldVoice!=null&&heldVoice.before!=null&&(newStart!=heldVoice.before.start||newEnd!=heldVoice.before.end))heldVoice.contextChanged=true;if(buffer.length()>0&&moved&&!localCommitInFlight)reconcileLocalPreeditSelection();if(moved&&emojiPanelActive())rebuild();}
+    @Override public void onUpdateSelection(int oldStart,int oldEnd,int newStart,int newEnd,int candidatesStart,int candidatesEnd){
+        super.onUpdateSelection(oldStart,oldEnd,newStart,newEnd,candidatesStart,candidatesEnd);
+        boolean moved=oldStart!=newStart||oldEnd!=newEnd;
+        boolean composing=candidatesStart>=0&&candidatesEnd>candidatesStart;
+        boolean cleared=preeditSelection.externalMove(oldStart,oldEnd,newStart,newEnd)
+                &&buffer.length()>0&&reconcilePreeditSelection();
+        if(moved){
+            emojiSelectionRevision++;
+            if(voiceUndo!=null&&!voiceUndo.atCaret(newStart,newEnd))clearVoiceUndo();
+            if(mathAssociation!=null)mathAssociation.request();
+        }
+        if(phraseAssociation!=null)phraseAssociation.selectionChanged(newStart,newEnd,composing,moved);
+        editorActions.selection(newStart,newEnd);
+        if(moved&&backspaceGesture!=null&&backspaceGesture.phase()==BackspaceGesture.Phase.BULK_PREVIEW)cancelBackspace();
+        if(heldVoice!=null&&heldVoice.before!=null&&(newStart!=heldVoice.before.start||newEnd!=heldVoice.before.end))heldVoice.contextChanged=true;
+        if(cleared)refresh();
+        if(moved&&emojiPanelActive())rebuild();
+    }
     private final EnterSequenceTracker hardwareEnterSequences=new EnterSequenceTracker();
     private static boolean isHardwareEnter(int code){return code==KeyEvent.KEYCODE_ENTER||code==KeyEvent.KEYCODE_NUMPAD_ENTER;}
     @Override public boolean onKeyDown(int keyCode,KeyEvent event){cancelBackspace();
@@ -881,7 +956,43 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(unicode>0&&unicode<128){if(",.?!;:".indexOf(unicode)>=0)punctuation((char)unicode);else key(String.valueOf((char)unicode));return true;}return super.onKeyDown(keyCode,event);
     }
     private boolean hasVoiceWork(){return recognizer!=null||offlineTask!=null||voiceReview!=null||heldVoice!=null||(voiceHold!=null&&voiceHold.busy());}
-    private void cancelHoldForOtherInput(){voiceEditEpoch++;if(voiceHold!=null&&voiceHold.busy())voiceHold.cancel(VoiceHoldController.CancelReason.OTHER_INPUT);}
+    private long voiceEditEpoch;
+    private void cancelHoldForOtherInput(){
+        voiceEditEpoch++;
+        clearVoiceUndo();
+        if(voiceHold!=null&&voiceHold.busy())voiceHold.cancel(VoiceHoldController.CancelReason.OTHER_INPUT);
+    }
+    private void clearVoiceUndo(){
+        if(voiceUndo==null)return;
+        voiceUndo=null;
+        refreshCompositionStatus();
+    }
+    private boolean showVoiceUndo(){
+        VoiceCommitUndo undo=voiceUndo;
+        if(undo==null||buffer.length()!=0)return false;
+        int session=inputSession;
+        InputConnection owner=getCurrentInputConnection();
+        composition.setText("已插入语音文字 · 点此撤销本次");
+        composition.setContentDescription("撤销本次语音插入");
+        composition.setTextColor(getColor(R.color.accent));
+        composition.setMinHeight(dp(36));
+        composition.setOnClickListener(view->undoVoiceInsertion(undo,session,owner));
+        return true;
+    }
+    private void undoVoiceInsertion(VoiceCommitUndo undo,int session,InputConnection owner){
+        if(undo!=voiceUndo)return;
+        clearVoiceUndo();
+        long selection=emojiSelectionRevision;
+        VoiceCommitUndo.Result result=undo.restore(
+                ()->voiceScope(session,owner)&&buffer.length()==0,
+                ()->connectionSnapshot(owner,true),
+                units->{
+                    if(selection!=emojiSelectionRevision||!voiceScope(session,owner))return false;
+                    return owner.deleteSurroundingText(units,0);
+                });
+        if(result!=VoiceCommitUndo.Result.RESTORED)toast("未确认撤销结果，请核对原文");
+        refresh();
+    }
     @Override public boolean onKeyUp(int keyCode,KeyEvent event){
         if(isHardwareEnter(keyCode)&&hardwareEnterSequences.release(event.getDeviceId(),keyCode,event.getDownTime()))return true;
         return super.onKeyUp(keyCode,event);
@@ -893,6 +1004,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         HeldVoice(VoiceHoldController.Token owned,InputConnection editor){token=owned;connection=editor;before=voiceSnapshot(editor);composing=buffer.toString();resultPolicy=captureVoiceResultPolicy();task=new OfflineVoice.Task(WangshuIme.this,this);}
         private boolean owns(){return heldVoice==this&&heldVoice.task==task&&token.inputSession==inputSession&&!password;}
         public void state(String text){if(owns())voiceHold.engineState(token,text.contains("点击")?"本地聆听 · 按住说话，松手结束":text);}
+        public void partial(String text){if(owns())voiceHold.partial(token,text);}
         public void result(String text){if(owns())voiceHold.result(token,formatVoiceResult(resultPolicy,text));}
         public void failure(String text){if(owns())voiceHold.failure(token,text);}
     }
@@ -909,17 +1021,31 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             public boolean beginVoice(VoiceHoldController.Token token){
                 if(BuildConfig.BASIC_TYPING_PREVIEW){toast(PreviewFeatures.VOICE_UNAVAILABLE);return false;}
                 if(token.inputSession!=inputSession||password||offlineTask!=null||recognizer!=null||voiceReview!=null||heldVoice!=null||!VoiceModels.available(WangshuIme.this)||checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)return false;
-                long epoch=voiceEditEpoch;InputConnection editor=getCurrentInputConnection();if(!voiceWriteCurrent(epoch,token.inputSession,editor))return false;HeldVoice capture=new HeldVoice(token,editor);if(!voiceWriteCurrent(epoch,token.inputSession,editor))return false;heldVoice=capture;capture.task.start();return true;
+                long epoch=voiceEditEpoch;
+                InputConnection editor=getCurrentInputConnection();
+                if(!voiceWriteCurrent(epoch,token.inputSession,editor))return false;
+                clearVoiceUndo();
+                HeldVoice capture=new HeldVoice(token,editor);
+                if(!voiceWriteCurrent(epoch,token.inputSession,editor)){capture.task.cancel();return false;}
+                heldVoice=capture;capture.task.start();return true;
             }
             public void finishVoice(VoiceHoldController.Token token){HeldVoice capture=ownedVoice(token);if(capture!=null)capture.task.finish();}
             public void cancelVoice(VoiceHoldController.Token token,VoiceHoldController.CancelReason reason){HeldVoice capture=ownedVoice(token);if(capture!=null){heldVoice=null;capture.task.cancel();}}
             public void tapSpace(long input){if(input==inputSession)space();}
             public void commitPreview(VoiceHoldController.Token token,String text,VoiceHoldController.Completion completion){
-                HeldVoice capture=ownedVoice(token);if(capture==null)return;long epoch=voiceEditEpoch;heldVoice=null;capture.task.cancel();if(!voiceWriteCurrent(epoch,token.inputSession,capture.connection))return;
+                HeldVoice capture=ownedVoice(token);
+                if(capture==null)return;
+                long revision=voiceReviewRevision,selection=emojiSelectionRevision,epoch=voiceEditEpoch;
+                heldVoice=null;
+                capture.task.cancel();
+                if(!voiceWriteCurrent(epoch,token.inputSession,capture.connection)||revision!=voiceReviewRevision)return;
                 String value=text+(completion.appendNewline()?"\n":"");
                 if(completion.releasedAt==VoiceHoldController.Target.RIGHT_ACTION&&completion.rightAction==VoiceHoldController.RightAction.CUSTOM){showVoiceReview(value,"自定义动作尚未连接，结果保留供核对",capture.connection,token.inputSession,true);return;}
-                if(!capture.contextChanged&&capture.composing.isEmpty()&&buffer.length()==0&&sameVoiceSnapshot(capture.before,voiceSnapshot(capture.connection))&&capture.before.start==capture.before.end){if(voiceWriteCurrent(epoch,token.inputSession,capture.connection))attemptVoiceCommit(value,capture.connection,capture.before,token.inputSession);}
-                else if(voiceWriteCurrent(epoch,token.inputSession,capture.connection))showVoiceReview(value,"输入位置、选区或内容需核对；请确认光标后再插入",capture.connection,token.inputSession,true);
+                String reason=heldVoiceReviewReason(capture);
+                if(!voiceWriteCurrent(epoch,token.inputSession,capture.connection)||revision!=voiceReviewRevision)return;
+                if(reason==null&&selection!=emojiSelectionRevision)reason="松手后输入位置或选区已变化";
+                if(reason==null)attemptVoiceCommit(value,capture.connection,capture.before,token.inputSession);
+                else showVoiceReview(value,reason,capture.connection,token.inputSession,true);
             }
             public void discardPreview(VoiceHoldController.Token token,VoiceHoldController.CancelReason reason){/* No host text was inserted while held, so no host deletion is authorized. */}
             public void update(VoiceHoldController.State state){if(root==null)return;if(state.showVoiceLayer())showVoiceHold(state);else if(voiceOverlay!=null){voiceOverlay=null;rebuild();}}
@@ -931,21 +1057,56 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(root==null||inputSurface==null)return;
         if(voiceOverlay==null){
             emojiViewGeneration++; // Replacing the key surface invalidates its queued taps.
-            int height=Math.max(dp(compact()?150:220),root.getHeight()-root.getPaddingTop()-root.getPaddingBottom());
             cancelBackspace();if(beforeCaret!=null)beforeCaret.invalidate();inputSurface.spaceKey(null);inputSurface.backspaceKey(null);root.removeAllViews();composition=null;candidates=null;voiceReviewPanel=null;
             boolean dark=(getResources().getConfiguration().uiMode&android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_YES;
             voiceOverlay=new VoiceHoldOverlay(this,new VoiceHoldOverlay.Palette(getColor(R.color.paper),getColor(R.color.surface),getColor(R.color.ink),getColor(R.color.muted),getColor(R.color.selected),dark?Color.rgb(244,147,147):Color.rgb(177,48,48)),compact());
-            voiceOverlay.setContentDescription("按住空格本地语音；文字仅在本次预览中");root.addView(voiceOverlay,new LinearLayout.LayoutParams(-1,height));voiceOverlay.coordinateSpace(inputSurface,(token,left,right)->voiceHold.targets(token,left,right));voiceOverlay.waitingCancel(token->voiceHold.cancel(token,VoiceHoldController.CancelReason.USER_ABORT));
+            voiceOverlay.setContentDescription("按住空格本地语音；文字仅在本次预览中");
+            if(landscapeViewport!=null)landscapeViewport.setVoiceLayer(voiceOverlay);
+            else {
+                int height=Math.max(dp(220),root.getHeight()-root.getPaddingTop()-root.getPaddingBottom());
+                root.addView(voiceOverlay,new LinearLayout.LayoutParams(-1,height));
+            }
+            voiceOverlay.coordinateSpace(inputSurface,(token,left,right)->voiceHold.targets(token,left,right));voiceOverlay.waitingCancel(token->voiceHold.cancel(token,VoiceHoldController.CancelReason.USER_ABORT));
         }
         voiceOverlay.setState(state);
     }
-    /** Null means the host did not expose a bounded, complete, Unicode-boundary-safe snapshot.
-     * ExtractedText uses partialStartOffset == -1 for full text; partialEndOffset
-     * is meaningful only for a partial change (Chromium sets it to the text length). */
+    private String heldVoiceReviewReason(HeldVoice capture){
+        if(capture.contextChanged)return "录音期间输入位置或选区已变化";
+        if(!capture.composing.isEmpty()||buffer.length()>0)return "请先结束拼音组合";
+        SplitSelection.Snapshot before=capture.before;
+        if(before==null)return "录音开始时无法核对编辑器文字与选区";
+        SplitSelection.Snapshot after=voiceSnapshot(capture.connection);
+        if(after==null)return "松手后无法核对编辑器文字与选区";
+        if(!sameVoiceSnapshot(before,after))return "录音前后的文字或选区不同";
+        if(before.start!=before.end)return "请先将选区收为光标";
+        return null;
+    }
+    /** Null means the host did not expose a bounded, complete, Unicode-boundary-safe snapshot. */
     private SplitSelection.Snapshot voiceSnapshot(InputConnection editor){return password?null:connectionSnapshot(editor);}
     static SplitSelection.Snapshot connectionSnapshot(InputConnection editor){
+        return connectionSnapshot(editor,false);
+    }
+    private static SplitSelection.Snapshot connectionSnapshot(InputConnection editor,boolean rejectComposing){
         if(editor==null)return null;
-        try{ExtractedTextRequest request=new ExtractedTextRequest();request.hintMaxChars=32768;request.hintMaxLines=1000;ExtractedText x=editor.getExtractedText(request,0);if(x==null||x.text==null||x.text.length()>32768||x.startOffset!=0||x.partialStartOffset!=-1||x.selectionStart<0||x.selectionEnd<0||x.selectionStart>x.text.length()||x.selectionEnd>x.text.length())return null;String text=x.text.toString();android.icu.text.BreakIterator b=android.icu.text.BreakIterator.getCharacterInstance(Locale.ROOT);b.setText(text);if(!b.isBoundary(x.selectionStart)||!b.isBoundary(x.selectionEnd))return null;return new SplitSelection.Snapshot(text,x.selectionStart,x.selectionEnd);}catch(RuntimeException unavailable){return null;}
+        try{
+            ExtractedTextRequest request=new ExtractedTextRequest();
+            request.hintMaxChars=32768;
+            request.hintMaxLines=1000;
+            if(rejectComposing)request.flags=InputConnection.GET_TEXT_WITH_STYLES;
+            ExtractedText x=editor.getExtractedText(request,0);
+            if(x==null||x.text==null||x.text.length()>32768||x.startOffset!=0||x.partialStartOffset!=-1||x.selectionStart<0||x.selectionEnd<0||x.selectionStart>x.text.length()||x.selectionEnd>x.text.length())return null;
+            if(rejectComposing&&x.text instanceof android.text.Spanned){
+                android.text.Spanned styled=(android.text.Spanned)x.text;
+                for(Object span:styled.getSpans(0,styled.length(),Object.class)){
+                    if((styled.getSpanFlags(span)&android.text.Spanned.SPAN_COMPOSING)!=0)return null;
+                }
+            }
+            String text=x.text.toString();
+            android.icu.text.BreakIterator boundary=android.icu.text.BreakIterator.getCharacterInstance(Locale.ROOT);
+            boundary.setText(text);
+            if(!boundary.isBoundary(x.selectionStart)||!boundary.isBoundary(x.selectionEnd))return null;
+            return new SplitSelection.Snapshot(text,x.selectionStart,x.selectionEnd);
+        }catch(RuntimeException unavailable){return null;}
     }
     static boolean sameVoiceSnapshot(SplitSelection.Snapshot first,SplitSelection.Snapshot second){return first!=null&&second!=null&&first.start==second.start&&first.end==second.end&&first.text.equals(second.text);}
     static boolean voiceCommitVisible(SplitSelection.Snapshot before,String text,SplitSelection.Snapshot actual){
@@ -953,40 +1114,92 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         int caret=before.start+text.length();
         return actual.start==caret&&actual.end==caret&&actual.text.equals(before.text.substring(0,before.start)+text+before.text.substring(before.end));
     }
-    private boolean voiceScope(long session,InputConnection editor){return session==inputSession&&!password&&editor!=null&&editor==getCurrentInputConnection()&&session==inputSession&&!password;}
-    private boolean voiceWriteCurrent(long epoch,long session,InputConnection editor){return epoch==voiceEditEpoch&&voiceScope(session,editor)&&epoch==voiceEditEpoch;}
-    private void showVoiceReview(String text,String reason,InputConnection editor,long session,boolean allowInsert){long epoch=voiceEditEpoch;if(!voiceWriteCurrent(epoch,session,editor)||text==null||text.isEmpty())return;voiceReview=text;voiceReviewReason=reason;reviewConnection=editor;reviewSession=(int)session;reviewCanInsert=allowInsert;rebuild();}
+    private boolean voiceScope(long session,InputConnection editor){
+        if(editor==null||session!=inputSession||password)return false;
+        return editor==getCurrentInputConnection()&&session==inputSession&&!password;
+    }
+    private boolean voiceWriteCurrent(long epoch,long session,InputConnection editor){
+        return epoch==voiceEditEpoch&&voiceScope(session,editor)&&epoch==voiceEditEpoch;
+    }
+    private boolean voiceResultCurrent(InputConnection editor,long session,long revision,long epoch){
+        return revision==voiceReviewRevision&&voiceWriteCurrent(epoch,session,editor)&&revision==voiceReviewRevision;
+    }
+    private void showVoiceReview(String text,String reason,InputConnection editor,long session,boolean allowInsert){
+        if(text==null||text.isEmpty()||!voiceResultCurrent(editor,session,voiceReviewRevision,voiceEditEpoch))return;
+        voiceReviewRevision++;
+        voiceReview=text;voiceReviewReason=reason;reviewConnection=editor;reviewSession=(int)session;
+        reviewCanInsert=allowInsert;
+        rebuild();
+    }
     private void attemptVoiceCommit(String text,InputConnection editor,SplitSelection.Snapshot expected,long session){
+        dispatchVoiceCommit(text,editor,expected,session,voiceReviewRevision,false);
+    }
+    private void dispatchVoiceCommit(String text,InputConnection editor,SplitSelection.Snapshot expected,
+                                     long session,long revision,boolean manual){
+        if(voiceCommitInFlight)return;
+        voiceCommitInFlight=true;
         long epoch=voiceEditEpoch;
-        if(!voiceWriteCurrent(epoch,session,editor))return;
-        boolean matches=buffer.length()==0&&expected!=null&&expected.start==expected.end&&sameVoiceSnapshot(expected,voiceSnapshot(editor));
-        if(!voiceWriteCurrent(epoch,session,editor))return;
-        if(!matches){showVoiceReview(text,"请先确认输入位置并结束拼音组合",editor,session,true);return;}
-        if(text.length()>32768-expected.text.length()){showVoiceReview(text,"结果超出安全编辑范围，请选择复制后分段使用",editor,session,false);return;}
+        boolean dispatched=false;
         try{
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            long selection=emojiSelectionRevision;
+            SplitSelection.Snapshot before=buffer.length()==0?voiceSnapshot(editor):null;
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            if(manual)expected=before;
+            if(selection!=emojiSelectionRevision||buffer.length()>0||expected==null
+                    ||expected.start!=expected.end||!sameVoiceSnapshot(expected,before)){
+                if(manual)toast("请先结束拼音并将选区收为光标；结果仍保留，可选择复制");
+                else showVoiceReview(text,"请先确认输入位置并结束拼音组合",editor,session,true);
+                return;
+            }
+            if(text.length()>32768-expected.text.length()){
+                showVoiceReview(text,"结果超出安全编辑范围，请选择复制后分段使用",editor,session,false);
+                return;
+            }
             boolean finished=editor.finishComposingText();
-            if(!voiceWriteCurrent(epoch,session,editor))return;
-            boolean unchanged=finished&&sameVoiceSnapshot(expected,voiceSnapshot(editor));
-            // Snapshot/finish calls can reenter the IME. Recheck ownership and
-            // cancellation after the last external read, before the only write.
-            if(!voiceWriteCurrent(epoch,session,editor))return;
-            if(!unchanged||buffer.length()>0){showVoiceReview(text,"编辑器状态变化，结果保留供核对",editor,session,true);return;}
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            SplitSelection.Snapshot ready=finished?voiceSnapshot(editor):null;
+            // Reading the old connection can deliver a newer field or selection callback.
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            if(selection!=emojiSelectionRevision||buffer.length()>0||!sameVoiceSnapshot(expected,ready)){
+                showVoiceReview(text,"编辑器状态变化，结果保留供核对",editor,session,true);
+                return;
+            }
+            dispatched=true;
             boolean accepted=editor.commitText(text,1);
-            if(!voiceWriteCurrent(epoch,session,editor))return;
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
             // A host can acknowledge asynchronously or return a misleading bool.
             // Retain an explicit copy path unless the actual resulting text and
             // caret match. Never offer a blind second insertion after dispatch.
-            boolean visible=accepted&&voiceCommitVisible(expected,text,voiceSnapshot(editor));
-            if(!voiceWriteCurrent(epoch,session,editor))return;
-            if(!visible){showVoiceReview(text,"插入请求已发出，结果暂无法核实；请核对原文，可复制本次结果",editor,session,false);return;}
+            SplitSelection.Snapshot after=accepted?voiceSnapshot(editor):null;
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            if(!voiceCommitVisible(expected,text,after)){showVoiceReview(text,"插入请求已发出，结果暂无法核实；请核对原文，可复制本次结果",editor,session,false);return;}
+            android.icu.text.BreakIterator boundary=android.icu.text.BreakIterator.getCharacterInstance(Locale.ROOT);
+            boundary.setText(after.text);
+            if(!text.isEmpty()&&boundary.isBoundary(expected.start))voiceUndo=new VoiceCommitUndo(expected,after);
+            voiceReviewRevision++;
             voiceReview=null;voiceReviewReason="";reviewConnection=null;reviewSession=-1;rebuild();
-        }catch(RuntimeException refused){if(voiceWriteCurrent(epoch,session,editor))showVoiceReview(text,"编辑器未完成插入，请核对原文后选择复制",editor,session,false);}
+        }catch(RuntimeException refused){
+            if(voiceResultCurrent(editor,session,revision,epoch)){
+                String reason=dispatched?"编辑器未确认插入，请核对原文后选择复制":"编辑器暂不可用，结果保留供核对";
+                showVoiceReview(text,reason,editor,session,!dispatched);
+            }
+        }finally{voiceCommitInFlight=false;}
     }
-    private void insertVoiceReview(){long epoch=voiceEditEpoch;String text=voiceReview;InputConnection editor=reviewConnection;int session=reviewSession;if(text==null||!reviewCanInsert||!voiceWriteCurrent(epoch,session,editor)){toast("输入会话已改变，未自动插入");return;}SplitSelection.Snapshot current=voiceSnapshot(editor);if(!voiceWriteCurrent(epoch,session,editor))return;if(current==null||current.start!=current.end||buffer.length()>0){toast("请先结束拼音并将选区收为光标；结果仍保留，可选择复制");return;}attemptVoiceCommit(text,editor,current,session);}
+    private void insertVoiceReview(long revision){
+        if(voiceCommitInFlight||revision!=voiceReviewRevision)return;
+        String text=voiceReview;
+        InputConnection editor=reviewConnection;
+        int session=reviewSession;
+        if(text==null||!reviewCanInsert)return;
+        dispatchVoiceCommit(text,editor,null,session,revision,true);
+    }
     private void copyVoiceReview(){if(voiceReview==null||password||clipboardManager==null)return;try{ClipData clip=ClipData.newPlainText("语音识别结果",voiceReview);PersistableBundle flags=new PersistableBundle();flags.putBoolean("android.content.extra.IS_SENSITIVE",true);clip.getDescription().setExtras(flags);clipboardManager.setPrimaryClip(clip);toast("已复制本次结果，未自动写入编辑器");}catch(RuntimeException unavailable){toast("系统剪贴板暂不可用，本次结果仍保留");}}
-    /** Compatibility adapter only. A separate explicit voice-format choice can replace this
-     * method later without changing recognizer, panel rendering, or editor protections. */
-    private VoiceResultPolicy captureVoiceResultPolicy(){return math?VoiceResultPolicy.MATH_SYMBOLS:VoiceResultPolicy.RAW;}
+    /** Freeze the explicit voice-output setting for this recording, independent of keyboard panels. */
+    private VoiceResultPolicy captureVoiceResultPolicy(){
+        try{return VoiceResultPolicy.fromSetting(getSharedPreferences("keyboard",0).getInt("voiceOutputMode",0));}
+        catch(ClassCastException invalid){return VoiceResultPolicy.RAW;}
+    }
     private String formatVoiceResult(VoiceResultPolicy policy,String raw){return policy.apply(raw,DataFiles.ready,text->NativeBridge.voiceMath(text));}
     private void startVoice(){
         if(BuildConfig.BASIC_TYPING_PREVIEW){toast(PreviewFeatures.VOICE_UNAVAILABLE);return;}
@@ -1007,6 +1220,6 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(!finishRaw())return;final VoiceResultPolicy resultPolicy=captureVoiceResultPolicy();int session=inputSession;SpeechRecognizer created=SpeechRecognizer.createOnDeviceSpeechRecognizer(this);recognizer=created;recognizer.setRecognitionListener(new RecognitionListener(){public void onReadyForSpeech(Bundle b){if(recognizer!=created)return;voiceToolState("停止",ToolbarIcon.Kind.STOP);toast(resultPolicy==VoiceResultPolicy.MATH_SYMBOLS?"本地数学语音：正在聆听":"本地语音：正在聆听");}public void onBeginningOfSpeech(){}public void onRmsChanged(float f){}public void onBufferReceived(byte[] b){}public void onEndOfSpeech(){}public void onError(int e){if(recognizer!=created)return;toast("设备端识别未完成（"+e+"），未转云");cancelVoice();}public void onResults(Bundle b){if(recognizer!=created)return;ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(session==inputSession&&!password&&values!=null&&!values.isEmpty()){String text=formatVoiceResult(resultPolicy,values.get(0));cancelVoice();showVoiceReview(text,"请核对识别文字后插入",getCurrentInputConnection(),session,true);}else cancelVoice();}public void onPartialResults(Bundle b){}public void onEvent(int t,Bundle b){}});
         Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"zh-CN");i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);try{recognizer.startListening(i);}catch(RuntimeException e){cancelVoice();toast("设备端语音不可用，键盘输入仍可用");}
     }
-    private void cancelVoice(){cancelHoldForOtherInput();HeldVoice held=heldVoice;heldVoice=null;if(held!=null)held.task.cancel();OfflineVoice.Task task=offlineTask;offlineTask=null;if(task!=null)task.cancel();voiceReview=null;voiceReviewReason="";reviewConnection=null;reviewSession=-1;reviewCanInsert=true;voiceState="";if(voiceReviewPanel!=null)voiceReviewPanel.setVisibility(View.GONE);SpeechRecognizer old=recognizer;recognizer=null;if(old!=null){old.cancel();old.destroy();}voiceToolState(math?"数学语音":"语音",ToolbarIcon.Kind.MICROPHONE);refreshCompositionStatus();}
+    private void cancelVoice(){voiceReviewRevision++;cancelHoldForOtherInput();HeldVoice held=heldVoice;heldVoice=null;if(held!=null)held.task.cancel();OfflineVoice.Task task=offlineTask;offlineTask=null;if(task!=null)task.cancel();voiceReview=null;voiceReviewReason="";reviewConnection=null;reviewSession=-1;reviewCanInsert=true;voiceState="";if(voiceReviewPanel!=null)voiceReviewPanel.setVisibility(View.GONE);SpeechRecognizer old=recognizer;recognizer=null;if(old!=null){old.cancel();old.destroy();}voiceToolState("语音",ToolbarIcon.Kind.MICROPHONE);refreshCompositionStatus();}
     private void toast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
 }

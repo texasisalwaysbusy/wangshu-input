@@ -2,6 +2,8 @@
 #include "pinyin_composition.h"
 #include "mixed_composition.h"
 #include "local_predictions.h"
+#include "context_predictions.h"
+#include "numeric_suffix.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -17,6 +19,68 @@ static std::vector<std::string> fields(const std::string& line){std::vector<std:
 static bool better(const Candidate& a,const Candidate& b){if(a.score!=b.score)return a.score>b.score;return a.text<b.text;}
 static int clampScore(int64_t score){return static_cast<int>(std::clamp(score,static_cast<int64_t>(std::numeric_limits<int>::min()),static_cast<int64_t>(std::numeric_limits<int>::max())));}
 static void trim(std::vector<Candidate>& out,size_t n){if(out.size()<2){if(out.size()>n)out.resize(n);return;}std::sort(out.begin(),out.end(),better);std::set<std::string> seen;out.erase(std::remove_if(out.begin(),out.end(),[&](const Candidate& c){return !seen.insert(c.text).second;}),out.end());if(out.size()>n)out.resize(n);}
+static constexpr size_t maxCompletionWordLength=6;
+static constexpr size_t maxCompletionMatches=1024;
+
+std::vector<Engine::CompletionWord> Engine::completionWords(
+        const std::map<std::string,std::vector<Candidate>>& dictionary){
+    std::vector<CompletionWord> words;
+    for(const auto& entry:dictionary){
+        for(const auto& candidate:entry.second){
+            auto text=utf16(candidate.text);
+            if(text.size()>=2&&text.size()<=maxCompletionWordLength&&
+                    std::all_of(text.begin(),text.end(),local_prediction::han)){
+                words.push_back({std::move(text),candidate.score});
+            }
+        }
+    }
+    std::sort(words.begin(),words.end(),[](const CompletionWord& a,const CompletionWord& b){
+        if(a.text!=b.text)return a.text<b.text;
+        return a.score>b.score;
+    });
+    words.erase(std::unique(words.begin(),words.end(),[](const CompletionWord& a,const CompletionWord& b){
+        return a.text==b.text;
+    }),words.end());
+    return words;
+}
+
+std::vector<Candidate> Engine::completeChinese(
+        std::u16string_view line,std::u16string_view after,size_t limit) const{
+    size_t length=0;
+    while(length<line.size()&&length<maxCompletionWordLength-1&&
+            local_prediction::han(line[line.size()-length-1]))++length;
+    if(length<2||!chineseCompletions_)return {};
+    auto& index=*chineseCompletions_;
+    // Build once in the prediction caller. Ordinary lookup never waits for this index.
+    std::call_once(index.initialized,[&]{
+        try{
+            index.words=completionWords(words_);
+        }catch(const std::bad_alloc&){
+            // Completion is optional. Preserve the base dictionary for this session.
+        }
+    });
+    while(!after.empty()&&local_prediction::separator(after.front()))after.remove_prefix(1);
+    for(;length>0;--length){
+        const auto prefix=line.substr(line.size()-length);
+        auto word=std::lower_bound(index.words.begin(),index.words.end(),prefix,
+                [](const CompletionWord& entry,std::u16string_view key){return std::u16string_view(entry.text)<key;});
+        std::vector<Candidate> candidates;
+        size_t matches=0;
+        for(;word!=index.words.end()&&std::u16string_view(word->text).substr(0,length)==prefix;++word){
+            if(word->text.size()==length)continue;
+            // Avoid returning a lexicographically truncated ranking for a dense prefix.
+            if(++matches>maxCompletionMatches)return {};
+            const auto suffix=std::u16string_view(word->text).substr(length);
+            if(!local_prediction::duplicate(suffix,after))
+                candidates.push_back({utf8(std::u16string(suffix)),"词典补全",word->score});
+        }
+        if(matches>0){
+            trim(candidates,limit);
+            return candidates;
+        }
+    }
+    return {};
+}
 // Merge the best Cartesian products without materializing beam^2 candidates.
 // Both inputs are sorted by trim(); each fixed-prefix row stays sorted.
 static void composeBest(const std::vector<Candidate>& prefixes,const std::vector<Candidate>& suffixes,
@@ -60,7 +124,13 @@ bool Engine::load(const std::string& directory){
     if(count<10||signs.empty())return false;
     for(auto& item:loaded)trim(item.second,2000);
     auto syllables=pinyin::syllables(loaded);
-    words_=std::move(loaded);symbols_=std::move(signs);pinyinSyllables_=std::move(syllables);entryCount_=count;return true;
+    auto completions=std::make_shared<CompletionIndex>();
+    words_=std::move(loaded);
+    symbols_=std::move(signs);
+    pinyinSyllables_=std::move(syllables);
+    chineseCompletions_=std::move(completions);
+    entryCount_=count;
+    return true;
 }
 std::vector<Candidate> Engine::lookup(const std::string& raw,size_t limit,size_t page) const{
     if(raw.empty()||raw.size()>128||limit==0||limit>50||page>100)return {};
@@ -112,6 +182,8 @@ std::vector<Candidate> Engine::lookup(const std::string& raw,size_t limit,size_t
                 // Preserve existing prefix ordering and avoid extra search while the
                 // user is still typing a normal word. Exact lookups stay on their fast path.
                 if(dp.back().empty()&&out.empty()&&key.size()<=pinyin::kMaxAbbreviatedLetters) {
+                    const bool pureInitials=key.size()>=3&&
+                        key.find_first_not_of("bpmfdtnlgkhjqxrzcswy")==std::string::npos;
                     std::vector<std::vector<pinyin::Spelling>> choices(key.size());
                     for(size_t i=0;i<key.size();++i)choices[i]=pinyin::spellings(key,i,pinyinSyllables_);
                     std::vector<std::vector<Candidate>> abbreviated(key.size()+1);
@@ -125,6 +197,13 @@ std::vector<Candidate> Engine::lookup(const std::string& raw,size_t limit,size_t
                                 const auto& word=(*match.words)[k];
                                 int score=clampScore(static_cast<int64_t>(word.score)/100-pinyin::kLexicalNormalizer+
                                     static_cast<int64_t>(match.letters*match.letters*20)-static_cast<int64_t>(match.omitted*pinyin::kOmittedLetterCost));
+                                if(pureInitials&&i==0&&match.end==key.size()) {
+                                    const auto text=utf16(word.text);
+                                    // One Han character per initial supports the complete word.
+                                    // Its ranking uses lexical frequency without an omitted-final penalty.
+                                    if(text.size()==key.size()&&std::all_of(text.begin(),text.end(),local_prediction::han))
+                                        score=word.score/100;
+                                }
                                 parts[match.end].push_back({word.text,"",score});
                             }
                         }
@@ -141,13 +220,26 @@ std::vector<Candidate> Engine::lookup(const std::string& raw,size_t limit,size_t
     }
     trim(out,needed);size_t begin=page*limit;if(begin>=out.size())return {};return {out.begin()+static_cast<std::ptrdiff_t>(begin),out.end()};
 }
-std::vector<Candidate> Engine::predict(const std::string& before,const std::string& after,bool english,size_t limit) const{
-    if(before.size()>131072||after.size()>131072)return {};
+std::vector<Candidate> Engine::predict(const std::string& before,const std::string& after,bool english,
+                                       size_t limit,bool numericPanel) const{
+    if(before.size()>131072||after.size()>131072||!limit||limit>8)return {};
     auto left=utf16(before),right=utf16(after);
     // Reject malformed input instead of predicting from replacement characters.
     if(utf8(left)!=before||utf8(right)!=after)return {};
-    std::vector<Candidate> out;for(const auto& value:local_prediction::suggest(left,right,english,limit))
+    if(numericPanel){
+        auto suffix=numeric_suffix::suggest(left,right);
+        if(!suffix.empty())return {{utf8(std::u16string(suffix)),"数字续写",0}};
+    }
+    const auto line=local_prediction::eligibleLine(left,right,limit);
+    if(line.empty())return {};
+    bool matchedExample=false;
+    std::vector<Candidate> out;for(const auto& value:local_prediction::suggest(left,right,english,limit,&matchedExample))
         out.push_back({utf8(value.suffix),"本地例句 #"+std::to_string(value.row)+(value.sentence?" · 整句":" · 下一词"),static_cast<int>(value.matched)});
+    if(!out.empty()||matchedExample)return out;
+    auto context=english?context_prediction::english(line,right,limit):context_prediction::chinese(line,right,limit);
+    for(const auto& value:context)
+        out.push_back({utf8(value.suffix),value.partial?"语料补全":"语料下一词",value.count});
+    if(out.empty()&&!english)return completeChinese(line,right,limit);
     return out;
 }
 std::vector<Symbol> Engine::symbols(const std::string& category) const{std::vector<Symbol> out;for(const auto& s:symbols_)if(category.empty()||s.category==category)out.push_back(s);return out;}

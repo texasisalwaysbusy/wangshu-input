@@ -7,6 +7,17 @@
 struct WindowsPersonalTestAccess {
  static void store(TextService* s,const std::wstring& path){s->personalStore=std::make_unique<wangshu::WindowsPersonalStore>(path);}
  static void pause(TextService* s){s->noLearn=true;s->invalidatePending();}
+ static void english(TextService* s){s->chinese=false;}
+ static void math(TextService* s,bool enabled=true){s->math=enabled;}
+ static bool pending(TextService* s){return static_cast<bool>(s->predictionRequest);}
+ static void tick(TextService* s){
+     if(!pending(s))return;
+     s->predictionRequest->due=0;
+     SendMessageW(s->predictionWindow,WM_TIMER,PredictionTimer,0);
+ }
+ static void expire(TextService* s){s->predictionRequest->expires=0;tick(s);}
+ static bool calculating(TextService* s){return s->predictionWork!=nullptr;}
+ static HWND dispatchWindow(TextService* s){return s->predictionWindow;}
 };
 static int passed=0,failed=0;
 static void expect(bool ok){if(!ok)throw std::runtime_error("phrase association contract");}
@@ -18,12 +29,184 @@ struct Fixture {
  ~Fixture(){c->flush();s->Deactivate();s->Release();c->Release();m->Release();}
  void text(const std::wstring& value){c->doc.value=value;c->doc.cursor=static_cast<LONG>(value.size());c->doc.selectionEnd=-1;}
  void enabled(bool value=true){auto old=store->readLearningFresh();store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.phraseAssociations=value;});}
- void release(){BOOL eaten=TRUE;expect(SUCCEEDED(s->OnTestKeyUp(c,VK_END,0,&eaten))&&!eaten);}
+ void builtin(bool value=true){
+     auto old=store->readLearningFresh();
+     store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.builtinPredictions=value;});
+ }
+ void cursorPredictions(bool value){
+     auto old=store->readLearningFresh();
+     store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.cursorPredictions=value;});
+ }
+ void release(WPARAM key=VK_END){ScriptedKeyboardState state;BOOL eaten=TRUE;expect(SUCCEEDED(s->OnTestKeyUp(c,key,0,&eaten))&&!eaten);}
+ void waitPrediction(){
+     auto expires=GetTickCount64()+1200;
+     while(WindowsPersonalTestAccess::pending(s)&&GetTickCount64()<expires){
+         WindowsPersonalTestAccess::tick(s);
+         if(WindowsPersonalTestAccess::pending(s))Sleep(2);
+     }
+     expect(!WindowsPersonalTestAccess::pending(s));
+ }
  ITfCandidateListUIElementBehavior* ui(){ITfCandidateListUIElementBehavior* p=nullptr;expect(m->element&&SUCCEEDED(m->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&p))));return p;}
- std::wstring first(){auto p=ui();BSTR b=nullptr;expect(SUCCEEDED(p->GetString(0,&b)));std::wstring value(b,SysStringLen(b));SysFreeString(b);p->Release();return value;}
+ std::wstring at(UINT index){auto p=ui();BSTR b=nullptr;auto result=p->GetString(index,&b);p->Release();expect(SUCCEEDED(result));std::wstring value(b,SysStringLen(b));SysFreeString(b);return value;}
+ std::wstring first(){return at(0);}
  HRESULT choose(){auto p=ui();auto h=p->Finalize();p->Release();return h;}
 };
-int main(){
+static int builtinSuite(){
+ test("built-in flag persists independently and can return to legacy format",[]{
+     Fixture f;f.enabled();auto old=f.store->readLearningFresh();
+     expect(old.data.phraseAssociations&&!old.data.builtinPredictions);
+     f.store->modifyLearning(old.revision,[](wangshu::LearningData& data){data.pin("nihao","你好",true,100);});
+     f.builtin();
+     wangshu::WindowsPersonalStore reopened(f.store->path());
+     auto saved=reopened.readLearningFresh();
+     expect(saved.data.phraseAssociations&&saved.data.builtinPredictions&&saved.data.pinned("nihao","你好"));
+     expect(saved.revision.find("\"version\":3")!=std::string::npos);
+     f.builtin(false);
+     auto restored=reopened.readLearningFresh();
+     expect(restored.data.phraseAssociations&&!restored.data.builtinPredictions&&restored.data.pinned("nihao","你好"));
+     expect(restored.revision.find("\"version\":2")!=std::string::npos);
+ });
+ test("default off does not request editor text",[]{
+     Fixture f;bool read=false;f.c->doc.onRead=[&]{read=true;};
+     f.release();f.waitPrediction();expect(!read&&!f.m->element);
+ });
+ test("disabled caret preference persists and legacy defaults preserve navigation behavior",[]{
+     Fixture f;f.enabled();f.builtin();auto previous=f.store->readLearningFresh();
+     expect(previous.data.cursorPredictions&&previous.revision.find("\"version\":3")!=std::string::npos);
+     f.cursorPredictions(false);
+     wangshu::WindowsPersonalStore reopened(f.store->path());auto changed=reopened.readLearningFresh();
+     expect(!changed.data.cursorPredictions&&changed.data.builtinPredictions&&changed.data.phraseAssociations&&
+            changed.revision.find("\"version\":4")!=std::string::npos);
+     f.cursorPredictions(true);expect(reopened.readLearningFresh().revision==previous.revision);
+ });
+ test("disabled movement avoids provider reads but ordinary input still refreshes",[]{
+     Fixture f;f.builtin();f.cursorPredictions(false);WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     bool read=false;f.c->doc.onRead=[&]{read=true;};
+     for(auto key:{VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN,VK_HOME,VK_END})f.release(key);
+     expect(!read&&!f.m->element&&!WindowsPersonalTestAccess::pending(f.s));
+     f.release('H');f.waitPrediction();expect(read&&f.first()==L"ER");
+ });
+ test("turned-off cursor setting rejects a queued movement choice",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     f.release(VK_DOWN);f.waitPrediction();expect(f.first()==L"ER");
+     f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.cursorPredictions(false);
+     auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"THE WEATH");
+ });
+ test("disabling movement during a saved-phrase snapshot prevents publication",[]{
+     Fixture f;f.enabled();bool disabled=false;
+     f.c->doc.onRead=[&]{if(!disabled){disabled=true;f.cursorPredictions(false);}};
+     f.release(VK_RIGHT);expect(disabled&&!f.m->element);
+     f.release('E');expect(f.first()==L"llo");
+ });
+ test("independent exact arithmetic remains available with movement prediction off",[]{
+     Fixture f;f.builtin();f.cursorPredictions(false);WindowsPersonalTestAccess::math(f.s);f.text(L"2+2=");
+     f.release(VK_LEFT);expect(f.first()==L"4"&&!WindowsPersonalTestAccess::pending(f.s));
+ });
+ test("English completion is computed after key-up and selected row is appended",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     bool read=false;f.c->doc.onRead=[&]{read=true;};f.release();
+     expect(!read&&!f.m->element&&WindowsPersonalTestAccess::pending(f.s));
+     f.waitPrediction();expect(read&&f.first()==L"ER");
+     const auto second=f.at(1);
+     expect(!second.empty()&&second!=L"ER");
+     auto p=f.ui();expect(SUCCEEDED(p->SetSelection(1)));auto committed=p->Finalize();p->Release();
+     expect(SUCCEEDED(committed)&&f.c->doc.value==L"THE WEATH"+second);
+ });
+ test("Chinese next-word choice preserves separated right-side text",[]{
+     Fixture f;f.builtin();f.text(L"你想不想，之后再说");f.c->doc.cursor=4;f.release();
+     f.waitPrediction();expect(f.at(2)==L"一起");
+     auto p=f.ui();expect(SUCCEEDED(p->SetSelection(2)));auto committed=p->Finalize();p->Release();
+     expect(SUCCEEDED(committed));
+     expect(f.c->doc.value==L"你想不想一起，之后再说");
+ });
+ test("native timer dispatch publishes without taking focus",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     auto focus=GetFocus();f.release();
+     auto window=WindowsPersonalTestAccess::dispatchWindow(f.s);
+     expect(window&&FindWindowExW(HWND_MESSAGE,nullptr,PredictionWindowClass,nullptr)==window&&!IsWindowVisible(window));
+     auto expires=GetTickCount64()+1000;
+     while(WindowsPersonalTestAccess::pending(f.s)&&GetTickCount64()<expires){
+         MSG message{};
+         if(PeekMessageW(&message,window,WM_TIMER,WM_TIMER,PM_REMOVE))DispatchMessageW(&message);
+         else Sleep(2);
+     }
+     expect(!WindowsPersonalTestAccess::pending(f.s)&&f.first()==L"ER");
+     expect(GetFocus()==focus&&f.c->doc.value==L"THE WEATH");
+ });
+ test("personal phrase takes precedence when both flags are on",[]{
+     Fixture f;f.enabled();f.builtin();f.release();expect(f.first()==L"llo"&&!WindowsPersonalTestAccess::pending(f.s));
+ });
+ test("exact arithmetic takes precedence over built-in predictions",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"2+2=");
+     f.release();expect(f.first()==L"4"&&!WindowsPersonalTestAccess::pending(f.s));
+ });
+ test("numeric mode appends a date unit without modifying digits or right-side text",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026，备注");
+     f.c->doc.cursor=7;f.release();f.waitPrediction();
+     expect(f.first()==L"年"&&f.c->doc.value==L"日期：2026，备注");
+     expect(SUCCEEDED(f.choose())&&f.c->doc.value==L"日期：2026年，备注");
+ });
+ test("numeric suffix requires math mode and enabled built-in predictions",[]{
+     Fixture f;f.builtin();f.text(L"Time: 09");f.release();f.waitPrediction();expect(!f.m->element);
+     WindowsPersonalTestAccess::math(f.s);f.builtin(false);f.release();f.waitPrediction();expect(!f.m->element);
+     f.builtin();f.release();f.waitPrediction();expect(f.first()==L":");
+ });
+ test("restricted number field has no date suggestion",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.c->scope=IS_DIGITS;
+     f.text(L"日期：2026");f.release();f.waitPrediction();expect(!f.m->element);
+ });
+ test("mode change after numeric selection rejects a queued suffix",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026");
+     f.release();f.waitPrediction();expect(f.first()==L"年");
+     f.c->deferred=true;expect(SUCCEEDED(f.choose()));WindowsPersonalTestAccess::math(f.s,false);
+     auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"日期：2026");
+ });
+ test("restricted scopes refuse before requesting editor text",[]{
+     for(auto scope:{IS_PASSWORD,IS_PRIVATE,IS_URL,IS_EMAIL_SMTPEMAILADDRESS,IS_DIGITS}){
+         Fixture f;f.builtin();f.c->scope=scope;bool read=false;f.c->doc.onRead=[&]{read=true;};
+         f.release();f.waitPrediction();expect(!read&&!f.m->element);
+     }
+ });
+ test("moving the caret while the worker is active discards publication",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     f.release();WindowsPersonalTestAccess::tick(f.s);expect(WindowsPersonalTestAccess::calculating(f.s));
+     f.c->doc.cursor=4;f.waitPrediction();expect(!f.m->element&&f.c->doc.value==L"THE WEATH");
+ });
+ test("switching focus cancels the running suggestion",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     f.release();WindowsPersonalTestAccess::tick(f.s);expect(WindowsPersonalTestAccess::calculating(f.s));
+     f.s->OnSetFocus(FALSE);f.waitPrediction();expect(!f.m->element&&f.c->doc.value==L"THE WEATH");
+ });
+ test("focus reentry during snapshot capture cannot start a worker",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     f.release();f.c->afterRead=[&]{f.s->OnSetFocus(FALSE);};
+     f.waitPrediction();expect(!f.m->element&&!WindowsPersonalTestAccess::calculating(f.s));
+ });
+ test("same caret with changed right-side text rejects queued insertion",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH, later");
+     f.c->doc.cursor=9;f.release();f.waitPrediction();expect(f.first()==L"ER");
+     f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.c->doc.value=L"THE WEATH, again";
+     auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"THE WEATH, again");
+ });
+ test("switching preference off rejects an already queued insertion",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");f.release();f.waitPrediction();
+     f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.builtin(false);
+     auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"THE WEATH");
+ });
+ test("expiration invalidates a running request and never inserts",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
+     f.release();WindowsPersonalTestAccess::tick(f.s);expect(WindowsPersonalTestAccess::calculating(f.s));
+     WindowsPersonalTestAccess::expire(f.s);f.waitPrediction();
+     expect(!f.m->element&&f.c->doc.value==L"THE WEATH");
+ });
+ test("fixtures release COM references and timer windows",[]{expect(objectCount==0&&predictionWindowCount==0);});
+ std::cout<<"RESULT "<<passed<<" passed, "<<failed<<" failed; Windows native prediction, mock TSF only"<<std::endl;
+ return failed?1:0;
+}
+
+int main(int argc,char** argv){
+ if(argc==2&&std::string(argv[1])=="--builtin")return builtinSuite();
+ if(argc!=1)return 2;
  test("default off creates no candidate",[]{Fixture f;f.release();expect(!f.m->element&&f.c->doc.value==L"he");});
  test("explicit setting enables English suffix",[]{Fixture f;f.enabled();f.release();expect(f.first()==L"llo"&&f.c->doc.value==L"he");});
  test("explicit TSF choice appends",[]{Fixture f;f.enabled();f.release();expect(SUCCEEDED(f.choose())&&f.c->doc.value==L"hello");});
@@ -38,7 +221,7 @@ int main(){
  test("phrase change rejects old selection",[]{Fixture f;f.enabled();f.release();auto old=f.store->readFresh();f.store->modify(old.revision,[](wangshu::PersonalData& d){d.phrases[1].text="help";});expect(FAILED(f.choose())&&f.c->doc.value==L"he");});
  test("async caret change rejects",[]{Fixture f;f.enabled();f.release();f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.c->doc.cursor=1;auto result=f.c->flush();expect(result.size()==1&&FAILED(result[0])&&f.c->doc.value==L"he");});
  test("focus loss rejects queued choice",[]{Fixture f;f.enabled();f.release();f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.s->OnSetFocus(FALSE);auto result=f.c->flush();expect(result.size()==1&&FAILED(result[0])&&f.c->doc.value==L"he");});
- test("Space and Enter do not select association",[]{Fixture f;f.enabled();f.release();BOOL eaten=TRUE;f.s->OnTestKeyDown(f.c,VK_SPACE,0,&eaten);expect(!eaten&&f.c->doc.value==L"he");f.release();f.s->OnTestKeyDown(f.c,VK_RETURN,0,&eaten);expect(!eaten&&f.c->doc.value==L"he");});
+ test("Space and Enter do not select association",[]{Fixture f;f.enabled();f.release();BOOL eaten=TRUE;scriptedTestKeyDown(f.s,f.c,VK_SPACE,&eaten);expect(!eaten&&f.c->doc.value==L"he");f.release();scriptedTestKeyDown(f.s,f.c,VK_RETURN,&eaten);expect(!eaten&&f.c->doc.value==L"he");});
  test("fixture releases COM objects",[]{expect(objectCount==0);});
  std::cout<<"RESULT "<<passed<<" passed, "<<failed<<" failed; production Windows PE/mock TSF, no real device"<<std::endl;return failed?1:0;
 }

@@ -15,7 +15,14 @@ public final class VoiceHoldTouchSurface extends FrameLayout {
     public void spaceKey(View value){spaceKey=value;}
     public void backspaceController(BackspaceGesture value){if(eraser!=null)eraser.cancel();endErase();eraser=value;}
     public void backspaceKey(View value){eraseKey=value;}
-    private boolean over(View key,float x,float y){if(key==null||!key.isShown())return false;Rect r=new Rect();key.getDrawingRect(r);try{offsetDescendantRectToMyCoords(key,r);}catch(IllegalArgumentException detached){return false;}return x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom;}
+    private boolean over(View key,float x,float y){
+        if(key==null||!key.isShown())return false;
+        Rect visible=new Rect();
+        if(!key.getLocalVisibleRect(visible))return false;
+        try{offsetDescendantRectToMyCoords(key,visible);}
+        catch(IllegalArgumentException detached){return false;}
+        return x>=visible.left&&x<visible.right&&y>=visible.top&&y<visible.bottom;
+    }
     private boolean overSpace(float x,float y){return over(spaceKey,x,y);}
     private void endErase(){if(pressedErase!=null)pressedErase.setPressed(false);pressedErase=null;erasing=false;if(getParent()!=null)getParent().requestDisallowInterceptTouchEvent(false);}
     private void releasePressed(){if(pressedKey!=null){pressedKey.setPressed(false);pressedKey=null;}}

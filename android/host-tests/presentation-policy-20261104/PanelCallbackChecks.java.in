@@ -28,6 +28,9 @@ public final class PanelCallbackChecks {
     static class DataFiles {static boolean ready;}
     static class NativeBridge {static int calls;static String raw;static String voiceMath(String text){calls++;raw=text;return "converted:"+text;}}
 
+    static class Preferences {int mode;int getInt(String key,int fallback){return mode;}}
+    final Preferences preferences=new Preferences();
+    Preferences getSharedPreferences(String name,int mode){return preferences;}
     int inputSession=1,commits;long emojiViewGeneration=1;
     boolean math=true,editing,phrasesOpen,emoji,shown=true;
     String committed;InputConnection editor=new InputConnection();HorizontalScrollView emojiOuterScroll;
@@ -59,11 +62,11 @@ public final class PanelCallbackChecks {
         }
     }
     static void format(){
-        PanelCallbackChecks h=new PanelCallbackChecks();h.math=true;VoiceResultPolicy first=h.captureVoiceResultPolicy();h.math=false;VoiceResultPolicy second=h.captureVoiceResultPolicy();DataFiles.ready=true;NativeBridge.calls=0;
+        PanelCallbackChecks h=new PanelCallbackChecks();h.preferences.mode=1;VoiceResultPolicy first=h.captureVoiceResultPolicy();h.preferences.mode=0;VoiceResultPolicy second=h.captureVoiceResultPolicy();DataFiles.ready=true;NativeBridge.calls=0;
         check(h.formatVoiceResult(first,"根号").equals("converted:根号")&&NativeBridge.calls==1,"actual formatter uses captured math after panel switch");
         check(h.formatVoiceResult(second,"根号").equals("根号")&&NativeBridge.calls==1,"actual formatter keeps raw without native call");
         DataFiles.ready=false;check(h.formatVoiceResult(first,"根号").equals("根号")&&NativeBridge.calls==1,"actual formatter remains lazy without dictionary");
-        h.math=true;check(h.captureVoiceResultPolicy()==VoiceResultPolicy.MATH_SYMBOLS,"legacy adapter deliberately retains old math behavior");
+        h.math=true;check(h.captureVoiceResultPolicy()==VoiceResultPolicy.RAW,"math panel does not change explicit raw voice mode");h.preferences.mode=1;h.math=false;check(h.captureVoiceResultPolicy()==VoiceResultPolicy.MATH_SYMBOLS,"math voice works independently of the panel");h.preferences.mode=99;check(h.captureVoiceResultPolicy()==VoiceResultPolicy.RAW,"unknown voice mode fails to raw");
     }
     public static void main(String[] args){reveal();choose();format();System.out.println("PASS "+checks+" actual panel callback checks with synthetic view/editor boundaries; no native Android execution.");}
 }

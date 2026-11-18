@@ -46,8 +46,9 @@ final class PersonalStore {
     }
     static String key(String input)throws IOException {
         if(input==null)throw new IOException("拼音不能为空");
-        String value=input.trim().toLowerCase(Locale.ROOT).replace("'","");
-        if(!value.matches("[a-z]{1,64}"))throw new IOException("拼音仅支持 1–64 个英文字母，ü 请用 v");return value;
+        String value=input.trim().replace("'","");
+        if(!value.matches("[a-zA-Z]{1,64}"))throw new IOException("拼音仅支持 1–64 个英文字母，ü 请用 v");
+        return value.toLowerCase(Locale.ROOT);
     }
     private static String field(JSONObject object,String name)throws JSONException,IOException {Object value=object.get(name);if(!(value instanceof String))throw new IOException("文本字段必须是字符串");return (String)value;}
     private static void fields(JSONObject object,String... allowed)throws IOException {for(Iterator<String> it=object.keys();it.hasNext();)if(!Arrays.asList(allowed).contains(it.next()))throw new IOException("条目包含未知字段，未导入");}
@@ -95,7 +96,13 @@ final class PersonalStore {
             JSONObject clean=empty();Set<String> seen=new HashSet<>();
             for(int i=0;i<words.length();i++){JSONObject w=words.getJSONObject(i);fields(w,"pinyin","text");String k=key(field(w,"pinyin")),t=wordText(field(w,"text"));if(seen.add(k+"\u0000"+t))clean.getJSONArray("words").put(new JSONObject().put("pinyin",k).put("text",t));}
             seen.clear();
-            for(int i=0;i<phrases.length();i++){JSONObject p=phrases.getJSONObject(i);fields(p,"text","shortcut");String t=text(field(p,"text"),4000,true),s=p.has("shortcut")?field(p,"shortcut").trim().toLowerCase(Locale.ROOT):"";if(!s.isEmpty()&&!s.matches("[a-z]{1,32}"))throw new IOException("常用语简称仅支持 1–32 个英文字母");if(seen.add(s+"\u0000"+t))clean.getJSONArray("phrases").put(new JSONObject().put("text",t).put("shortcut",s));}
+            for(int i=0;i<phrases.length();i++){
+                JSONObject p=phrases.getJSONObject(i);fields(p,"text","shortcut");
+                String t=text(field(p,"text"),4000,true),s=p.has("shortcut")?field(p,"shortcut").trim():"";
+                if(!s.isEmpty()&&!s.matches("[a-zA-Z]{1,32}"))throw new IOException("常用语简称仅支持 1–32 个英文字母");
+                s=s.toLowerCase(Locale.ROOT);
+                if(seen.add(s+"\u0000"+t))clean.getJSONArray("phrases").put(new JSONObject().put("text",t).put("shortcut",s));
+            }
             return clean;
         }catch(JSONException e){throw new IOException("个人词库文件不完整或格式不正确",e);}
     }
@@ -114,7 +121,10 @@ final class PersonalStore {
         try(BufferedReader lines=new BufferedReader(new StringReader(decoded))){String line;
             while((line=lines.readLine())!=null){lineNumber++;String trimmed=line.trim();if(trimmed.isEmpty()||trimmed.startsWith("#"))continue;
                 int tab=line.indexOf('\t');if(tab<0||line.indexOf('\t',tab+1)>=0)throw new IOException("第 "+lineNumber+" 行：需要恰好两列（拼音、词条），以一个制表符分隔；未实现权重或来源列");
-                String pinyin=line.substring(0,tab),raw=line.substring(tab+1);boolean header=(pinyin.trim().equalsIgnoreCase("pinyin")&&raw.trim().equalsIgnoreCase("text"))||(pinyin.trim().equals("拼音")&&raw.trim().equals("词条"));
+                String pinyin=line.substring(0,tab),raw=line.substring(tab+1);
+                String firstColumn=pinyin.trim(),secondColumn=raw.trim();
+                boolean header=(firstColumn.matches("(?i)pinyin")&&secondColumn.matches("(?i)text"))||
+                        (firstColumn.equals("拼音")&&secondColumn.equals("词条"));
                 if(header){if(!first)throw new IOException("第 "+lineNumber+" 行：表头只能出现在第一条记录之前");first=false;continue;}first=false;
                 try{String k=key(pinyin),t=wordText(raw);if(seen.add(k+"\u0000"+t)){if(seen.size()>MAX_WORDS)throw new IOException("去重后词条超过 2000 条限制");result.getJSONArray("words").put(new JSONObject().put("pinyin",k).put("text",t));}}
                 catch(IOException e){throw new IOException("第 "+lineNumber+" 行："+e.getMessage(),e);}

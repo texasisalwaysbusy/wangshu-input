@@ -1,0 +1,14 @@
+Wangshu's contextual prediction tables use aggregated counts derived from
+public sentences contributed to Tatoeba (https://tatoeba.org/).
+English context and completion vocabulary: Tatoeba contributors, English
+sentence export, CC BY 2.0 FR. Derived counts use a documented split and
+reference exclusions. Historical English context tables used the CC0 1.0
+export (https://creativecommons.org/publicdomain/zero/1.0/).
+Mandarin source: Tatoeba contributors, Mandarin sentence export, CC BY 2.0 FR
+(https://creativecommons.org/licenses/by/2.0/fr/).
+Source and licensing details: https://tatoeba.org/en/downloads
+
+The source exports were filtered by language, normalized, deduplicated,
+segmented and reduced to word and short-context counts. Mandarin segmentation
+uses Wangshu's existing CC-CEDICT-derived lexicon. See CC-CEDICT-NOTICE.txt.
+No source sentence corpus is distributed in the IME.

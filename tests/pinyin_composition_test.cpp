@@ -46,6 +46,14 @@ int main(int argc,char**argv) {
     for(const auto& item:std::vector<std::pair<std::string,std::string>>{{"nh","你好"},{"shrf","输入法"},{"zhongwensrf","中文输入法"},{"nihaowoshishrf","你好我是输入法"},{"bjdx","北京大学"}}) {
         auto values=e.lookup(item.first);check(!values.empty()&&values.front().text==item.second,"independent mixed/initial spelling "+item.first);
     }
+    for(const auto& item:std::vector<std::pair<std::string,std::string>>{
+            {"zsh","早上好"},{"mtj","明天见"},{"csh","城市化"},{"ggqc","公共汽车"}}) {
+        auto firstPage=e.lookup(item.first);
+        check(std::any_of(firstPage.begin(),firstPage.end(),
+            [&](const auto& value){return value.text==item.second;}),
+            "dictionary word survives pure-initial ranking "+item.first);
+        check(collect(e,item.first)==collect(e,item.first,50),"pure-initial paging agrees "+item.first);
+    }
     check(e.lookup("nihao").front().text=="你好"&&e.lookup("shi").front().text=="是","exact common-word priorities unchanged");
     auto mixed=e.lookup("ceshiye`test`shrf");
     check(!mixed.empty()&&mixed.front().text.find("test")!=std::string::npos,"explicit mixed literal segment remains exact");

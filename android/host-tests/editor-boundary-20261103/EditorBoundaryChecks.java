@@ -4,16 +4,19 @@ public final class EditorBoundaryChecks {
  static int checks,failures;static void check(boolean b,String s){checks++;if(!b)failures++;System.out.println((b?"PASS ":"FAIL ")+s);}
  static final class Fixture {final WangshuIme ime=new WangshuIme();final Conn first=new Conn(this),second=new Conn(this);final EditorActions actions=new EditorActions(ime);Fixture(){ime.connection=first;}void swap(){ime.connection=second;ime.inputSession++;}}
  static final class Conn implements InputConnection {
-  final Fixture f;String text="abcXYZ";int start=3,end=3,extracts,selections,commits,deletes,selectedReads,beforeReads,afterReads,downs,ups,menus;Runnable extractHook,selectedHook,beforeHook,afterHook,selectionHook,keyHook,menuHook;boolean reject,throwExtract,throwSelected,throwSelection,omitExtract,partial;CharSequence styled;int requestFlags,finishes;boolean rejectFinish,throwFinish;boolean chromeSnapshot;int partialStart=-1,startOffset;Runnable finishHook;
+  final Fixture f;String text="abcXYZ";int start=3,end=3,extracts,selections,commits,deletes,selectedReads,beforeReads,afterReads,downs,ups,menus;Runnable extractHook,selectedHook,beforeHook,afterHook,selectionHook,keyHook,menuHook;boolean reject,throwExtract,throwSelected,throwSelection,omitExtract,partial;CharSequence styled;int requestFlags,finishes;boolean rejectFinish,throwFinish;Runnable finishHook;
+  boolean acknowledgeWithoutApplying;
+  Runnable afterDelete;
+  boolean chromeSnapshot;int partialStart=-1,startOffset;
   Conn(Fixture f){this.f=f;}void once(int kind){Runnable r=kind==0?extractHook:kind==1?selectedHook:kind==2?beforeHook:afterHook;if(kind==0)extractHook=null;else if(kind==1)selectedHook=null;else if(kind==2)beforeHook=null;else afterHook=null;if(r!=null)r.run();}
   public ExtractedText getExtractedText(ExtractedTextRequest r,int flags){extracts++;requestFlags=r.flags;if(throwExtract)throw new IllegalStateException();if(omitExtract)return null;ExtractedText x=new ExtractedText();x.text=styled==null?text:styled;x.startOffset=startOffset;x.partialStartOffset=partialStart;if(chromeSnapshot)x.partialEndOffset=text.length();if(partial)x.partialStartOffset=0;x.selectionStart=start;x.selectionEnd=end;once(0);return x;}
   public CharSequence getSelectedText(int flags){selectedReads++;if(throwSelected)throw new IllegalStateException();String s=text.substring(Math.min(start,end),Math.max(start,end));once(1);return s.isEmpty()?null:s;}
   public CharSequence getTextBeforeCursor(int n,int flags){beforeReads++;String s=text.substring(Math.max(0,Math.min(start,end)-n),Math.min(start,end));once(2);return s;}
   public CharSequence getTextAfterCursor(int n,int flags){afterReads++;String s=text.substring(Math.max(start,end),Math.min(text.length(),Math.max(start,end)+n));once(3);return s;}
-  public boolean setSelection(int a,int b){selections++;if(throwSelection)throw new IllegalStateException();if(!reject){start=a;end=b;}if(selectionHook!=null){Runnable r=selectionHook;selectionHook=null;r.run();}return !reject;}
+  public boolean setSelection(int a,int b){selections++;if(throwSelection)throw new IllegalStateException();if(!reject&&!acknowledgeWithoutApplying){start=a;end=b;}if(selectionHook!=null){Runnable r=selectionHook;selectionHook=null;r.run();}return !reject;}
   public boolean finishComposingText(){finishes++;if(throwFinish)throw new IllegalStateException();if(finishHook!=null)finishHook.run();return !rejectFinish;}
-  public boolean commitText(CharSequence v,int p){commits++;text=text.substring(0,Math.min(start,end))+v+text.substring(Math.max(start,end));start=end=Math.min(start,end)+v.length();return !reject;}
-  public boolean deleteSurroundingText(int b,int a){deletes++;text=text.substring(0,start-b)+text.substring(end+a);start-=b;end=start;return !reject;}
+  public boolean commitText(CharSequence v,int p){commits++;if(!acknowledgeWithoutApplying){text=text.substring(0,Math.min(start,end))+v+text.substring(Math.max(start,end));start=end=Math.min(start,end)+v.length();}return !reject;}
+  public boolean deleteSurroundingText(int b,int a){deletes++;if(!acknowledgeWithoutApplying){text=text.substring(0,start-b)+text.substring(end+a);start-=b;end=start;}if(afterDelete!=null)afterDelete.run();return !reject;}
   public boolean sendKeyEvent(KeyEvent e){if(e.action==KeyEvent.ACTION_DOWN){downs++;if(keyHook!=null){Runnable r=keyHook;keyHook=null;r.run();}}else ups++;return !reject;}
   public boolean performContextMenuAction(int id){menus++;if(menuHook!=null)menuHook.run();return !reject;}
  }
@@ -39,7 +42,7 @@ public final class EditorBoundaryChecks {
   attempt("unexpected synchronous selection callback is not confirmed success",f->{f.first.selectionHook=()->{f.first.start=f.first.end=1;f.actions.selection(1,1);};return !f.actions.move(1,false)&&f.first.selections==1;});
   attempt("truncated RI context cannot invent a flag boundary for forward delete",f->{f.first.text="🇦".repeat(2051);f.first.start=f.first.end=4098;return !f.actions.delete(true)&&f.first.deletes==0;});
   attempt("truncated RI context cannot invent a flag boundary for backspace",f->{f.first.text="🇦".repeat(2051);f.first.start=f.first.end=4098;return !f.actions.delete(false)&&f.first.deletes==0;});
-  attempt("long complete snapshot permits safe ordinary backspace",f->{f.first.text="a".repeat(12000);f.first.start=f.first.end=6000;return f.actions.delete(false)&&f.first.text.length()==11999&&f.first.extracts==2;});
+  attempt("long complete snapshot permits safe ordinary backspace",f->{f.first.text="a".repeat(12000);f.first.start=f.first.end=6000;return f.actions.delete(false)&&f.first.text.length()==11999&&f.first.extracts==3;});
   attempt("long text above complete-snapshot bound fails closed",f->{f.first.text="a".repeat(100001);f.first.start=f.first.end=6000;return !f.actions.delete(false)&&f.first.deletes==0;});
   attempt("withheld full snapshot fails closed without surrounding-text fallback",f->{f.first.omitExtract=true;return !f.actions.delete(false)&&f.first.deletes==0&&f.first.selectedReads==0&&f.first.beforeReads==0;});
   attempt("partial full snapshot fails closed",f->{f.first.partial=true;return !f.actions.delete(false)&&f.first.deletes==0;});
@@ -57,6 +60,46 @@ public final class EditorBoundaryChecks {
   attempt("edge navigation preserves entire UTF16 range",f->{return f.actions.move(-1,true)&&f.first.end==0&&f.actions.move(1,true)&&f.first.end==6;});
   attempt("normal backspace removes one grapheme",f->{f.first.text="A👩🏽‍💻Z";f.first.start=f.first.end=8;EditorActions.Deletion d=f.actions.deleteDetails(false);return d.accepted&&d.changed&&!d.newline&&f.first.text.equals("AZ")&&f.first.deletes==1;});
   attempt("selected newline deletion reports slowdown",f->{f.first.text="A\r\nZ";f.first.start=1;f.first.end=3;EditorActions.Deletion d=f.actions.deleteDetails(false);return d.accepted&&d.changed&&d.newline&&f.first.text.equals("AZ");});
+  attempt("acknowledged backspace without a document change stops the gesture",f->{
+      f.first.text="A👩🏽‍💻e\u0301Z";
+      f.first.start=f.first.end=10;
+      f.first.acknowledgeWithoutApplying=true;
+      EditorActions.Deletion deletion=f.actions.deleteDetails(false);
+      return !deletion.accepted&&!deletion.changed&&deletion.failure==EditorActions.DeleteFailure.READBACK
+              &&f.first.deletes==1&&f.first.start==10&&f.first.text.equals("A👩🏽‍💻e\u0301Z");
+  });
+  attempt("verified backspace reads exact combining-grapheme deletion and caret",f->{
+      f.first.text="A👩🏽‍💻e\u0301Z";
+      f.first.start=f.first.end=10;
+      return f.actions.delete(false)&&f.first.text.equals("A👩🏽‍💻Z")&&f.first.start==8;
+  });
+  attempt("acknowledged selected delete requires exact readback",f->{
+      f.first.start=1;f.first.end=3;f.first.acknowledgeWithoutApplying=true;
+      return !f.actions.delete(false)&&f.first.commits==1&&f.first.text.equals("abcXYZ");
+  });
+  attempt("successful-looking move with an unchanged caret is unverified",f->{
+      f.first.acknowledgeWithoutApplying=true;
+      return !f.actions.move(1,false)&&f.first.selections==1&&f.first.end==3;
+  });
+  attempt("unverified selection collapse does not report successful exit",f->{
+      if(!f.actions.toggle()||!f.actions.move(1,false))return false;
+      f.first.acknowledgeWithoutApplying=true;
+      return !f.actions.toggle()&&f.actions.selecting&&f.first.start==3&&f.first.end==4;
+  });
+  attempt("lost readback after an applied deletion remains uncertain without replay",f->{
+      f.first.afterDelete=()->f.first.omitExtract=true;
+      EditorActions.Deletion deletion=f.actions.deleteDetails(false);
+      return !deletion.changed&&deletion.failure==EditorActions.DeleteFailure.READBACK
+              &&f.first.text.equals("abXYZ")&&f.first.deletes==1;
+  });
+  attempt("focus change while deleting forbids reading the replacement editor",f->{
+      f.first.afterDelete=f::swap;
+      return !f.actions.delete(false)&&f.first.deletes==1&&f.second.extracts==0;
+  });
+  attempt("unexpected text change after a selection request is not navigation success",f->{
+      f.first.selectionHook=()->f.first.text="ab!";
+      return !f.actions.move(1,false)&&f.first.selections==1;
+  });
   attempt("document boundary deletion is accepted no-op",f->{f.first.start=f.first.end=0;EditorActions.Deletion d=f.actions.deleteDetails(false);return d.accepted&&!d.changed&&f.first.deletes==0;});
   attempt("interior surrogate selection cannot delete",f->{f.first.text="A😀Z";f.first.start=2;f.first.end=3;return !f.actions.delete(false)&&f.first.commits==0;});
   attempt("malformed UTF16 cannot delete",f->{f.first.text="A\ud800Z";f.first.start=f.first.end=2;return !f.actions.delete(false)&&f.first.deletes==0;});

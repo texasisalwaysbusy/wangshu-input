@@ -6,7 +6,7 @@ import android.os.Looper;
 
 /** Deliberately unavailable preview backend. Never opens a capture or returns recognition. */
 final class OfflineVoice {
-    interface Listener {void state(String text);void result(String text);void failure(String text);}
+    interface Listener {void state(String text);default void partial(String text) { }void result(String text);void failure(String text);}
     interface Capture extends AutoCloseable {void start();int read(short[] samples);void stop();void close();}
     interface CaptureFactory {Capture create() throws Exception;}
     static void trimMemory() { }

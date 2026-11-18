@@ -47,6 +47,21 @@ public final class PresentationPolicyChecks {
         final int[] calls={0};String raw="根号大于等于阿尔法";VoiceResultPolicy.MathConverter converter=text->{calls[0]++;check(text==raw,"converter receives exact raw");return "√≥α";};
         check(VoiceResultPolicy.MATH_SYMBOLS.apply(raw,false,converter)==raw,"unready dictionary preserves raw");eq(calls[0],0,"no converter while dictionary unavailable");
         eq(VoiceResultPolicy.MATH_SYMBOLS.apply(raw,true,converter),"√≥α","math explicit transform");eq(calls[0],1,"converter exactly once");
+        eq(VoiceResultPolicy.fromSetting(2).apply("加热到负十二点〇五摄氏度。",false,converter),
+                "加热到-12.05摄氏度。","numeric mode works without dictionary");
+        eq(calls[0],1,"numeric mode does not call the math converter");
+        eq(VoiceNumberFormat.apply("二〇二四年二月二十九日，称了两千零六克。"),
+                "2024年2月29日，称了2006克。","valid leap day and unit positions");
+        eq(VoiceNumberFormat.apply("序列号为〇〇四五，备件二十个。"),
+                "序列号为0045，备件20个。","identifier zeros and separate quantity");
+        eq(VoiceNumberFormat.apply("仓库里有两百零七个零件，缺口为零点五毫米。"),
+                "仓库里有207个零件，缺口为0.5毫米。","standalone zero preserves nouns; zero decimal is explicit");
+        eq(VoiceNumberFormat.apply("它值一亿零五万元，另付十二点五元。"),
+                "它值100050000元，另付12.5元。","large unit and decimal");
+        String ambiguous="一点点，下午三点五分，一百二个，一万二个，二〇二三年二月二十九日，编号为零九号，型号A三米，001个";
+        eq(VoiceNumberFormat.apply(ambiguous),ambiguous,"preserve time, shorthand, invalid dates and ambiguous identifiers");
+        eq(VoiceNumberFormat.apply("他说等一等。已经看过了吗？"),"他说等一等。已经看过了吗？",
+                "preserve recognized punctuation and ordinary prose");
         VoiceResultPolicy captured=VoiceResultPolicy.MATH_SYMBOLS;VoiceResultPolicy nextRecording=VoiceResultPolicy.RAW;
         eq(captured.apply(raw,true,converter),"√≥α","changing a later recording's choice cannot mutate captured policy");eq(nextRecording.apply(raw,true,converter),raw,"new raw policy is independent");
     }

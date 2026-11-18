@@ -19,8 +19,8 @@ def inputs():
     return {str(p.relative_to(ROOT)):sha(p) for p in sorted(selected)}
 before=inputs();cxx=ROOT/'.tools/mingw/usr/bin/x86_64-w64-mingw32-g++-posix'
 record={'started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Actual PE production speech position guard with complete mock host under existing Wine; real Windows GUI/registration/microphone NOT_RUN','inputs_before':before,'compiler_sha256':sha(cxx),'commands':[]}
-sources=[BASE/'voice_position_test.cpp',BASE/'personal_store.cpp',PROJECT/'staging/personal-native/personal_data.cpp',PROJECT/'core/engine.cpp']
-command=[str(cxx),'-std=c++17','-O1','-Wall','-Wextra','-Wno-unused-parameter','-static',*map(str,sources),'-o',str(exe),'-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lwinpthread']
+sources=[BASE/'voice_position_test.cpp',BASE/'personal_store.cpp',BASE/'clipboard_store.cpp',PROJECT/'staging/personal-native/personal_data.cpp',PROJECT/'core/engine.cpp']
+command=[str(cxx),'-std=c++17','-O1','-Wall','-Wextra','-Wno-unused-parameter','-static',*map(str,sources),'-o',str(exe),'-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lcrypt32','-lwinpthread']
 code=0
 for stage,args,bound in [('compile',command,180),('runtime',['bash',str(PROJECT/'tools/run_wine.sh'),str(exe)],90)]:
     result=subprocess.run(args,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=bound);(out/(stage+'.stdout.txt')).write_bytes(result.stdout);(out/(stage+'.stderr.txt')).write_bytes(result.stderr)

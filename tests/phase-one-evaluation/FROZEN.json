@@ -1,0 +1,9 @@
+{
+  "protocol": "phase-one-v1",
+  "date_toronto": "2026-11-10",
+  "files": {
+    "voice.jsonl": "fa8d220e92db496a5487cbe7791213e3abf00a3bfb4ee6d90b2db31d22dfab61",
+    "prediction.jsonl": "a7e20738bf9de9fdac2a3eb4ec42f3a95822b311679eb88ff61b7f67a2976672"
+  },
+  "protocol_sha256": "be692b20fbe8389200aef7e6dbfdbdbecccd5330964b03dac9eb2beb0cabb432"
+}

@@ -97,7 +97,7 @@ def make_case(label, architectures=('x64', 'x86')):
                  'windows/phrase_association_tsf_test.cpp', 'windows/personal_store.cpp',
                  'staging/personal-native/personal_data.cpp', 'core/engine.cpp',
                  'core/local_predictions.h', 'core/local_prediction_data.inc', 'tests/synthetic_fixture.inc',
-                 'windows/text_service.cpp', 'windows/personal_settings.cpp', 'windows/voice_helper.cpp',
+                 'windows/text_service.cpp', 'windows/personal_settings.cpp', 'windows/clipboard_store.cpp', 'windows/voice_helper.cpp',
                  'third_party/sherpa/c-api.h', 'third_party/nlohmann/json.hpp',
                  'third_party/nlohmann/LICENSE.MIT', 'third_party/nlohmann/SOURCE.json',
                  'windows/install.cmd', 'windows/uninstall.cmd', 'windows/INSTALL.md',

@@ -26,7 +26,14 @@ public final class LocalPredictionJniTest {
         check(contains(NativeBridge.lookup("\\X",0),"𝕏"),"existing supplementary symbol survives UTF8 UTF16 JNI roundtrip");
         check(contains(NativeBridge.predict("今天","",false),"天气"),"Chinese next unit crosses actual native bridge");
         check(contains(NativeBridge.predict("今天","",false),"天气很好，适合散步。"),"Chinese sentence suffix remains separate candidate");
+        check(contains(NativeBridge.predict("换上太阳能电","",false),"池"),"dictionary completion crosses actual native bridge");
+        check(NativeBridge.predict("换上太阳能电","，池",false).length==0,"dictionary completion preserves an existing following suffix");
         check(contains(NativeBridge.predict("I would ","",true),"like"),"English next unit crosses actual native bridge");
+        check(contains(NativeBridge.predict("THE WEATH","",true),"ER"),"corpus completion preserves uppercase across JNI");
+        check(contains(NativeBridge.predict("你想不想","",false),"一起"),"Chinese corpus next word crosses JNI");
+        check(contains(NativeBridge.predictInNumbers("日期：2026","，备注",false),"年"),"numeric JNI appends a date suffix at a separated caret");
+        check(contains(NativeBridge.predictInNumbers("Time: 08","",true),":"),"English time separator crosses numeric JNI");
+        check(NativeBridge.predictInNumbers("2+2=","",false).length==0,"numeric JNI does not generate arithmetic values");
         check(contains(NativeBridge.predict("I would ",", later",true),"like"),"middle-field safe suffix boundary remains eligible");
         check(NativeBridge.predict("I would "," like",true).length==0,"duplicate existing following word is suppressed");
         check(NativeBridge.predict("https://host/Thank you ","",true).length==0,"unsafe line stays rejected through JNI");
@@ -48,9 +55,22 @@ public final class LocalPredictionJniTest {
             }catch(Throwable failure){fault.compareAndSet(null,failure);}},"jni-check-"+i);
             workers[i].start();
         }
+        Thread reload=new Thread(()->{
+            try{
+                start.await();
+                if(NativeBridge.load(args[0]+"/pinyin.tsv")!=0)
+                    throw new AssertionError("a dictionary file is not a data directory");
+                if(!contains(NativeBridge.lookup("nihao",0),"你好"))
+                    throw new AssertionError("failed reload discarded the working dictionary");
+                if(NativeBridge.load(args[0])<=100000)
+                    throw new AssertionError("valid dictionary replacement was not published");
+            }catch(Throwable failure){fault.compareAndSet(null,failure);}
+        },"jni-dictionary-reload");
+        reload.start();
         start.countDown();for(Thread worker:workers)worker.join();
+        reload.join();
         if(fault.get()!=null)throw new AssertionError("concurrent native calls",fault.get());
-        check(true,"four JVM threads complete 400 prediction and 400 mixed JNI calls deterministically");
-        System.out.println("TOTAL "+checks+" PASS; actual Linux JVM JNI only. Android API/runtime/editor/APK/device NOT_RUN. Finite editorial examples are not language quality evidence.");
+        check(true,"400 predictions and 400 mixed lookups remain deterministic during failed and successful reloads");
+        System.out.println("TOTAL "+checks+" PASS; host JVM JNI only. Android API/runtime/editor/APK/device NOT_RUN. Finite editorial examples are not language quality evidence.");
     }
 }

@@ -6,7 +6,7 @@ from pathlib import Path
 import hashlib,json,subprocess,sys,xml.etree.ElementTree as ET
 project,out=map(lambda x:Path(x).resolve(),sys.argv[1:3]);out.mkdir(parents=True,exist_ok=False)
 here=Path(__file__).resolve().parent;java=project/'android/app/src/main/java/org/wangshu/ime'
-sources=[java/'SymbolPanelCatalog.java',java/'VoiceResultPolicy.java',here/'PresentationPolicyChecks.java']
+sources=[java/'SymbolPanelCatalog.java',java/'VoiceResultPolicy.java',java/'VoiceNumberFormat.java',here/'PresentationPolicyChecks.java']
 result={'scope':'Direct production pure classes, extracted real callbacks with fake views, XML/source wiring. No Android build/layout/TalkBack/phone or ASR acceptance.','checks':[]}
 def run(name,cmd):
     r=subprocess.run([str(x) for x in cmd],text=True,capture_output=True);(out/(name+'.txt')).write_text(r.stdout+r.stderr);print(r.stdout+r.stderr,end='');result['checks'].append({'name':name,'returncode':r.returncode});return r.returncode==0
@@ -31,7 +31,7 @@ check(ime.count('captureVoiceResultPolicy();')==3,'all three recognition starts 
 check(ime.count('formatVoiceResult(resultPolicy,')==3,'all three result paths share the transformer')
 check(ime.count('NativeBridge.voiceMath(')==1,'one production native math conversion callsite')
 check('mathVoice' not in ime and 'mathematical=math' not in ime,'no mutable shared mathVoice flag')
-check('return math?VoiceResultPolicy.MATH_SYMBOLS:VoiceResultPolicy.RAW;' in ime,'single explicit legacy-panel adapter retained, not full behavioral decoupling')
+check('math' not in extract('private VoiceResultPolicy captureVoiceResultPolicy('),'explicit voice output independent of keyboard panel')
 check('text->NativeBridge.voiceMath(text)' in ime,'native loading/conversion remains lazy')
 check('symbolCategory=SymbolPanelCatalog.DEFAULT_CATEGORY' in ime,'default symbol panel uses common catalog')
 check('for(String category:SymbolPanelCatalog.categories())' in ime,'actual tab rendering consumes catalog')

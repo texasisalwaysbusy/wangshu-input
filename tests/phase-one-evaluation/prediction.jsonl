@@ -1,0 +1,44 @@
+{"id":"zh-completion-1","language":"zh","kind":"completion","before":"请将包裹送到收","after":"","acceptable":["发室"]}
+{"id":"zh-completion-2","language":"zh","kind":"completion","before":"这条路暂时禁止通","after":"","acceptable":["行"]}
+{"id":"zh-completion-3","language":"zh","kind":"completion","before":"车站附近有一家便","after":"","acceptable":["利店"]}
+{"id":"zh-completion-4","language":"zh","kind":"completion","before":"先拿出新的充","after":"","acceptable":["电器"]}
+{"id":"zh-completion-5","language":"zh","kind":"completion","before":"明天要更新通讯","after":"","acceptable":["录"]}
+{"id":"zh-completion-6","language":"zh","kind":"completion","before":"我们预约了体","after":"","acceptable":["检"]}
+{"id":"en-completion-1","language":"en","kind":"completion","before":"The drawer contains several spare batt","after":"","acceptable":["eries"]}
+{"id":"en-completion-2","language":"en","kind":"completion","before":"Please take the glass cont","after":"","acceptable":["ainer"]}
+{"id":"en-completion-3","language":"en","kind":"completion","before":"We replaced the broken connec","after":"","acceptable":["tor"]}
+{"id":"en-completion-4","language":"en","kind":"completion","before":"The letters are on the fire","after":"","acceptable":["place"]}
+{"id":"en-completion-5","language":"en","kind":"completion","before":"Check the train timet","after":"","acceptable":["able"]}
+{"id":"en-completion-6","language":"en","kind":"completion","before":"This letter needs a signa","after":"","acceptable":["ture"]}
+{"id":"zh-next-1","language":"zh","kind":"next","before":"请把外套挂在","after":"","acceptable":["门后","衣架上"]}
+{"id":"zh-next-2","language":"zh","kind":"next","before":"我用剪刀剪开","after":"","acceptable":["包装","信封"]}
+{"id":"zh-next-3","language":"zh","kind":"next","before":"排队的时候请保持","after":"","acceptable":["安静","距离"]}
+{"id":"zh-next-4","language":"zh","kind":"next","before":"收据上没有写明","after":"","acceptable":["日期","金额"]}
+{"id":"zh-next-5","language":"zh","kind":"next","before":"这条小路通向","after":"","acceptable":["山顶","村庄"]}
+{"id":"zh-next-6","language":"zh","kind":"next","before":"请在地图上标出","after":"","acceptable":["位置","路线"]}
+{"id":"en-next-1","language":"en","kind":"next","before":"Fill the kettle with ","after":"","acceptable":["water"]}
+{"id":"en-next-2","language":"en","kind":"next","before":"The shop closes at ","after":"","acceptable":["six","five","noon"]}
+{"id":"en-next-3","language":"en","kind":"next","before":"Please turn off the ","after":"","acceptable":["light","lights","heater"]}
+{"id":"en-next-4","language":"en","kind":"next","before":"I forgot my umbrella at ","after":"","acceptable":["home","work"]}
+{"id":"en-next-5","language":"en","kind":"next","before":"The bus stopped outside the ","after":"","acceptable":["station","library"]}
+{"id":"en-next-6","language":"en","kind":"next","before":"Could you lend me a ","after":"","acceptable":["pen","pencil"]}
+{"id":"zh-sentence-1","language":"zh","kind":"sentence","before":"晾衣服之前，","after":"","acceptable":["先看看天气预报。"]}
+{"id":"zh-sentence-2","language":"zh","kind":"sentence","before":"如果没有收到回信，","after":"","acceptable":["明天再联系一次。"]}
+{"id":"zh-sentence-3","language":"zh","kind":"sentence","before":"到达车站后，","after":"","acceptable":["请告诉我你在哪个出口。"]}
+{"id":"zh-sentence-4","language":"zh","kind":"sentence","before":"把水龙头关紧，","after":"","acceptable":["再检查有没有漏水。"]}
+{"id":"zh-sentence-5","language":"zh","kind":"sentence","before":"钥匙找不到了，","after":"","acceptable":["我得再检查一下背包。"]}
+{"id":"zh-sentence-6","language":"zh","kind":"sentence","before":"为了防止纸张受潮，","after":"","acceptable":["请把盒子放在干燥的地方。"]}
+{"id":"en-sentence-1","language":"en","kind":"sentence","before":"Before you leave, ","after":"","acceptable":["please lock the back door."]}
+{"id":"en-sentence-2","language":"en","kind":"sentence","before":"If the package arrives early, ","after":"","acceptable":["leave it on the front desk."]}
+{"id":"en-sentence-3","language":"en","kind":"sentence","before":"We missed the last bus, ","after":"","acceptable":["so we walked home."]}
+{"id":"en-sentence-4","language":"en","kind":"sentence","before":"When the water starts to boil, ","after":"","acceptable":["turn the heat down."]}
+{"id":"en-sentence-5","language":"en","kind":"sentence","before":"I could not find the address, ","after":"","acceptable":["so I called for directions."]}
+{"id":"en-sentence-6","language":"en","kind":"sentence","before":"To keep the bread fresh, ","after":"","acceptable":["store it in a sealed bag."]}
+{"id":"zh-cursor-1","language":"zh","kind":"cursor","before":"请把材料放进收","after":"，谢谢。","acceptable":["纳盒"]}
+{"id":"zh-cursor-2","language":"zh","kind":"cursor","before":"他正在更换遥控器的","after":"，谢谢。","acceptable":["电池"]}
+{"id":"zh-cursor-3","language":"zh","kind":"cursor","before":"请沿着湖边的小","after":"，谢谢。","acceptable":["路"]}
+{"id":"zh-cursor-4","language":"zh","kind":"cursor","before":"我们先在入口等","after":"，谢谢。","acceptable":["候"]}
+{"id":"en-cursor-1","language":"en","kind":"cursor","before":"Please move the blue cont","after":", please.","acceptable":["ainer"]}
+{"id":"en-cursor-2","language":"en","kind":"cursor","before":"Write the date on the ","after":", please.","acceptable":["label"]}
+{"id":"en-cursor-3","language":"en","kind":"cursor","before":"The key is beside the wind","after":", please.","acceptable":["ow"]}
+{"id":"en-cursor-4","language":"en","kind":"cursor","before":"We kept an extra ","after":", please.","acceptable":["copy"]}

@@ -40,7 +40,15 @@ public final class VoiceHoldOverlay extends LinearLayout {
     public void waitingCancel(CancelListener action){cancel.setOnClickListener(v->{if(action!=null&&state!=null&&state.token!=null&&state.phase==VoiceHoldController.Phase.WAITING_RESULT)action.cancel(state.token);});}
     public void setState(VoiceHoldController.State value){state=value;boolean waiting=value.phase==VoiceHoldController.Phase.WAITING_RESULT;status.setText(value.finalResult?"识别已完成，松手确认":waiting?"本地识别中，完成后按松手位置处理":value.status);preview.setText(value.preview);left.setText("撤回");right.setText(value.rightLabel);left.setContentDescription("拖入后高亮，松手仅丢弃本次语音预览");right.setContentDescription("拖入后高亮，松手结束并"+value.rightLabel);card(left,value.highlighted==VoiceHoldController.Target.LEFT_DISCARD,true);card(right,value.highlighted==VoiceHoldController.Target.RIGHT_ACTION,false);targets.setVisibility(waiting?GONE:VISIBLE);cancel.setVisibility(waiting?VISIBLE:GONE);
         footer.setText(value.highlighted==VoiceHoldController.Target.LEFT_DISCARD?"松手撤回本次语音":value.highlighted==VoiceHoldController.Target.RIGHT_ACTION?"松手结束并"+value.rightLabel:value.finalResult?"松手确认；左侧仅撤回本次语音":"按住说话 · 松手结束");adapt();post(this::publishRegions);}
-    private void adapt(){if(state==null)return;boolean waiting=state.phase==VoiceHoldController.Phase.WAITING_RESULT;boolean tight=getHeight()>0&&getHeight()<dp(160);status.setVisibility(waiting||!tight?VISIBLE:GONE);preview.setVisibility(state.preview.isEmpty()?GONE:VISIBLE);footer.setVisibility(waiting?GONE:VISIBLE);}
+    private void adapt(){
+        if(state==null)return;
+        boolean waiting=state.phase==VoiceHoldController.Phase.WAITING_RESULT;
+        boolean tight=getHeight()>0&&getHeight()<dp(160);
+        boolean shortLandscape=compact&&getHeight()>0&&getHeight()<dp(120);
+        status.setVisibility(!shortLandscape&&(waiting||!tight)?VISIBLE:GONE);
+        preview.setVisibility(state.preview.isEmpty()?GONE:VISIBLE);
+        footer.setVisibility(waiting||shortLandscape?GONE:VISIBLE);
+    }
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){super.onSizeChanged(w,h,oldw,oldh);adapt();post(this::publishRegions);}
     private VoiceHoldController.Region bounds(View child){if(coordinates==null||!child.isShown()||child.getWidth()<1||child.getHeight()<1)return null;Rect r=new Rect();child.getDrawingRect(r);try{coordinates.offsetDescendantRectToMyCoords(child,r);}catch(IllegalArgumentException detached){return null;}if(r.width()<1||r.height()<1)return null;return new VoiceHoldController.Region(r.left,r.top,r.right,r.bottom);}
     private void publishRegions(){if(regions==null||state==null||state.token==null||state.phase!=VoiceHoldController.Phase.HOLDING)return;regions.changed(state.token,bounds(left),bounds(right));}

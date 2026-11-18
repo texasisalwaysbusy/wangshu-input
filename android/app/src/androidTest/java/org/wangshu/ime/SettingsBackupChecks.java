@@ -13,6 +13,14 @@ final class SettingsBackupChecks {
   AppPreferences.restore(isolated,before,next);if(keyboard.getInt("candidateFontDelta",0)!=3||!AppPreferences.open(isolated,"associations").getBoolean("phraseEnglish",false))throw new AssertionError("multi-group restore");count++;
   if(!AppPreferences.open(isolated,"clipboard").getBoolean("enabled",false))throw new AssertionError("capture optin overwritten");count++;
   if(!keyboard.getString("unknown","").equals("synthetic"))throw new AssertionError("unknown key overwritten");count++;
+  SharedPreferences associations=AppPreferences.open(isolated,"associations");
+  if(!associations.edit().putBoolean("builtinPredictions",true).commit())throw new AssertionError("enable fixture prediction");
+  byte[] predictionOn=AppPreferences.snapshot(isolated);
+  if(!associations.edit().putBoolean("builtinPredictions",false).commit())throw new AssertionError("disable fixture prediction");
+  AppPreferences.restore(isolated,AppPreferences.snapshot(isolated),SettingsBackup.decode(predictionOn));
+  if(!associations.getBoolean("builtinPredictions",false)||!Arrays.equals(predictionOn,AppPreferences.snapshot(isolated)))
+      throw new AssertionError("local prediction restored after real setting change");
+  count++;
   byte[] stale=AppPreferences.snapshot(isolated);keyboard.edit().putInt("cursorStepDp",25).commit();try{AppPreferences.restore(isolated,stale,next);throw new AssertionError("stale accepted");}catch(IOException expected){count++;}
   if(keyboard.getInt("cursorStepDp",0)!=25)throw new AssertionError("stale restore changed value");count++;
   byte[] old=AppPreferences.snapshot(isolated);try{SettingsBackup.decode("WANGSHU-SETTINGS\t1\nclipboard\tenabled\tb\ttrue\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));throw new AssertionError("privacy injection accepted");}catch(IOException expected){count++;}

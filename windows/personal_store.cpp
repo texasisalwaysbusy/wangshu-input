@@ -1,86 +1,16 @@
 #include "personal_store.h"
+#include "local_store_io.h"
 #include <filesystem>
 #include <sstream>
 #include <set>
 #include <algorithm>
 #include <limits>
+#include <string_view>
 #include "../third_party/nlohmann/json.hpp"
 
 namespace wangshu {
 namespace {
-struct Handle {
-    HANDLE value=INVALID_HANDLE_VALUE;
-    explicit Handle(HANDLE h):value(h){}
-    ~Handle(){if(value!=INVALID_HANDLE_VALUE&&value!=nullptr)CloseHandle(value);}
-    Handle(const Handle&)=delete;Handle& operator=(const Handle&)=delete;
-};
-struct WriteLock {
-    Handle handle;
-    bool owned=false;
-    explicit WriteLock(const std::wstring& path):handle([&]{
-        std::vector<wchar_t> buffer(32768);DWORD n=GetFullPathNameW(path.c_str(),static_cast<DWORD>(buffer.size()),buffer.data(),nullptr);
-        if(!n||n>=buffer.size())throw std::runtime_error("Personal path unavailable");
-        unsigned long long hash=1469598103934665603ULL;
-        for(DWORD i=0;i<n;i++){wchar_t c=buffer[i];if(c>=L'A'&&c<=L'Z')c+=32;if(c==L'/')c=L'\\';hash^=static_cast<unsigned short>(c);hash*=1099511628211ULL;}
-        auto name=L"Local\\WangshuImePersonal-"+std::to_wstring(hash);
-        return CreateMutexW(nullptr,FALSE,name.c_str());
-    }()){
-        if(!handle.value)throw std::runtime_error("Personal write lock unavailable");
-        DWORD result=WaitForSingleObject(handle.value,5000);
-        if(result!=WAIT_OBJECT_0&&result!=WAIT_ABANDONED)throw std::runtime_error("Another personal-data operation is still running");
-        owned=true;
-    }
-    ~WriteLock(){if(owned)ReleaseMutex(handle.value);}
-};
-std::wstring uniqueSuffix(){GUID id{};if(FAILED(CoCreateGuid(&id)))throw std::runtime_error("Temporary identifier unavailable");wchar_t buffer[40];StringFromGUID2(id,buffer,40);return buffer;}
-struct Stamp {bool exists=false;unsigned long long time=0,size=0;};
-Stamp metadata(const std::wstring& path){WIN32_FILE_ATTRIBUTE_DATA value{};if(!GetFileAttributesExW(path.c_str(),GetFileExInfoStandard,&value)){DWORD error=GetLastError();if(error==ERROR_FILE_NOT_FOUND||error==ERROR_PATH_NOT_FOUND)return {};throw std::runtime_error("Personal-data file metadata is unavailable");}if(value.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)throw std::runtime_error("Expected a personal-data file, not a directory");Stamp out;out.exists=true;out.time=(static_cast<unsigned long long>(value.ftLastWriteTime.dwHighDateTime)<<32)|value.ftLastWriteTime.dwLowDateTime;out.size=(static_cast<unsigned long long>(value.nFileSizeHigh)<<32)|value.nFileSizeLow;return out;}
-std::string signature(const std::wstring& path){auto a=metadata(path),b=metadata(path+L".bak");return std::to_string(a.exists)+":"+std::to_string(a.time)+":"+std::to_string(a.size)+":"+std::to_string(b.exists)+":"+std::to_string(b.time)+":"+std::to_string(b.size);}
-std::string readBytes(const std::wstring& path){
-    Handle handle(CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr));
-    if(handle.value==INVALID_HANDLE_VALUE)throw std::runtime_error("Cannot read selected personal-data file");
-    LARGE_INTEGER size{};if(!GetFileSizeEx(handle.value,&size)||size.QuadPart<0||size.QuadPart>1024*1024)throw std::runtime_error("Personal file exceeds 1MiB or size is unavailable");
-    std::string bytes;bytes.reserve(static_cast<size_t>(size.QuadPart));char buffer[16384];DWORD n=0;
-    do{if(!ReadFile(handle.value,buffer,sizeof(buffer),&n,nullptr))throw std::runtime_error("Personal-data read did not complete");if(bytes.size()+n>1024*1024)throw std::runtime_error("Personal file grew beyond 1MiB");bytes.append(buffer,n);}while(n);
-    return bytes;
-}
-void writeCreated(const std::wstring& path,const std::string& bytes){
-    Handle handle(CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr));
-    if(handle.value==INVALID_HANDLE_VALUE)throw std::runtime_error("Output already exists or cannot be created; nothing overwritten");
-    size_t done=0;while(done<bytes.size()){DWORD n=0,part=static_cast<DWORD>(std::min<size_t>(16384,bytes.size()-done));if(!WriteFile(handle.value,bytes.data()+done,part,&n,nullptr)||n!=part)throw std::runtime_error("Personal-data write did not complete");done+=n;}
-    if(!FlushFileBuffers(handle.value))throw std::runtime_error("Personal-data flush did not complete");
-}
-// The handle identifies only this operation's CREATE_NEW file. Never scan or
-// delete by path: a different file can appear at the same path after a race.
-struct OwnedTemporary {
-    Handle handle;
-    std::wstring path;
-    bool owned=true;
-    explicit OwnedTemporary(std::wstring name):handle(CreateFileW(name.c_str(),GENERIC_WRITE|DELETE,FILE_SHARE_DELETE,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr)),path(std::move(name)){
-        if(handle.value==INVALID_HANDLE_VALUE){owned=false;throw std::runtime_error("Temporary file already exists or cannot be created");}
-    }
-    void write(const std::string& bytes){
-        size_t done=0;while(done<bytes.size()){DWORD n=0,part=static_cast<DWORD>(std::min<size_t>(16384,bytes.size()-done));if(!WriteFile(handle.value,bytes.data()+done,part,&n,nullptr)||n!=part)throw std::runtime_error("Personal-data write did not complete");done+=n;}
-        if(!FlushFileBuffers(handle.value))throw std::runtime_error("Personal-data flush did not complete");
-    }
-    void publish(const std::wstring& destination){
-        if(!MoveFileExW(path.c_str(),destination.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Atomic replacement failed; prior data retained");
-        owned=false; // Destination now owns the bytes; never delete it on readback failure.
-        bool closed=CloseHandle(handle.value)!=FALSE;handle.value=INVALID_HANDLE_VALUE;
-        if(!closed)throw std::runtime_error("Replacement completed but temporary handle close failed; refresh before retrying");
-    }
-    bool discard() noexcept {
-        if(!owned)return true;
-        FILE_DISPOSITION_INFO info{};info.DeleteFile=TRUE;
-        bool marked=SetFileInformationByHandle(handle.value,FileDispositionInfo,&info,sizeof(info))!=FALSE;
-        bool closed=CloseHandle(handle.value)!=FALSE;handle.value=INVALID_HANDLE_VALUE;owned=false;
-        // Deletion can be delayed by another handle or denied; report uncertainty.
-        if(!marked||!closed)return false;
-        DWORD attributes=GetFileAttributesW(path.c_str());if(attributes!=INVALID_FILE_ATTRIBUTES)return false;
-        DWORD error=GetLastError();return error==ERROR_FILE_NOT_FOUND||error==ERROR_PATH_NOT_FOUND;
-    }
-    ~OwnedTemporary(){if(owned)discard();}
-};
+using namespace local_store_io;
 std::wstring normalizedNfc(const std::wstring& input){
     if(input.empty())return input;
     int length=NormalizeString(NormalizationC,input.data(),static_cast<int>(input.size()),nullptr,0);
@@ -95,14 +25,37 @@ std::wstring normalizedNfc(const std::wstring& input){
     }
     throw std::runtime_error("Unicode normalization did not complete");
 }
+
+std::string normalizedWord(const std::string& word) {
+    PersonalData::validateText(word,1024*1024,false);
+    auto units=wangshu::utf16(word);
+    auto nfc=normalizedNfc(std::wstring(units.begin(),units.end()));
+    return wangshu::utf8(std::u16string(nfc.begin(),nfc.end()));
+}
+
+std::string_view trimAscii(std::string_view value) {
+    while(!value.empty()&&static_cast<unsigned char>(value.front())<=32)value.remove_prefix(1);
+    while(!value.empty()&&static_cast<unsigned char>(value.back())<=32)value.remove_suffix(1);
+    return value;
+}
+
+bool equalAsciiFold(std::string_view value,std::string_view lowercase) {
+    if(value.size()!=lowercase.size())return false;
+    return std::equal(value.begin(),value.end(),lowercase.begin(),[](char actual,char expected){
+        return (actual>='A'&&actual<='Z'?actual+('a'-'A'):actual)==expected;
+    });
+}
 }
 WindowsPersonalStore::WindowsPersonalStore(std::wstring path):file_(std::move(path)){if(file_.empty())throw std::runtime_error("Personal-data location unavailable");}
 std::wstring WindowsPersonalStore::defaultPath(){std::vector<wchar_t> value(32768);DWORD n=GetEnvironmentVariableW(L"LOCALAPPDATA",value.data(),static_cast<DWORD>(value.size()));if(!n||n>=value.size())throw std::runtime_error("LocalAppData is unavailable; built-in input remains available");return (std::filesystem::path(std::wstring(value.data(),n))/L"WangshuIme"/L"personal-v1.json").wstring();}
-PersonalData WindowsPersonalStore::normalizeWords(PersonalData data){for(auto& word:data.words){auto utf16=wangshu::utf16(word.text);auto nfc=normalizedNfc(std::wstring(utf16.begin(),utf16.end()));word.text=wangshu::utf8(std::u16string(nfc.begin(),nfc.end()));}return PersonalData::parse(data.serialize());}
+PersonalData WindowsPersonalStore::normalizeWords(PersonalData data){
+    for(auto& word:data.words)word.text=normalizedWord(word.text);
+    return PersonalData::parse(data.serialize());
+}
 PersonalSnapshot WindowsPersonalStore::readUncached()const{
     const bool main=metadata(file_).exists,backup=metadata(file_+L".bak").exists;
-    if(main){try{auto data=normalizeWords(PersonalData::parse(readBytes(file_)));return {data,data.serialize(),false};}catch(const std::exception&){if(!backup)throw;}}
-    if(backup){auto data=normalizeWords(PersonalData::parse(readBytes(file_+L".bak")));return {data,data.serialize(),true};}
+    if(main){try{auto data=PersonalData::parse(readBytes(file_),normalizedWord);return {data,data.serialize(),false};}catch(const std::exception&){if(!backup)throw;}}
+    if(backup){auto data=PersonalData::parse(readBytes(file_+L".bak"),normalizedWord);return {data,data.serialize(),true};}
     PersonalData empty;return {empty,empty.serialize(),false};
 }
 PersonalSnapshot WindowsPersonalStore::read(){std::lock_guard<std::mutex> guard(cacheGate_);auto stamp=signature(file_);if(haveCache_&&stamp==stamp_)return cache_;auto fresh=readUncached();cache_=fresh;stamp_=stamp;haveCache_=true;return fresh;}
@@ -142,21 +95,53 @@ PersonalSnapshot WindowsPersonalStore::repairFromImport(const PersonalData& inco
 }
 PersonalData WindowsPersonalStore::parseImport(const std::string& bytes){
     if(bytes.size()>1024*1024)throw std::runtime_error("Personal import exceeds 1MiB");
-    std::string input=bytes;if(input.compare(0,3,"\xef\xbb\xbf")==0)input.erase(0,3);auto first=input.find_first_not_of(" \t\r\n");if(first==std::string::npos)throw std::runtime_error("Import is empty");if(input[first]=='{')return normalizeWords(PersonalData::parse(input));
-    PersonalData incoming;std::istringstream lines(input);std::string line;size_t number=0;
-    while(std::getline(lines,line)){
-        ++number;if(!line.empty()&&line.back()=='\r')line.pop_back();
+    std::string input=bytes;
+    if(input.compare(0,3,"\xef\xbb\xbf")==0)input.erase(0,3);
+    auto content=trimAscii(input);
+    if(content.empty())throw std::runtime_error("Import is empty");
+    if(content.front()=='{'||content.front()=='['){
+        auto parsed=PersonalData::parse(input,normalizedWord);
+        parsed.serialize(); // Also enforce the file limit on normalized records.
+        return parsed;
+    }
+    PersonalData incoming;
+    std::set<std::pair<std::string,std::string>> seen;
+    size_t number=0,offset=0;
+    bool firstRecord=true;
+    while(offset<input.size()){
+        auto end=input.find_first_of("\r\n",offset);
+        if(end==std::string::npos)end=input.size();
+        const auto line=std::string_view(input).substr(offset,end-offset);
+        offset=end;
+        if(offset<input.size()&&input[offset++]=='\r'&&offset<input.size()&&input[offset]=='\n')++offset;
+        ++number;
         try{
             // Validate encoding even in skipped comments; invalid input is never
             // silently repaired or partly imported.
             if(!line.empty()&&!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,line.data(),static_cast<int>(line.size()),nullptr,0))throw std::runtime_error("Invalid UTF8");
-            auto content=line.find_first_not_of(" \t");if(content==std::string::npos||line[content]=='#')continue;if(line=="pinyin\ttext")continue;
-            auto tab=line.find('\t');if(tab==std::string::npos||line.find('\t',tab+1)!=std::string::npos)throw std::runtime_error("Expected exactly pinyin and text columns");
-            auto key=PersonalData::key(line.substr(0,tab));auto text=line.substr(tab+1);PersonalData::validateText(text,200,false);incoming.words.push_back({key,text});
-            if(incoming.words.size()>2000)throw std::runtime_error("TSV exceeds 2000 words");
+            auto trimmed=trimAscii(line);
+            if(trimmed.empty()||trimmed.front()=='#')continue;
+            auto tab=line.find('\t');
+            if(tab==std::string_view::npos||line.find('\t',tab+1)!=std::string_view::npos)
+                throw std::runtime_error("Expected exactly pinyin and text columns");
+            auto left=line.substr(0,tab),right=line.substr(tab+1);
+            auto leftHeader=trimAscii(left),rightHeader=trimAscii(right);
+            bool header=(equalAsciiFold(leftHeader,"pinyin")&&equalAsciiFold(rightHeader,"text"))||
+                (leftHeader==u8"拼音"&&rightHeader==u8"词条");
+            if(header&&!firstRecord)throw std::runtime_error("Header must precede all data rows");
+            firstRecord=false;
+            if(header)continue;
+            auto key=PersonalData::key(std::string(left));
+            auto text=normalizedWord(std::string(right));
+            PersonalData::validateText(text,200,false);
+            if(seen.emplace(key,text).second){
+                if(incoming.words.size()>=2000)throw std::runtime_error("TSV exceeds 2000 unique words");
+                incoming.words.push_back({key,text});
+            }
         }catch(const std::exception& e){throw std::runtime_error("TSV row "+std::to_string(number)+": "+e.what());}
     }
-    if(incoming.words.empty())throw std::runtime_error("TSV contains no words");return normalizeWords(incoming);
+    if(incoming.words.empty())throw std::runtime_error("TSV contains no words");
+    return PersonalData::parse(incoming.serialize());
 }
 std::string WindowsPersonalStore::readExternal(const std::wstring& path){return readBytes(path);}
 void WindowsPersonalStore::exportNew(const std::wstring& path,const PersonalData& data){writeCreated(path,normalizeWords(data).serialize());}
@@ -201,16 +186,59 @@ bool LearningData::pinned(const std::string& input,const std::string& text)const
 LearningData LearningData::parse(const std::string& bytes){
     if(bytes.empty()||bytes.size()>MaxBytes)throw std::runtime_error("Learning file size is invalid");LearningJson root;
     try{root=LearningJson::parse(bytes,[](int depth,LearningJson::parse_event_t,LearningJson&){if(depth>8)throw std::runtime_error("Learning JSON depth exceeds schema");return true;});}catch(const LearningJson::exception&){throw std::runtime_error("Malformed learning JSON");}
-    auto version=root.contains("version")?learningNumber(root["version"],2):0;
-    if(version==2)learningFields(root,{"kind","version","enabled","entries","phraseAssociations"});else learningFields(root,{"kind","version","enabled","entries"});
-    if((version!=1&&version!=2)||learningString(root["kind"])!="wangshu-windows-learning"||!root["enabled"].is_boolean()||!root["entries"].is_array()||root["entries"].size()>MaxEntries)throw std::runtime_error("Unsupported learning schema");
-    LearningData out;out.enabled=root["enabled"].get<bool>();if(version==2){if(!root["phraseAssociations"].is_boolean())throw std::runtime_error("Invalid phrase association setting");out.phraseAssociations=root["phraseAssociations"].get<bool>();}std::set<std::pair<std::string,std::string>> seen;
+    auto version=root.contains("version")?learningNumber(root["version"],6):0;
+    if(version==6)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat","fuzzyMask"});
+    else if(version==5)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat"});
+    else if(version==4)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions"});
+    else if(version==3)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions"});
+    else if(version==2)learningFields(root,{"kind","version","enabled","entries","phraseAssociations"});
+    else learningFields(root,{"kind","version","enabled","entries"});
+    if(!version||learningString(root["kind"])!="wangshu-windows-learning"||!root["enabled"].is_boolean()||!root["entries"].is_array()||root["entries"].size()>MaxEntries)throw std::runtime_error("Unsupported learning schema");
+    LearningData out;
+    out.enabled=root["enabled"].get<bool>();
+    if(version>=2){
+        if(!root["phraseAssociations"].is_boolean())throw std::runtime_error("Invalid phrase association setting");
+        out.phraseAssociations=root["phraseAssociations"].get<bool>();
+    }
+    if(version>=3){
+        if(!root["builtinPredictions"].is_boolean())throw std::runtime_error("Invalid built-in prediction setting");
+        out.builtinPredictions=root["builtinPredictions"].get<bool>();
+    }
+    if(version>=4){
+        if(!root["cursorPredictions"].is_boolean())throw std::runtime_error("Invalid cursor prediction setting");
+        out.cursorPredictions=root["cursorPredictions"].get<bool>();
+    }
+    if(version>=5)out.speechFormat=static_cast<voice_format::Mode>(learningNumber(root["speechFormat"],2));
+    if(version==6)out.fuzzyMask=static_cast<unsigned>(learningNumber(root["fuzzyMask"],fuzzy_pinyin::AllRules));
+    std::set<std::pair<std::string,std::string>> seen;
     for(const auto& item:root["entries"]){learningFields(item,{"key","text","count","pinned","updated"});auto key=learningString(item["key"]),text=learningString(item["text"]);if(key!=candidateKey(key)||text!=candidateText(text)||!item["pinned"].is_boolean()||!seen.emplace(key,text).second)throw std::runtime_error("Noncanonical or duplicate learning entry");auto count=static_cast<unsigned>(learningNumber(item["count"],MaxCount));bool pin=item["pinned"].get<bool>();if(!count&&!pin)throw std::runtime_error("Learning entry has neither weight nor pin");out.entries.push_back({key,text,count,pin,learningNumber(item["updated"],static_cast<unsigned long long>(std::numeric_limits<long long>::max()))});}
     return out;
 }
 std::string LearningData::serialize()const{
     LearningJson root={{"kind","wangshu-windows-learning"},{"version",1},{"enabled",enabled},{"entries",LearningJson::array()}};for(const auto& value:entries)root["entries"].push_back({{"key",value.key},{"text",value.text},{"count",value.count},{"pinned",value.pinned},{"updated",value.updated}});
     if(phraseAssociations){root["version"]=2;root["phraseAssociations"]=true;}
+    if(builtinPredictions){
+        root["version"]=3;
+        root["phraseAssociations"]=phraseAssociations;
+        root["builtinPredictions"]=true;
+    }
+    if(!cursorPredictions){
+        root["version"]=4;
+        root["phraseAssociations"]=phraseAssociations;
+        root["builtinPredictions"]=builtinPredictions;
+        root["cursorPredictions"]=false;
+    }
+    if(speechFormat!=voice_format::Mode::Raw||fuzzyMask){
+        root["version"]=5;
+        root["phraseAssociations"]=phraseAssociations;
+        root["builtinPredictions"]=builtinPredictions;
+        root["cursorPredictions"]=cursorPredictions;
+        root["speechFormat"]=static_cast<unsigned>(speechFormat);
+    }
+    if(fuzzyMask){
+        root["version"]=6;
+        root["fuzzyMask"]=fuzzyMask;
+    }
     std::string bytes;try{bytes=root.dump();}catch(const LearningJson::exception&){throw std::runtime_error("Invalid learning Unicode");}parse(bytes);return bytes;
 }
 std::vector<Candidate> LearningData::lookup(const Engine& base,const PersonalData& manual,const std::string& input,size_t page,unsigned long long now)const{
@@ -243,6 +271,82 @@ void WindowsPersonalStore::writeLearningAtomic(const LearningSnapshot& old,const
 }
 LearningSnapshot WindowsPersonalStore::modifyLearning(const std::string& expected,const std::function<void(LearningData&)>& action,const LearningWriteGate* gate){WriteLock guard(learningPath());auto current=readLearningUncached();if(current.revision!=expected)throw LearningDiscarded("Personal ranking changed; refresh before editing");if(current.fromBackup)throw LearningDiscarded("Personal ranking uses backup; explicitly restore before editing");auto next=current.data;action(next);if(next.serialize()==current.revision)return current;writeLearningAtomic(current,next,gate);return readLearningUncached();}
 LearningSnapshot WindowsPersonalStore::restoreLearningBackup(const std::string& expected){WriteLock guard(learningPath());auto current=readLearningUncached();if(current.revision!=expected||!current.fromBackup)throw std::runtime_error("Learning recovery state changed; refresh first");writeLearningAtomic(current,current.data);return readLearningUncached();}
+
+namespace {
+constexpr char PortableHeader[]="WANGSHU-PORTABLE-SETTINGS\t1";
+constexpr char VoiceSetting[]="keyboard\tvoiceOutputMode\ti\t";
+constexpr char BuiltinSetting[]="associations\tbuiltinPredictions\tb\t";
+constexpr char CursorSetting[]="associations\tcursorPredictions\tb\t";
+constexpr char PhraseSetting[]="windows\tphraseAssociations\tb\t";
+
+bool portableBoolean(std::string_view value){
+    if(value=="true")return true;
+    if(value=="false")return false;
+    throw std::runtime_error("Invalid portable setting boolean");
+}
+}
+
+PortableSettings PortableSettings::parse(const std::string& bytes){
+    if(bytes.empty()||bytes.size()>1024)throw std::runtime_error("Invalid portable settings file size");
+    std::string_view text(bytes);
+    if(text.substr(0,3)=="\xef\xbb\xbf")text.remove_prefix(3);
+    // Only ASCII identifiers and scalar values are accepted after an optional BOM.
+    auto nextLine=[&]{
+        auto pos=text.find('\n');
+        auto line=text.substr(0,pos);
+        if(pos!=std::string_view::npos&&!line.empty()&&line.back()=='\r')line.remove_suffix(1);
+        text.remove_prefix(pos==std::string_view::npos?text.size():pos+1);
+        return line;
+    };
+    if(nextLine()!=PortableHeader)throw std::runtime_error("Unsupported portable settings version");
+    std::optional<voice_format::Mode> speech;
+    std::optional<bool> builtin,cursor,phrase;
+    while(!text.empty()){
+        const auto line=nextLine();
+        const auto value=[&](std::string_view id){return line.substr(id.size());};
+        const auto setting=[&](std::string_view id){return line.substr(0,id.size())==id;};
+        if(setting(VoiceSetting)&&!speech){
+            const auto digit=value(VoiceSetting);
+            if(digit.size()!=1||digit.front()<'0'||digit.front()>'2')throw std::runtime_error("Invalid voice format");
+            speech=static_cast<voice_format::Mode>(digit.front()-'0');
+        }else if(setting(BuiltinSetting)&&!builtin)builtin=portableBoolean(value(BuiltinSetting));
+        else if(setting(CursorSetting)&&!cursor)cursor=portableBoolean(value(CursorSetting));
+        else if(setting(PhraseSetting)&&!phrase)phrase=portableBoolean(value(PhraseSetting));
+        else throw std::runtime_error("Unknown or duplicate portable setting");
+    }
+    if(!speech||!builtin||!cursor)throw std::runtime_error("Incomplete portable settings backup");
+    return {*speech,*builtin,*cursor,phrase};
+}
+
+PortableSettings PortableSettings::from(const LearningData& data){
+    return {data.speechFormat,data.builtinPredictions,data.cursorPredictions,data.phraseAssociations};
+}
+
+std::string PortableSettings::serialize()const{
+    const auto boolean=[](bool value){return value?"true":"false";};
+    std::string result=std::string(PortableHeader)+"\n"+VoiceSetting+std::to_string(static_cast<unsigned>(speechFormat))+"\n"+
+        BuiltinSetting+boolean(builtinPredictions)+"\n"+CursorSetting+boolean(cursorPredictions)+"\n";
+    if(windowsPhraseAssociations)result+=std::string(PhraseSetting)+boolean(*windowsPhraseAssociations)+"\n";
+    parse(result);
+    return result;
+}
+
+void PortableSettings::apply(LearningData& data)const{
+    data.speechFormat=speechFormat;
+    data.builtinPredictions=builtinPredictions;
+    data.cursorPredictions=cursorPredictions;
+    if(windowsPhraseAssociations)data.phraseAssociations=*windowsPhraseAssociations;
+}
+
+void WindowsPersonalStore::exportPortableSettingsNew(const std::wstring& path)const{
+    const auto current=readLearningFresh();
+    if(current.fromBackup)throw std::runtime_error("Restore the verified local backup before exporting settings");
+    const auto bytes=PortableSettings::from(current.data).serialize();
+    OwnedTemporary temporary(path+L"."+uniqueSuffix()+L".tmp");
+    temporary.write(bytes);
+    temporary.publish(path,false);
+    if(readBytes(path)!=bytes)throw std::runtime_error("Settings export could not be read back");
+}
 unsigned long long WindowsPersonalStore::learningNow(){FILETIME time{};GetSystemTimeAsFileTime(&time);unsigned long long ticks=(static_cast<unsigned long long>(time.dwHighDateTime)<<32)|time.dwLowDateTime;constexpr unsigned long long Epoch=116444736000000000ULL;return ticks<Epoch?0:(ticks-Epoch)/10000;}
 
 }

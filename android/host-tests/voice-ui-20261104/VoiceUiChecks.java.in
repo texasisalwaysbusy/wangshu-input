@@ -59,9 +59,11 @@ public final class VoiceUiChecks {
         boolean editing,numbers,math,english,password;BeforeCaret beforeCaret;
         OfflineVoice.Task offlineTask;HeldVoice heldVoice;SpeechRecognizer recognizer;
         String voiceReview,voiceReviewReason="",voiceState="";Object reviewConnection;int reviewSession=-1;boolean reviewCanInsert=true;
+        long voiceReviewRevision;
         View voiceReviewPanel;int holdCancels,toolUpdates;String tool;
         SharedPreferences getSharedPreferences(String name,int mode){return preferences;}
         int getColor(int color){return color;}int dp(int value){return value;}boolean compact(){return false;}void undoBeforeCaret(){}
+        boolean showVoiceUndo(){return false;}
         void cancelHoldForOtherInput(){holdCancels++;}void voiceToolState(String text,ToolbarIcon.Kind kind){tool=text;toolUpdates++;}
         // Calling whole refresh/rebuild while cancelling would restart unrelated work.
         void refresh(){throw new AssertionError("Cancellation must only update status, not refresh candidates/associations");}
@@ -101,7 +103,8 @@ public final class VoiceUiChecks {
         }
         DataFiles.ready=true;DataFiles.failure="";
         Subject s=new Subject();s.heldVoice=new HeldVoice();HeldVoice held=s.heldVoice;s.recognizer=new SpeechRecognizer();SpeechRecognizer system=s.recognizer;
-        s.voiceReview="synthetic";s.voiceReviewReason="reason";s.reviewConnection=new Object();s.reviewSession=4;s.reviewCanInsert=false;s.voiceReviewPanel=new View();s.cancelVoice();
+        s.voiceReview="synthetic";s.voiceReviewReason="reason";s.reviewConnection=new Object();s.reviewSession=4;s.reviewCanInsert=false;s.voiceReviewPanel=new View();long revision=s.voiceReviewRevision;s.cancelVoice();
+        check(s.voiceReviewRevision!=revision,"cancellation retires the displayed review actions");
         check(held.task.cancels==1&&s.heldVoice==null&&system.cancels==1&&system.destroys==1&&s.recognizer==null,"held/system owners are cancelled once and detached");
         check(s.voiceReview==null&&s.voiceReviewReason.isEmpty()&&s.reviewConnection==null&&s.reviewSession==-1&&s.reviewCanInsert&&s.voiceReviewPanel.visibility==View.GONE,"review text/owner/panel are cleared");
         check("语音".equals(s.tool),"microphone toolbar restored");

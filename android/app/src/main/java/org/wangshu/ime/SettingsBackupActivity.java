@@ -29,6 +29,7 @@ public final class SettingsBackupActivity extends Activity {
         explanation.setTextColor(getColor(R.color.ink));explanation.setPadding(0,dp(16),0,dp(16));panel.addView(explanation);
         status=new TextView(this);status.setText(AppPreferences.writable(this)?"尚未选择文件。还原不会删除现有词库、常用语或历史。":"本地设置已暂停。可选择备份，或预览默认设置修复。尚未修改设置。");status.setTextColor(getColor(R.color.muted));panel.addView(status);
         add(panel,"备份设置到所选文件",()->chooseFile(31));
+        add(panel,"导出 Android / Windows 共用设置",()->chooseFile(33));
         add(panel,"预览设置备份（还原或修复）",()->chooseFile(32));
         add(panel,"设置暂停时：预览默认设置修复",this::previewDefaults);
         add(panel,"返回",this::finish);ThemeBars.navigation(this,getWindow());
@@ -39,9 +40,10 @@ public final class SettingsBackupActivity extends Activity {
     private void failed(long operation,String message){if(operation!=generation||!live())return;busy=false;status.setText(message);new AlertDialog.Builder(this).setTitle("操作未完成").setMessage(message).setPositiveButton("知道了",null).show();}
     private void chooseFile(int request){
         if(!available())return;
-        if(request==31&&!AppPreferences.writable(this)){status.setText("设置已暂停，不能导出安全默认值冒充现有配置。请先预览修复。");return;}
+        boolean output=request==31||request==33;
+        if(output&&!AppPreferences.writable(this)){status.setText("设置已暂停，不能导出安全默认值冒充现有配置。请先预览修复。");return;}
         pickerRequest=request;generation++;
-        Intent intent=request==31?new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/tab-separated-values").putExtra(Intent.EXTRA_TITLE,"wangshu-settings-v1.tsv"):
+        Intent intent=output?new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/tab-separated-values").putExtra(Intent.EXTRA_TITLE,request==33?"wangshu-portable-settings.tsv":"wangshu-settings-v5.tsv"):
             new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"text/tab-separated-values","text/plain","application/octet-stream"});
         try{startActivityForResult(intent,request);}catch(RuntimeException unavailable){pickerRequest=0;status.setText("无法打开文件选择器，尚未修改设置。");}
     }
@@ -52,10 +54,11 @@ public final class SettingsBackupActivity extends Activity {
         pickerRequest=0;
         if(result!=RESULT_OK||intent==null||intent.getData()==null){status.setText("已取消选择，设置未修改。");return;}
         android.net.Uri uri=intent.getData();busy=true;long operation=++generation;
-        status.setText(request==31?"正在写入所选设置文件…":"正在验证，尚未修改设置…");
+        boolean output=request==31||request==33;
+        status.setText(output?"正在写入所选设置文件…":"正在验证，尚未修改设置…");
         io.execute(()->{try{
-            if(request==31){byte[] bytes=AppPreferences.snapshot(this);try(OutputStream stream=getContentResolver().openOutputStream(uri,"w")){if(stream==null)throw new IOException("无法打开所选目标");stream.write(bytes);stream.flush();}
-                runOnUiThread(()->{if(operation==generation&&live()){busy=false;status.setText("设置备份已写入所选文件；词库与常用语需另行备份。");}});
+            if(output){byte[] current=AppPreferences.snapshot(this);byte[] bytes=request==33?SettingsBackup.encodePortable(current):current;try(OutputStream stream=getContentResolver().openOutputStream(uri,"w")){if(stream==null)throw new IOException("无法打开所选目标");stream.write(bytes);stream.flush();}
+                runOnUiThread(()->{if(operation==generation&&live()){busy=false;status.setText(request==33?"已导出语音格式、补全与下一词和光标联想。":"设置备份已写入所选文件；词库与常用语需另行备份。");}});
             }else{
                 byte[] bytes;try(InputStream stream=getContentResolver().openInputStream(uri)){bytes=SettingsBackup.read(stream);}
                 preparePreview(bytes,operation);
@@ -69,36 +72,54 @@ public final class SettingsBackupActivity extends Activity {
         io.execute(()->{try{preparePreview(SettingsBackup.encode(key->key.fallback),operation);}catch(Exception error){runOnUiThread(()->failed(operation,error instanceof IOException?error.getMessage():"无法预览修复，尚未修改设置。"));}});
     }
     private void preparePreview(byte[] bytes,long operation)throws IOException {
+        if(SettingsBackup.isPortable(bytes)){
+            if(!AppPreferences.writable(this))throw new IOException("共用设置只能合并到可读的本机设置。请先使用完整 Android 备份修复。");
+            byte[] before=AppPreferences.snapshot(this);
+            Map<SettingsBackup.Key,Object> incoming=SettingsBackup.mergePortable(bytes,before);
+            runOnUiThread(()->{if(operation==generation&&live()){busy=false;preview(incoming,before,null,operation,true);}});
+            return;
+        }
         Map<SettingsBackup.Key,Object> incoming=SettingsBackup.decode(bytes);
         AppPreferences.RecoveryPreview recovery=AppPreferences.writable(this)?null:AppPreferences.previewRecovery(this,bytes);
         byte[] before=recovery==null?AppPreferences.snapshot(this):null;
-        runOnUiThread(()->{if(operation==generation&&live()){busy=false;preview(incoming,before,recovery,operation);}});
+        runOnUiThread(()->{if(operation==generation&&live()){busy=false;preview(incoming,before,recovery,operation,false);}});
     }
     private String describe(SettingsBackup.Key key,Object value){
         if(key.name.equals("enterActionsEnabled"))return Boolean.TRUE.equals(value)?"允许回车执行应用发送等动作":"禁止回车发送等动作";
         if(key.name.equals("numberSymbols"))return "自定义符号/手动文字："+value.toString().replace("\n"," · ");
         if(key.name.equals("voiceRightAction"))return value.equals(1)?"只保留语音文字":"保留语音文字并换行";
+        if(key.name.equals("voiceOutputMode"))return VoiceResultPolicy.fromSetting((Integer)value).label;
         if(value instanceof Boolean)return (Boolean)value?"开":"关";return value.toString();
     }
-    private void preview(Map<SettingsBackup.Key,Object> incoming,byte[] before,AppPreferences.RecoveryPreview recovery,long operation){
+    private void preview(Map<SettingsBackup.Key,Object> incoming,byte[] before,AppPreferences.RecoveryPreview recovery,long operation,boolean portable){
         StringBuilder details=new StringBuilder();int changes=0;
         // Use the frozen preview snapshot, not current preferences, for the old-value display.
         Map<SettingsBackup.Key,Object> previous;
         try{previous=recovery==null?SettingsBackup.decode(before):Collections.emptyMap();}catch(IOException invalid){failed(operation,"预览快照无效，设置未修改。");return;}
         for(Map.Entry<SettingsBackup.Key,Object> item:incoming.entrySet()){
             SettingsBackup.Key key=item.getKey();Object old=previous.get(key);
-            if(recovery!=null||!item.getValue().equals(old)){changes++;details.append(key.group).append(" / ").append(key.name).append("\n").append(recovery!=null?"原值未确认":describe(key,old)).append(" → ").append(describe(key,item.getValue())).append("\n\n");}
+            if(recovery!=null||!item.getValue().equals(old)){
+                changes++;
+                if(key.name.equals("builtinPredictions"))details.append("本地补全与下一词联想");
+                else if(key.name.equals("numericPredictions"))details.append("数字面板联想");
+                else if(key.name.equals("cursorPredictions"))details.append("移动光标联想");
+                else details.append(key.group).append(" / ").append(key.name);
+                details.append("\n").append(recovery!=null?"原值未确认":describe(key,old))
+                    .append(" → ").append(describe(key,item.getValue())).append("\n\n");
+            }
         }
+        if(portable&&changes==0){status.setText("三个共用设置与本机一致，未写入。");return;}
         status.setText("已验证，等待确认；设置尚未修改。");
         TextView text=new TextView(this);text.setTextIsSelectable(true);text.setTextColor(getColor(R.color.ink));text.setPadding(dp(20),dp(12),dp(20),dp(12));
-        String note=recovery==null?"已验证 "+incoming.size()+" 项设置，"+changes+" 项不同。整组一次保存，下次重开键盘生效。\n\n":
+        String note=portable?"已验证三个共用设置，其中 "+changes+" 项不同。其余 Android 设置保留。\n\n":
+            recovery==null?"已验证 "+incoming.size()+" 项设置，"+changes+" 项不同。整组一次保存，下次重开键盘生效。\n\n":
             "本地设置暂停，无法可靠比较旧值。以下 "+incoming.size()+" 项将整组写入。先保存当前仍存在的 XML、备份、迁移及修复凭据的故障副本，任何证据保存失败均停止；不从旧配置重新导入。\n\n";
         String privacy=recovery==null?"自动学习和剪贴板记录开关不改变。":"本次修复强制关闭自动学习及剪贴板记录；旧历史与词频文件不删除、不导入。当前进程继续暂停，需自行重启应用及输入法后核对，再到对应页面分别确认开启。失败或结果不明不会自动重试，故障副本保留。";
         text.setText(getString(R.string.settings_backup_preview,note,details,privacy));
         ScrollView scroll=new ScrollView(this);scroll.addView(text);
-        previewDialog=new AlertDialog.Builder(this).setTitle(recovery==null?"还原设置预览":"故障修复预览")
+        previewDialog=new AlertDialog.Builder(this).setTitle(portable?"预览共用设置":recovery==null?"还原设置预览":"故障修复预览")
             .setView(scroll).setNegativeButton("取消",(dialog,which)->{if(operation==generation)status.setText("已取消，设置未修改。");})
-            .setPositiveButton(recovery==null?"确认整组还原":"保留证据并确认修复",(dialog,which)->restore(incoming,before,recovery,operation))
+            .setPositiveButton(portable?"确认合并":recovery==null?"确认整组还原":"保留证据并确认修复",(dialog,which)->restore(incoming,before,recovery,operation))
             .setOnCancelListener(dialog->{if(operation==generation)status.setText("已取消，设置未修改。");}).create();
         previewDialog.setOnDismissListener(dialog->previewDialog=null);previewDialog.show();
     }

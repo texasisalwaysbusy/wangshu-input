@@ -14,7 +14,12 @@ public final class AppPreferencesChecks {
   public File getFilesDir(){return directory;}public File getDataDir(){return directory;}
   public Memory getSharedPreferences(String name,int mode){return memory.computeIfAbsent(name,key->new Memory(disk.computeIfAbsent(key,k->new HashMap<>())));}
  }
- static Map<SettingsBackup.Key,Object> custom(Owner c)throws Exception{return SettingsBackup.decode(SettingsBackup.encode(key->key.name.equals("candidateFontDelta")?3:key.name.equals("phraseEnglish")?true:key.fallback));}
+ static Map<SettingsBackup.Key,Object> custom(Owner c)throws Exception{return SettingsBackup.decode(SettingsBackup.encode(key->{
+  if(key.name.equals("candidateFontDelta"))return 3;
+  if(key.name.equals("cursorPredictions"))return false;
+  if(key.name.equals("phraseEnglish")||key.name.endsWith("Predictions"))return true;
+  return key.fallback;
+ }));}
  public static void main(String[] args)throws Exception{
   Owner c=new Owner();Memory oldKeyboard=c.getSharedPreferences("keyboard",0),oldClipboard=c.getSharedPreferences("clipboard",0),oldLearning=c.getSharedPreferences("candidate-learning",0);
   oldKeyboard.edit().putInt("cursorStepDp",23).putString("customFutureKey","kept").commit();oldClipboard.edit().putBoolean("enabled",true).putInt("days",30).commit();oldLearning.edit().putBoolean("enabled",true).commit();
@@ -23,15 +28,43 @@ public final class AppPreferencesChecks {
   require(AppPreferences.open(c,"candidate-learning").getBoolean("enabled",false),"learning optin retained");
   List<String> events=new ArrayList<>();SharedPreferences.OnSharedPreferenceChangeListener listener=(prefs,key)->events.add(key);keyboard.registerOnSharedPreferenceChangeListener(listener);keyboard.edit().putInt("candidateFontDelta",1).commit();clipboard.edit().putInt("days",7).commit();require(events.equals(Arrays.asList("candidateFontDelta")),"listener group keys and isolation");keyboard.unregisterOnSharedPreferenceChangeListener(listener);keyboard.edit().putInt("candidateFontDelta",2).commit();require(events.size()==1,"listener unregistered");
   byte[] before=AppPreferences.snapshot(c);Map<SettingsBackup.Key,Object> incoming=custom(c);Memory unified=c.getSharedPreferences(AppPreferences.FILE,0);int count=unified.commits;AppPreferences.restore(c,before,incoming);require(unified.commits==count+1,"all groups one commit");require(keyboard.getInt("candidateFontDelta",0)==3&&AppPreferences.open(c,"associations").getBoolean("phraseEnglish",false),"both groups restored");require(clipboard.getBoolean("enabled",false)&&AppPreferences.open(c,"candidate-learning").getBoolean("enabled",false),"capture/learning flags untouched by restore");require(keyboard.getString("customFutureKey",null).equals("kept"),"future key retained by restore");
+  SharedPreferences associations=AppPreferences.open(c,"associations");
+  require(associations.getBoolean("builtinPredictions",false),"local prediction restored");
+  require(associations.getBoolean("numericPredictions",false),"numeric panel prediction restored");
+  require(!associations.getBoolean("cursorPredictions",true),"disabled caret prediction restored");
+  byte[] enabledBackup=AppPreferences.snapshot(c);
+  require(associations.edit().putBoolean("builtinPredictions",false).putBoolean("numericPredictions",false).putBoolean("cursorPredictions",true).commit(),"changed prediction settings after export");
+  AppPreferences.restore(c,AppPreferences.snapshot(c),SettingsBackup.decode(enabledBackup));
+  require(Arrays.equals(enabledBackup,AppPreferences.snapshot(c)),"local prediction restored to the exported state");
   byte[] stale=AppPreferences.snapshot(c);keyboard.edit().putInt("cursorStepDp",24).commit();count=unified.commits;try{AppPreferences.restore(c,stale,incoming);throw new AssertionError("stale accepted");}catch(IOException expected){assertions++;}require(unified.commits==count,"stale restore no commit");
   byte[] raceBefore=AppPreferences.snapshot(c);Thread other=new Thread(()->keyboard.edit().putInt("cursorStepDp",25).commit());other.start();other.join();try{AppPreferences.restore(c,raceBefore,incoming);throw new AssertionError("race accepted");}catch(IOException expected){assertions++;}require(keyboard.getInt("cursorStepDp",0)==25,"concurrent completed edit retained");
   byte[] failureBefore=AppPreferences.snapshot(c);Map<String,Object> diskBefore=new HashMap<>(unified.disk);Map<SettingsBackup.Key,Object> failureIncoming=SettingsBackup.decode(SettingsBackup.encode(key->key.name.equals("candidateFontDelta")?-3:key.name.equals("phraseEnglish")?false:key.fallback));unified.fail=true;
   try{AppPreferences.restore(c,failureBefore,failureIncoming);throw new AssertionError("failure accepted");}catch(IOException expected){require(expected.getMessage().contains("未确认"),"uncertain outcome surfaced");}require(unified.disk.equals(diskBefore),"failed single transaction leaves old whole disk model");require(keyboard.getInt("candidateFontDelta",0)==-3,"failed commit may update process memory as disclosed");
   Owner reopened=new Owner(c.disk);require(AppPreferences.open(reopened,"keyboard").getInt("candidateFontDelta",0)==3&&AppPreferences.open(reopened,"associations").getBoolean("phraseEnglish",false),"restart old whole snapshot no mixed groups");
+  require(AppPreferences.open(reopened,"associations").getBoolean("builtinPredictions",false),"failed restore preserves previous prediction value in reopened storage model");
+  require(AppPreferences.open(reopened,"associations").getBoolean("numericPredictions",false),"reopened storage model retains the restored numeric setting");
+  require(!AppPreferences.open(reopened,"associations").getBoolean("cursorPredictions",true),"reopened storage model retains disabled caret prediction");
   unified.fail=false;keyboard.edit().putString("afterFailure","synthetic").commit();require(unified.disk.get("keyboard:candidateFontDelta").equals(-3)&&unified.disk.get("associations:phraseEnglish").equals(false),"later unrelated successful commit may persist earlier unconfirmed memory; no rollback claim");
   SharedPreferences rkey=AppPreferences.open(reopened,"keyboard"),rclip=AppPreferences.open(reopened,"clipboard");rkey.edit().clear().putString("only","new").commit();require(rkey.getAll().size()==1&&rclip.getBoolean("enabled",false),"clear restricted to group");
   Set<String> set=new HashSet<>(Arrays.asList("a"));rkey.edit().putStringSet("set",set).commit();set.add("b");require(rkey.getStringSet("set",null).size()==1,"set write defensive");Set<String> got=rkey.getStringSet("set",null);got.add("c");require(rkey.getStringSet("set",null).size()==1,"set read defensive");
   Owner bad=new Owner();bad.getSharedPreferences("keyboard",0).edit().putInt("cursorStepDp",31).commit();bad.getSharedPreferences(AppPreferences.FILE,0).fail=true;SharedPreferences badKey=AppPreferences.open(bad,"keyboard");require(badKey.getInt("cursorStepDp",16)==16,"failed migration returns safe defaults");require(!badKey.edit().putInt("cursorStepDp",32).commit()&&bad.getSharedPreferences("keyboard",0).getInt("cursorStepDp",0)==31,"failed migration refuses modifications");try{AppPreferences.snapshot(bad);throw new AssertionError("bad migration backed up");}catch(IOException expected){assertions++;}
+  Owner portableOwner=new Owner();
+  AppPreferences.open(portableOwner,"keyboard").edit().putInt("cursorStepDp",24).commit();
+  AppPreferences.open(portableOwner,"clipboard").edit().putBoolean("enabled",true).putInt("days",30).commit();
+  AppPreferences.open(portableOwner,"candidate-learning").edit().putBoolean("enabled",true).commit();
+  byte[] portableBefore=AppPreferences.snapshot(portableOwner);
+  byte[] portableFile=SettingsBackup.encodePortable(SettingsBackup.encode(k->
+      k.name.equals("voiceOutputMode")?2:k.name.equals("builtinPredictions")?true:k.fallback));
+  var portableMerged=SettingsBackup.mergePortable(portableFile,portableBefore);
+  require(Arrays.equals(portableBefore,AppPreferences.snapshot(portableOwner)),"portable preview is read-only");
+  AppPreferences.restore(portableOwner,portableBefore,portableMerged);
+  Owner portableReopened=new Owner(portableOwner.disk);
+  require(AppPreferences.open(portableReopened,"keyboard").getInt("voiceOutputMode",0)==2&&
+      AppPreferences.open(portableReopened,"associations").getBoolean("builtinPredictions",false),"portable values survive reopening synthetic store");
+  require(AppPreferences.open(portableReopened,"keyboard").getInt("cursorStepDp",0)==24&&
+      AppPreferences.open(portableReopened,"clipboard").getBoolean("enabled",false)&&
+      AppPreferences.open(portableReopened,"clipboard").getInt("days",0)==30&&
+      AppPreferences.open(portableReopened,"candidate-learning").getBoolean("enabled",false),"portable save protects local settings and consent");
   require(AppPreferences.managed("keyboard")&&!AppPreferences.managed("unknown-platform-setting"),"framework groups not intercepted");
   Owner reuseOwner=new Owner();SharedPreferences reuse=AppPreferences.open(reuseOwner,"keyboard");
   SharedPreferences.Editor putOnce=reuse.edit().putInt("i",1);putOnce.commit();reuse.edit().putInt("i",2).commit();putOnce.commit();require(reuse.getInt("i",0)==2,"reused editor does not replay committed put");

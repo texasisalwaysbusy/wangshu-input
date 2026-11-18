@@ -19,6 +19,7 @@ public final class ImeInstrumentation extends Instrumentation {
     private void settle(){waitForIdleSync();SystemClock.sleep(400);}
     private void awaitEditor(Activity activity,EditText editor)throws Exception{diagnostics.awaitReady(activity,editor);}
     @Override public void onStart(){Bundle result=new Bundle();try{
+        if(suite.equals("landscape-viewport")){result.putString("result",LandscapeViewportChecks.run(this));finish(Activity.RESULT_OK,result);return;}
         if(BuildConfig.BASIC_TYPING_PREVIEW&&!suite.equals("core")&&!suite.equals("candidates"))throw new UnsupportedOperationException("Basic Typing Preview supports only core/candidates here; voice and other suites NOT RUN");
         if(suite.equals("core")||suite.equals("candidates"))diagnostics=new ImeTestDiagnostics(this,suite,diagnosticSyntheticOnly);
         if(suite.equals("toolbarui")){result.putString("result",ToolbarUiChecks.run(this));finish(Activity.RESULT_OK,result);return;}

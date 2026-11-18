@@ -16,8 +16,8 @@ def inputs():
     return {str(x.relative_to(ROOT)):sha(x) for x in sorted(files)}
 before=inputs();record={'started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'scope':'Affected production TSF DLLs and actual PE/Wine mock TSF/COM tests only. Real Windows desktop/registration/x86 runtime/microphone NOT_RUN. No unchanged managers/helper rebuilt.','inputs_before':before,'commands':[]}
 shutil.copytree(PROJECT/'data',build/'data')
-libs=['-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lwinpthread']
-native=[str(BASE/'personal_store.cpp'),str(PROJECT/'staging/personal-native/personal_data.cpp'),str(PROJECT/'core/engine.cpp')]
+libs=['-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lcrypt32','-lwinpthread']
+native=[str(BASE/'personal_store.cpp'),str(BASE/'clipboard_store.cpp'),str(PROJECT/'staging/personal-native/personal_data.cpp'),str(PROJECT/'core/engine.cpp')]
 cxx=ROOT/'.tools/mingw/usr/bin/x86_64-w64-mingw32-g++-posix';record['compiler_sha256']={}
 commands=[]
 for arch,triple in [('x64','x86_64-w64-mingw32'),('x86','i686-w64-mingw32')]:

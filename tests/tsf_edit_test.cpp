@@ -4,18 +4,24 @@
 #include <iostream>
 #include <stdexcept>
 #include <functional>
-struct Document{std::wstring value=L"beforeafter";LONG cursor=6,selectionEnd=-1;bool noFull=false,noRead=false,noSelection=false,ignoreMove=false,writeThenFail=false;std::function<void()> onRead,afterWrite;bool denyText=false,denyComposition=false,denySelection=false,nullComposition=false;};
+struct Document{std::wstring value=L"beforeafter";LONG cursor=6,selectionEnd=-1;bool noFull=false,noRead=false,noSelection=false,ignoreMove=false,writeThenFail=false;std::function<void()> onRead,afterWrite;bool denyText=false,denyComposition=false,denySelection=false,nullComposition=false;int textWrites=0;};
 class Range final:public RangeStub {
 public:
     Document& doc;LONG start,end;
     Range(Document& d,LONG a,LONG b):doc(d),start(a),end(b){}
-    HRESULT STDMETHODCALLTYPE SetText(TfEditCookie,DWORD,const WCHAR* text,LONG n) override{if(doc.denyText)return E_ACCESSDENIED;if(n<0)return E_INVALIDARG;doc.value.replace(start,end-start,text,n);end=start+n;if(doc.afterWrite){auto fn=std::move(doc.afterWrite);doc.afterWrite={};fn();}return doc.writeThenFail?E_FAIL:S_OK;}
+    HRESULT STDMETHODCALLTYPE SetText(TfEditCookie,DWORD,const WCHAR* text,LONG n) override{if(doc.denyText)return E_ACCESSDENIED;if(n<0)return E_INVALIDARG;doc.value.replace(start,end-start,text,n);doc.textWrites++;end=start+n;if(doc.afterWrite){auto fn=std::move(doc.afterWrite);doc.afterWrite={};fn();}return doc.writeThenFail?E_FAIL:S_OK;}
     // Bounded plain-text fixture movement used by exact snapshot verification.
     HRESULT STDMETHODCALLTYPE ShiftStart(TfEditCookie,LONG requested,LONG* actual,const TF_HALTCOND* halt)override{
         if(!actual)return E_POINTER;
         if(halt)return E_NOTIMPL;
         LONG next=static_cast<LONG>(std::max<long long>(0,std::min<long long>(end,static_cast<long long>(start)+requested)));
         *actual=next-start;start=next;return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE ShiftEnd(TfEditCookie,LONG requested,LONG* actual,const TF_HALTCOND* halt)override{
+        if(!actual)return E_POINTER;
+        if(halt)return E_NOTIMPL;
+        LONG next=static_cast<LONG>(std::max<long long>(start,std::min<long long>(doc.value.size(),static_cast<long long>(end)+requested)));
+        *actual=next-end;end=next;return S_OK;
     }
     HRESULT STDMETHODCALLTYPE GetText(TfEditCookie,DWORD flags,WCHAR* out,ULONG max,ULONG* count) override{if(doc.onRead){auto fn=std::move(doc.onRead);doc.onRead={};fn();}if(doc.noRead)return E_ACCESSDENIED;auto s=doc.value.substr(start,end-start);*count=std::min<ULONG>(max,s.size());std::copy_n(s.data(),*count,out);if((flags&TF_TF_MOVESTART)&&!doc.ignoreMove)start+=*count;return S_OK;}
     HRESULT STDMETHODCALLTYPE ShiftEndToRange(TfEditCookie,ITfRange* value,TfAnchor anchor) override{auto other=dynamic_cast<Range*>(value);if(!other||&other->doc!=&doc)return E_INVALIDARG;end=anchor==TF_ANCHOR_END?other->end:other->start;if(start>end)start=end;return S_OK;}
@@ -83,16 +89,28 @@ class Context final:public ContextStub {
 public:
     ITfDocumentMgr* documentManager=nullptr; // weak, owned by the manager fixture
     HRESULT STDMETHODCALLTYPE GetDocumentMgr(ITfDocumentMgr** out)override{if(!out)return E_POINTER;*out=documentManager;if(*out)(*out)->AddRef();return *out?S_OK:E_FAIL;}
-    Document doc;int starts=0,selections=0;InputScope scope=IS_DEFAULT;RECT layout{100,200,140,225};BOOL clipped=FALSE;HRESULT layoutResult=S_OK;bool layoutAvailable=false;bool deferred=false;std::function<void()> afterRead;std::vector<ITfEditSession*> queued;
+    Document doc;int starts=0,selections=0,fullReads=0;InputScope scope=IS_DEFAULT;RECT layout{100,200,140,225};BOOL clipped=FALSE;HRESULT layoutResult=S_OK;bool layoutAvailable=false;bool deferred=false,deferSynchronous=false;std::function<void()> afterRead;std::vector<ITfEditSession*> queued;
     std::vector<HRESULT> flush(){auto copy=queued;queued.clear();std::vector<HRESULT> results;for(auto* edit:copy){results.push_back(edit->DoEditSession(99));edit->Release();}return results;}
-    HRESULT STDMETHODCALLTYPE GetStart(TfEditCookie,ITfRange** out) override{*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,0,0);return S_OK;}
+    HRESULT STDMETHODCALLTYPE GetStart(TfEditCookie,ITfRange** out) override{fullReads++;*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,0,0);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetEnd(TfEditCookie,ITfRange** out) override{*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,doc.value.size(),doc.value.size());return S_OK;}
     HRESULT STDMETHODCALLTYPE GetActiveView(ITfContextView** out) override{if(!layoutAvailable){*out=nullptr;return E_NOTIMPL;}*out=new ContextView(layout,clipped,layoutResult);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetAppProperty(REFGUID id,ITfReadOnlyProperty** out) override{if(id!=GUID_PROP_INPUTSCOPE)return E_NOTIMPL;*out=new ScopeProperty(scope);return S_OK;}
-    HRESULT STDMETHODCALLTYPE GetSelection(TfEditCookie,ULONG,ULONG,TF_SELECTION* out,ULONG* count) override{if(doc.noSelection){out->range=nullptr;*count=0;return E_FAIL;}out->range=new Range(doc,std::min(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd),std::max(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd));out->style={TF_AE_NONE,FALSE};*count=1;return S_OK;}
-    HRESULT STDMETHODCALLTYPE RequestEditSession(TfClientId,ITfEditSession* edit,DWORD flags,HRESULT* result) override{if(deferred&&!(flags&TF_ES_SYNC)){edit->AddRef();queued.push_back(edit);*result=TF_S_ASYNC;}else *result=edit->DoEditSession(99);if((flags&TF_ES_READWRITE)==TF_ES_READ&&afterRead){auto fn=std::move(afterRead);afterRead={};fn();}return S_OK;}
+    bool preserveSelectionRange=false, overrideSelectionStyle=false;
+    TF_SELECTIONSTYLE selectionStyle{TF_AE_NONE,FALSE};
+    HRESULT STDMETHODCALLTYPE GetSelection(TfEditCookie,ULONG,ULONG,TF_SELECTION* out,ULONG* count) override{if(doc.noSelection){out->range=nullptr;*count=0;return E_FAIL;}out->range=new Range(doc,std::min(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd),std::max(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd));out->style=selectionStyle;*count=1;return S_OK;}
+    HRESULT STDMETHODCALLTYPE RequestEditSession(TfClientId,ITfEditSession* edit,DWORD flags,HRESULT* result) override{if(deferSynchronous||(deferred&&!(flags&TF_ES_SYNC))){edit->AddRef();queued.push_back(edit);*result=TF_S_ASYNC;}else *result=edit->DoEditSession(99);if((flags&TF_ES_READWRITE)==TF_ES_READ&&afterRead){auto fn=std::move(afterRead);afterRead={};fn();}return S_OK;}
     HRESULT STDMETHODCALLTYPE InsertTextAtSelection(TfEditCookie,DWORD flags,const WCHAR*,LONG,ITfRange** out) override{if(!(flags&TF_IAS_QUERYONLY))return E_INVALIDARG;*out=new Range(doc,std::min(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd),std::max(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd));return S_OK;}
-    HRESULT STDMETHODCALLTYPE SetSelection(TfEditCookie,ULONG count,const TF_SELECTION* selected) override{if(doc.denySelection)return E_ACCESSDENIED;if(count!=1)return E_INVALIDARG;auto r=static_cast<Range*>(selected->range);doc.cursor=r->end;doc.selectionEnd=-1;selections++;return S_OK;}
+    HRESULT STDMETHODCALLTYPE SetSelection(TfEditCookie,ULONG count,const TF_SELECTION* selected) override{
+        if(doc.denySelection)return E_ACCESSDENIED;
+        if(count!=1)return E_INVALIDARG;
+        auto r=static_cast<Range*>(selected->range);
+        const bool range=preserveSelectionRange&&r->start!=r->end;
+        doc.cursor=range?r->start:r->end;
+        doc.selectionEnd=range?r->end:-1;
+        if(preserveSelectionRange&&!overrideSelectionStyle)selectionStyle=selected->style;
+        selections++;
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE StartComposition(TfEditCookie,ITfRange* range,ITfCompositionSink* sink,ITfComposition** out) override{if(doc.denyComposition)return E_ACCESSDENIED;if(doc.nullComposition){*out=nullptr;return S_OK;}starts++;*out=new Composition(range,sink);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetStatus(TF_STATUS* status) override{*status={};return S_OK;}
 };
@@ -117,6 +135,21 @@ public:
 struct TextServiceTestAccess {
     static bool stageVoice(TextService* service,ITfContext* c,const std::string& text){service->stopVoice();service->voiceRecovery.clear();auto manager=dynamic_cast<Manager*>(service->manager);if(manager&&!manager->document)manager->document=new DocumentManager(c);if(FAILED(service->bindVoice(c)))return false;service->reviewVoice(text);return !service->voiceReview.empty();}
     static bool beginVoice(TextService* service,ITfContext* c){service->stopVoice();service->voiceRecovery.clear();return SUCCEEDED(service->bindVoice(c));}
+    static bool beginVoicePreviewFixture(TextService* service,ITfContext* c,const std::filesystem::path& folder){
+        if(!beginVoice(service,c)||!service->localVoice.start(folder,L"--preview"))return false;
+        service->listening=true;
+        return true;
+    }
+    static void voiceTick(TextService* service){service->pollVoice();}
+    static std::wstring voicePreview(TextService* service){return service->localVoice.preview();}
+    static VoiceProcess::State voiceProcessState(TextService* service){return service->localVoice.state;}
+    static void loadSpeechFormat(TextService* service,const std::wstring& storePath){
+        service->personalStore=std::make_unique<wangshu::WindowsPersonalStore>(storePath);
+        service->loadVoiceFormat();
+    }
+    static void mathPanel(TextService* service,bool math){service->math=math;}
+    static void recognizeSpeech(TextService* service,std::string text){service->recognizeVoice(std::move(text));}
+    static bool canUndoSpeech(TextService* service){return static_cast<bool>(service->voiceUndo);}
     static void resultVoice(TextService* service,const std::string& text){service->reviewVoice(text);}
     static void resumeVoice(TextService* service,ITfContext* c){service->startVoice(c);}
     static bool recovery(TextService* service){return !service->voiceRecovery.empty();}
@@ -134,6 +167,29 @@ struct TextServiceTestAccess {
 };
 static int checks=0;
 static void check(bool ok,const char* label){if(!ok)throw std::runtime_error(label);checks++;std::cout<<"PASS "<<label<<std::endl;}
+class ScriptedKeyboardState {
+    BYTE previous[256]{};
+public:
+    explicit ScriptedKeyboardState(bool shift=false,bool ctrl=false) {
+        BYTE keys[256]{};
+        if (shift) keys[VK_SHIFT]=0x80;
+        if (ctrl) keys[VK_CONTROL]=0x80;
+        if (!GetKeyboardState(previous)||!SetKeyboardState(keys))
+            throw std::runtime_error("fixture cannot initialize its thread key state");
+    }
+    ~ScriptedKeyboardState(){SetKeyboardState(previous);}
+    ScriptedKeyboardState(const ScriptedKeyboardState&)=delete;
+    ScriptedKeyboardState& operator=(const ScriptedKeyboardState&)=delete;
+};
+static HRESULT scriptedKeyDown(TextService* service,ITfContext* context,WPARAM key,
+                               BOOL* eaten,bool shift=false){
+    ScriptedKeyboardState state(shift);
+    return service->OnKeyDown(context,key,0,eaten);
+}
+static HRESULT scriptedTestKeyDown(TextService* service,ITfContext* context,WPARAM key,BOOL* eaten){
+    ScriptedKeyboardState state;
+    return service->OnTestKeyDown(context,key,0,eaten);
+}
 int main(){try{
     auto service=new TextService;auto context=new Context;
     check(SUCCEEDED(service->edit(context,7,L"n",false))&&context->doc.value==L"beforenafter","start composition preserves surrounding text");
@@ -158,22 +214,22 @@ int main(){try{
     moduleHandle=GetModuleHandleW(nullptr);service=new TextService;auto manager=new Manager;context=new Context;
     check(SUCCEEDED(service->Activate(manager,17)),"TSF activation registers sinks and loads full shared data");
     BOOL eat=FALSE;bool digitsStayWithHost=true;auto beforeDigits=context->doc.value;
-    for(WPARAM key:{'2','3','2','0','9','1'}){service->OnTestKeyDown(context,key,0,&eat);digitsStayWithHost&=!eat;service->OnKeyDown(context,key,0,&eat);digitsStayWithHost&=!eat;}
+    for(WPARAM key:{'2','3','2','0','9','1'}){scriptedTestKeyDown(service,context,key,&eat);digitsStayWithHost&=!eat;scriptedKeyDown(service,context,key,&eat);digitsStayWithHost&=!eat;}
     check(digitsStayWithHost,"uncomposed Windows hardware digits remain with the host application");
     check(context->doc.value==beforeDigits&&TextServiceTestAccess::pendingText(service).empty(),"Windows TSF adds no phantom space or composition for direct digits");
-    for(WPARAM key:{'N','I','H','A','O'}){service->OnKeyDown(context,key,0,&eat);check(eat,"production key sink consumes a composing letter");}
-    service->OnKeyDown(context,VK_SPACE,0,&eat);check(eat&&context->doc.value==L"before你好after","production TSF key routing commits Chinese through edit sessions");
-    for(WPARAM key:std::initializer_list<WPARAM>{VK_OEM_5,'S','U','B','9'})service->OnKeyDown(context,key,0,&eat);
-    service->OnKeyDown(context,VK_SPACE,0,&eat);check(eat&&context->doc.value==L"before你好₉after","TSF mathematical alias digits are composed before candidate selection");
+    for(WPARAM key:{'N','I','H','A','O'}){scriptedKeyDown(service,context,key,&eat);check(eat,"production key sink consumes a composing letter");}
+    scriptedKeyDown(service,context,VK_SPACE,&eat);check(eat&&context->doc.value==L"before你好after","production TSF key routing commits Chinese through edit sessions");
+    for(WPARAM key:std::initializer_list<WPARAM>{VK_OEM_5,'S','U','B','9'})scriptedKeyDown(service,context,key,&eat);
+    scriptedKeyDown(service,context,VK_SPACE,&eat);check(eat&&context->doc.value==L"before你好₉after","TSF mathematical alias digits are composed before candidate selection");
     auto beforeVoice=context->doc.value;TextServiceTestAccess::stageVoice(service,context,"语音核对");
     check(context->doc.value==beforeVoice,"speech transcript remains staged without automatic insertion");
-    service->OnTestKeyDown(context,VK_RETURN,0,&eat);check(eat,"Enter is routed to the staged speech review");service->OnKeyDown(context,VK_RETURN,0,&eat);
+    scriptedTestKeyDown(service,context,VK_RETURN,&eat);check(eat,"Enter is routed to the staged speech review");scriptedKeyDown(service,context,VK_RETURN,&eat);
     check(eat&&context->doc.value==L"before你好₉语音核对after"&&!TextServiceTestAccess::hasVoice(service),"reviewed voice commits through production TSF transaction and clears pending text");
-    beforeVoice=context->doc.value;TextServiceTestAccess::stageVoice(service,context,"不可插入");service->OnKeyDown(context,VK_ESCAPE,0,&eat);check(eat&&context->doc.value==beforeVoice&&!TextServiceTestAccess::hasVoice(service),"Escape discards only pending speech without altering document");
-    TextServiceTestAccess::stageVoice(service,context,"旧语音");service->OnKeyDown(context,'N',0,&eat);check(!TextServiceTestAccess::hasVoice(service)&&context->doc.value==L"before你好₉语音核对nafter","manual input cancels speech review before new composition");service->OnKeyDown(context,VK_ESCAPE,0,&eat);
-    TextServiceTestAccess::stageVoice(service,context,"保密");context->scope=IS_PASSWORD;service->OnKeyDown(context,VK_RETURN,0,&eat);check(context->doc.value==beforeVoice,"password scope change rejects pending voice insertion");context->scope=IS_DEFAULT;service->OnSetFocus(FALSE);check(!TextServiceTestAccess::hasVoice(service),"focus loss clears pending speech and child process state");
-    TextServiceTestAccess::stageVoice(service,context,"待取消语音");service->OnTestKeyDown(context,VK_LEFT,0,&eat);check(!eat&&!TextServiceTestAccess::hasVoice(service),"unhandled navigation cancels pending speech before caret movement while remaining with host");
-    service->OnTestKeyDown(context,VK_LEFT,0,&eat);check(!eat,"unhandled navigation key remains with host application");
+    beforeVoice=context->doc.value;TextServiceTestAccess::stageVoice(service,context,"不可插入");scriptedKeyDown(service,context,VK_ESCAPE,&eat);check(eat&&context->doc.value==beforeVoice&&!TextServiceTestAccess::hasVoice(service),"Escape discards only pending speech without altering document");
+    TextServiceTestAccess::stageVoice(service,context,"旧语音");scriptedKeyDown(service,context,'N',&eat);check(!TextServiceTestAccess::hasVoice(service)&&context->doc.value==L"before你好₉语音核对nafter","manual input cancels speech review before new composition");scriptedKeyDown(service,context,VK_ESCAPE,&eat);
+    TextServiceTestAccess::stageVoice(service,context,"保密");context->scope=IS_PASSWORD;scriptedKeyDown(service,context,VK_RETURN,&eat);check(context->doc.value==beforeVoice,"password scope change rejects pending voice insertion");context->scope=IS_DEFAULT;service->OnSetFocus(FALSE);check(!TextServiceTestAccess::hasVoice(service),"focus loss clears pending speech and child process state");
+    TextServiceTestAccess::stageVoice(service,context,"待取消语音");scriptedTestKeyDown(service,context,VK_LEFT,&eat);check(!eat&&!TextServiceTestAccess::hasVoice(service),"unhandled navigation cancels pending speech before caret movement while remaining with host");
+    scriptedTestKeyDown(service,context,VK_LEFT,&eat);check(!eat,"unhandled navigation key remains with host application");
     service->Deactivate();service->Release();context->Release();manager->Release();check(objectCount==0,"activated sinks and edit sessions release all server objects");
     service=new TextService;manager=new Manager;context=new Context;ITfTextInputProcessorEx* extended=nullptr;
     check(SUCCEEDED(service->QueryInterface(IID_ITfTextInputProcessorEx,reinterpret_cast<void**>(&extended))),"Windows extended TSF activation interface available");
@@ -181,21 +237,21 @@ int main(){try{
     check(TextServiceTestAccess::restrictedVoice(service,context),"restricted Windows activation cannot launch microphone or ASR child");
     extended->Release();service->Deactivate();service->Release();context->Release();manager->Release();check(objectCount==0,"extended activation retains no COM references after deactivation");
     service=new TextService;manager=new Manager;context=new Context;check(SUCCEEDED(service->Activate(manager,19)),"async edit fixture activates production service");context->deferred=true;
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);auto composed=context->doc.value;
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);auto composed=context->doc.value;
     check(TextServiceTestAccess::click(service,context,"你")&&context->doc.value==composed&&TextServiceTestAccess::pendingText(service)=="ni","TF_S_ASYNC retains composition until actual callback rather than treating queueing as success");
     context->doc.denyText=true;auto deferred=context->flush();check(deferred.size()==1&&FAILED(deferred[0])&&context->doc.value==composed&&TextServiceTestAccess::pendingText(service)=="ni","later editor refusal preserves pending candidate and original composition");context->doc.denyText=false;
     check(TextServiceTestAccess::click(service,context,"你"),"mouse candidate retry can be queued");deferred=context->flush();check(SUCCEEDED(deferred[0])&&context->doc.value==L"before你after"&&TextServiceTestAccess::pendingText(service).empty(),"actual successful async callback commits exactly once and clears pending state");
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);TextServiceTestAccess::click(service,context,"你");service->OnKeyDown(context,'H',0,&eat);composed=context->doc.value;deferred=context->flush();check(deferred[0]==E_ABORT&&context->doc.value==composed&&TextServiceTestAccess::pendingText(service)=="nih","new typing invalidates an old queued candidate without deleting newly typed letters");service->OnKeyDown(context,VK_ESCAPE,0,&eat);
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);TextServiceTestAccess::click(service,context,"你");scriptedKeyDown(service,context,'H',&eat);composed=context->doc.value;deferred=context->flush();check(deferred[0]==E_ABORT&&context->doc.value==composed&&TextServiceTestAccess::pendingText(service)=="nih","new typing invalidates an old queued candidate without deleting newly typed letters");scriptedKeyDown(service,context,VK_ESCAPE,&eat);
     auto beforeDeferredVoice=context->doc.value;TextServiceTestAccess::stageVoice(service,context,"旧语音");TextServiceTestAccess::click(service,context,"旧语音");service->OnSetFocus(FALSE);deferred=context->flush();check(deferred[0]==E_ABORT&&context->doc.value==beforeDeferredVoice,"focus loss prevents queued speech insertion into an obsolete target");
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);TextServiceTestAccess::click(service,context,"你");composed=context->doc.value;service->Deactivate();deferred=context->flush();check(deferred[0]==E_ABORT&&context->doc.value==composed,"deactivation cancels outstanding async callbacks before any document mutation");service->Release();context->Release();manager->Release();check(objectCount==0,"queued edit sessions release all service and context references");
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);TextServiceTestAccess::click(service,context,"你");composed=context->doc.value;service->Deactivate();deferred=context->flush();check(deferred[0]==E_ABORT&&context->doc.value==composed,"deactivation cancels outstanding async callbacks before any document mutation");service->Release();context->Release();manager->Release();check(objectCount==0,"queued edit sessions release all service and context references");
     auto first=new TextService;auto second=new TextService;auto firstManager=new Manager;auto secondManager=new Manager;auto firstContext=new Context;auto secondContext=new Context;ULONGLONG firstStart=GetTickCount64();
     check(SUCCEEDED(first->Activate(firstManager,20)),"first independent service loads shared immutable word data");ULONGLONG firstTime=GetTickCount64()-firstStart,secondStart=GetTickCount64();check(SUCCEEDED(second->Activate(secondManager,21))&&TextServiceTestAccess::sameBuiltInDictionary(first,second),"second service reuses the same read-only built-in dictionary");ULONGLONG secondTime=GetTickCount64()-secondStart;
-    for(WPARAM k:{'N','I'})first->OnKeyDown(firstContext,k,0,&eat);for(WPARAM k:{'H','A','O'})second->OnKeyDown(secondContext,k,0,&eat);check(firstContext->doc.value==L"beforeniafter"&&secondContext->doc.value==L"beforehaoafter","shared lexicon does not share composition buffers across editor contexts");first->OnKeyDown(firstContext,VK_SPACE,0,&eat);check(firstContext->doc.value==L"before你after"&&secondContext->doc.value==L"beforehaoafter","committing one editor leaves another editor's active composition intact");
-    first->Deactivate();first->Release();firstContext->Release();firstManager->Release();second->OnKeyDown(secondContext,VK_SPACE,0,&eat);check(secondContext->doc.value==L"before好after","deactivating one service leaves the remaining shared dictionary valid");second->Deactivate();second->Release();secondContext->Release();secondManager->Release();check(objectCount==0,"both isolated services release COM ownership after shared-word reuse");std::cout<<"METRIC in-process cloud Wine dictionary first/reuse activation ms="<<firstTime<<"/"<<secondTime<<"; not real Windows performance"<<std::endl;
+    for(WPARAM k:{'N','I'})scriptedKeyDown(first,firstContext,k,&eat);for(WPARAM k:{'H','A','O'})scriptedKeyDown(second,secondContext,k,&eat);check(firstContext->doc.value==L"beforeniafter"&&secondContext->doc.value==L"beforehaoafter","shared lexicon does not share composition buffers across editor contexts");scriptedKeyDown(first,firstContext,VK_SPACE,&eat);check(firstContext->doc.value==L"before你after"&&secondContext->doc.value==L"beforehaoafter","committing one editor leaves another editor's active composition intact");
+    first->Deactivate();first->Release();firstContext->Release();firstManager->Release();scriptedKeyDown(second,secondContext,VK_SPACE,&eat);check(secondContext->doc.value==L"before好after","deactivating one service leaves the remaining shared dictionary valid");second->Deactivate();second->Release();secondContext->Release();secondManager->Release();check(objectCount==0,"both isolated services release COM ownership after shared-word reuse");std::cout<<"METRIC in-process cloud Wine dictionary first/reuse activation ms="<<firstTime<<"/"<<secondTime<<"; not real Windows performance"<<std::endl;
 
     service=new TextService;manager=new Manager;context=new Context;manager->supportsUI=true;manager->document=new DocumentManager(context);context->documentManager=manager->document;
     check(SUCCEEDED(service->ActivateEx(manager,22,TF_TMAE_UIELEMENTENABLEDONLY)),"host candidate fixture activates UI-element-only mode");
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);
     ITfCandidateListUIElementBehavior* candidateUI=nullptr;check(manager->begins==1&&manager->element&&SUCCEEDED(manager->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&candidateUI))),"TSF host receives real candidate UIElement and behavior interfaces");
     UINT count=0,selected=99;BOOL shown=TRUE;candidateUI->GetCount(&count);candidateUI->IsShown(&shown);check(count>2&&!shown&&!TextServiceTestAccess::ownCandidateUI(service),"host-owned presentation receives candidates while independent popup stays hidden");
     BSTR candidateText=nullptr;check(SUCCEEDED(candidateUI->GetString(1,&candidateText))&&candidateText&&SysStringLen(candidateText)>0,"host retrieves UTF16 Chinese candidate strings");std::wstring chosen(candidateText,SysStringLen(candidateText));SysFreeString(candidateText);
@@ -208,14 +264,14 @@ int main(){try{
     candidateUI->SetSelection(1);candidateUI->GetSelection(&selected);check(selected==1&&context->doc.value==L"beforeniafter","host selection alone leaves the editor composition unchanged");
     context->deferred=true;check(SUCCEEDED(candidateUI->Finalize())&&TextServiceTestAccess::pendingText(service)=="ni","host finalization uses the production asynchronous TSF edit transaction");deferred=context->flush();check(deferred.size()==1&&SUCCEEDED(deferred[0])&&context->doc.value==L"before"+chosen+L"after"&&manager->ends==1,"successful host finalization inserts its chosen candidate and ends UIElement");
     check(candidateUI->Finalize()==E_UNEXPECTED&&candidateUI->Show(TRUE)==E_UNEXPECTED,"retained obsolete candidate interface cannot act on another editor");candidateUI->Release();candidateUI=nullptr;
-    context->deferred=false;service->OnKeyDown(context,VK_OEM_5,0,&eat);BYTE originalKeys[256],shiftedKeys[256];GetKeyboardState(originalKeys);std::copy_n(originalKeys,256,shiftedKeys);shiftedKeys[VK_SHIFT]|=0x80;SetKeyboardState(shiftedKeys);service->OnKeyDown(context,'X',0,&eat);SetKeyboardState(originalKeys);check(manager->element!=nullptr,"uppercase mathematical alias produces a hosted candidate list");manager->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&candidateUI));candidateUI->GetString(0,&candidateText);check(std::wstring(candidateText,SysStringLen(candidateText))==L"𝕏"&&SysStringLen(candidateText)==2,"host candidate API preserves non-BMP mathematical symbols as UTF16 pairs");SysFreeString(candidateText);auto beforeAbort=L"before"+chosen+L"after";check(SUCCEEDED(candidateUI->Abort())&&context->doc.value==beforeAbort,"host abort removes only its owned active composition");candidateUI->Release();candidateUI=nullptr;
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);manager->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&candidateUI));service->OnSetFocus(FALSE);check(!manager->element&&candidateUI->Finalize()==E_UNEXPECTED,"focus loss ends host candidate UI and invalidates stale callbacks");candidateUI->Release();
+    context->deferred=false;scriptedKeyDown(service,context,VK_OEM_5,&eat);scriptedKeyDown(service,context,'X',&eat,true);check(manager->element!=nullptr,"uppercase mathematical alias produces a hosted candidate list");manager->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&candidateUI));candidateUI->GetString(0,&candidateText);check(std::wstring(candidateText,SysStringLen(candidateText))==L"𝕏"&&SysStringLen(candidateText)==2,"host candidate API preserves non-BMP mathematical symbols as UTF16 pairs");SysFreeString(candidateText);auto beforeAbort=L"before"+chosen+L"after";check(SUCCEEDED(candidateUI->Abort())&&context->doc.value==beforeAbort,"host abort removes only its owned active composition");candidateUI->Release();candidateUI=nullptr;
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);manager->element->QueryInterface(IID_ITfCandidateListUIElementBehavior,reinterpret_cast<void**>(&candidateUI));service->OnSetFocus(FALSE);check(!manager->element&&candidateUI->Finalize()==E_UNEXPECTED,"focus loss ends host candidate UI and invalidates stale callbacks");candidateUI->Release();
     service->Deactivate();service->Release();context->Release();manager->Release();check(objectCount==0,"host-retained candidate objects release all service and editor ownership");
 
     service=new TextService;manager=new Manager;context=new Context;check(SUCCEEDED(service->Activate(manager,23)),"editor rejection fixture activates production keyboard");
-    for(WPARAM k:{'N','I'})service->OnKeyDown(context,k,0,&eat);auto refusedComposition=context->doc.value;context->doc.denyText=true;service->OnKeyDown(context,VK_BACK,0,&eat);check(eat&&TextServiceTestAccess::pendingText(service)=="ni"&&context->doc.value==refusedComposition,"failed backspace preserves IME buffer and owned composition instead of forwarding a second edit");
-    BYTE savedKeyboard[256],shiftKeyboard[256];GetKeyboardState(savedKeyboard);std::copy_n(savedKeyboard,256,shiftKeyboard);shiftKeyboard[VK_SHIFT]|=0x80;SetKeyboardState(shiftKeyboard);service->OnKeyDown(context,VK_SPACE,0,&eat);SetKeyboardState(savedKeyboard);check(TextServiceTestAccess::chineseMode(service)&&TextServiceTestAccess::pendingText(service)=="ni","failed mode-switch commit keeps Chinese mode and recoverable composition");
-    context->doc.denyText=false;service->OnKeyDown(context,VK_BACK,0,&eat);check(TextServiceTestAccess::pendingText(service)=="n"&&context->doc.value==L"beforenafter","retry backspace edits the same original composition exactly once");
+    for(WPARAM k:{'N','I'})scriptedKeyDown(service,context,k,&eat);auto refusedComposition=context->doc.value;context->doc.denyText=true;scriptedKeyDown(service,context,VK_BACK,&eat);check(eat&&TextServiceTestAccess::pendingText(service)=="ni"&&context->doc.value==refusedComposition,"failed backspace preserves IME buffer and owned composition instead of forwarding a second edit");
+    scriptedKeyDown(service,context,VK_SPACE,&eat,true);check(TextServiceTestAccess::chineseMode(service)&&TextServiceTestAccess::pendingText(service)=="ni","failed mode-switch commit keeps Chinese mode and recoverable composition");
+    context->doc.denyText=false;scriptedKeyDown(service,context,VK_BACK,&eat);check(TextServiceTestAccess::pendingText(service)=="n"&&context->doc.value==L"beforenafter","retry backspace edits the same original composition exactly once");
     context->deferred=true;TextServiceTestAccess::click(service,context,"你");refusedComposition=context->doc.value;TextServiceTestAccess::terminateComposition(service);deferred=context->flush();check(deferred.size()==1&&deferred[0]==E_ABORT&&context->doc.value==refusedComposition,"external composition termination invalidates a queued candidate before stale insertion");
     service->Deactivate();service->Release();context->Release();manager->Release();check(objectCount==0,"rejected edits and externally terminated composition release all COM state");
     std::cout<<"TOTAL "<<checks<<" PASS; native Windows TSF editing with mock text store; real OS integration separate"<<std::endl;return 0;

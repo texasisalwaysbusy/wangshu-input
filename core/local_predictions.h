@@ -21,11 +21,16 @@ inline bool valid(std::u16string_view text){for(size_t i=0;i<text.size();++i){au
 inline bool boundary(std::u16string_view text,size_t at){return at==0||separator(text[at-1])||han(text[at-1]);}
 inline bool safeLine(std::u16string_view text){for(char16_t c:text)if(!letter(c)&&!han(c)&&!separator(c)&&c!=u'\''&&c!=u'’')return false;return true;}
 inline bool duplicate(std::u16string_view suffix,std::u16string_view after){size_t start=0;while(start<after.size()&&separator(after[start]))++start;if(start==after.size())return false;size_t n=std::min(suffix.size(),after.size()-start);return n&&equalFold(suffix.substr(0,n),after.substr(start,n));}
-inline std::vector<Result> suggest(std::u16string_view before,std::u16string_view after,bool english,size_t limit=4){
+inline std::u16string_view eligibleLine(std::u16string_view before,std::u16string_view after,size_t limit){
  if(before.empty()||before.size()>32768||after.size()>32768||!limit||limit>8||!valid(before)||!valid(after))return {};
  auto lineStart=before.find_last_of(u"\r\n");auto line=before.substr(lineStart==std::u16string_view::npos?0:lineStart+1);
  // Never truncate an unsafe code/URL prefix into apparently safe prose.
  if(line.size()>256||!safeLine(line)||(!after.empty()&&!separator(after.front())))return {};
+ return line;
+}
+inline std::vector<Result> suggest(std::u16string_view before,std::u16string_view after,bool english,size_t limit=4,bool* matched=nullptr){
+ auto line=eligibleLine(before,after,limit);
+ if(line.empty())return {};
  std::vector<Result> out;size_t row=0,bestMatched=0;
  for(const auto& example:examples()){
   ++row;if(example.language!=2&&example.language!=(english?1:0))continue;
@@ -37,6 +42,9 @@ inline std::vector<Result> suggest(std::u16string_view before,std::u16string_vie
     for(size_t end=offsets[token]+1;end<=offsets[token+1]&&end<sentence.size();++end){
      size_t count=end-start;if(count>line.size()||count<2)continue;
      auto typed=line.substr(line.size()-count);if(!boundary(line,line.size()-count)||!equalFold(typed,std::u16string_view(sentence).substr(start,count)))continue;
+     // English examples are only offered for an explicitly typed example prefix.
+     // A generic suffix such as an article must not preempt corpus context.
+     if(english&&(startToken!=0||count!=line.size()))continue;
      // A completed English word without a typed separating space is not a
      // next-word trigger. Punctuation-only continuation is also suppressed.
      char16_t next=sentence[end];if(next==u' '||separator(next)||(!letter(next)&&!han(next)))continue;
@@ -47,6 +55,7 @@ inline std::vector<Result> suggest(std::u16string_view before,std::u16string_vie
      // character is not enough to manufacture a continuation.
      size_t hans=0;for(auto c:typed)hans+=han(c);if(!english&&example.language==0&&hans<2)continue;
      bestMatched=std::max(bestMatched,count);
+     if(matched)*matched=true;
      std::u16string full=sentence.substr(end),word=sentence.substr(end,offsets[token+1]-end);
      if(word.empty()&&token+1<example.units.size())word=example.units[token+1];
      // At a unit boundary the next unit, not an empty prior-unit tail, is the word.

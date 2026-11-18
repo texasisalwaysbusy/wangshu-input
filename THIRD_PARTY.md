@@ -10,5 +10,7 @@
 - Kotlin、NDK、MinGW、GCC 运行时和其他第三方依赖须按实际构建版本分别保留其许可与 notices；某项第三方许可并不自动成为整个项目代码的许可。
 
 - 本地预测的 115 条例句为项目原创合成材料，CC0-1.0；来源与边界见 `data/LOCAL-PREDICTIONS-SOURCE.json`，不是用户输入或训练语料。
+- 中英文上下文联想表使用 [Tatoeba](https://tatoeba.org/en/downloads) 的公开句子统计。来源、CC BY 2.0 FR、历史 CC0 1.0 数据及处理方式见 [Tatoeba 说明](data/notices/TATOEBA-NOTICE.txt)。
+- Windows 完整字符簇删除使用 Unicode 17.0.0 属性数据，适用的版权和许可见 [Unicode 许可](data/notices/UNICODE-LICENSE.txt)。
 - 本次公开首页与原创图片的归属见 `docs/public/ATTRIBUTIONS.md`。
 

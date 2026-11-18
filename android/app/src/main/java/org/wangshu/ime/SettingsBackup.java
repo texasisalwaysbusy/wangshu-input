@@ -8,7 +8,15 @@ import java.util.*;
 /** Strict, bounded settings-only interchange. Includes user-authored symbol-list text, never key history, audio or capture enablement. */
 final class SettingsBackup {
     static final int MAX_BYTES=65536;
-    private static final String HEADER="WANGSHU-SETTINGS\t1";
+    private static final String FORMAT="WANGSHU-SETTINGS\t";
+    private static final String HEADER=FORMAT+"5";
+    private static final String PORTABLE_FORMAT="WANGSHU-PORTABLE-SETTINGS\t";
+    private static final String PORTABLE_HEADER=PORTABLE_FORMAT+"1";
+    private static final String WINDOWS_PHRASES="windows\tphraseAssociations";
+    private static final Key VOICE_OUTPUT=new Key("keyboard","voiceOutputMode",0,0,2);
+    private static final Key BUILTIN_PREDICTIONS=new Key("associations","builtinPredictions",false,0,0);
+    private static final Key NUMERIC_PREDICTIONS=new Key("associations","numericPredictions",false,0,0);
+    private static final Key CURSOR_PREDICTIONS=new Key("associations","cursorPredictions",true,0,0);
     static final class Key {
         final String group,name;final Object fallback;final int min,max;
         Key(String g,String n,Object value,int low,int high){group=g;name=n;fallback=value;min=low;max=high;}
@@ -32,9 +40,13 @@ final class SettingsBackup {
         keys.add(new Key("keyboard","candidateFontDelta",0,-3,3));
         keys.add(new Key("keyboard","cursorStepDp",16,8,48));
         keys.add(new Key("keyboard","voiceRightAction",0,0,1));
+        keys.add(VOICE_OUTPUT);
         keys.add(new Key("associations","math",true,0,0));
         keys.add(new Key("associations","phraseChinese",false,0,0));
         keys.add(new Key("associations","phraseEnglish",false,0,0));
+        keys.add(BUILTIN_PREDICTIONS);
+        keys.add(NUMERIC_PREDICTIONS);
+        keys.add(CURSOR_PREDICTIONS);
         for(String name:new String[]{"z_zh","c_ch","s_sh","n_l","f_h","an_ang","en_eng","in_ing"})
             keys.add(new Key("fuzzy-pinyin-v1","fuzzy."+name,false,0,0));
         // Do not transfer the history/learning enabled flags or any private content.
@@ -42,6 +54,66 @@ final class SettingsBackup {
         KEYS=Collections.unmodifiableList(keys);
     }
     interface Values {Object read(Key key)throws IOException;}
+
+    static boolean isPortable(byte[] bytes)throws IOException {
+        String text=decodeUtf8(bytes);
+        if(text.startsWith("\uFEFF"))text=text.substring(1);
+        return text.startsWith(PORTABLE_FORMAT);
+    }
+
+    static byte[] encodePortable(byte[] current)throws IOException {
+        Map<Key,Object> snapshot=decode(current);
+        StringBuilder text=new StringBuilder(PORTABLE_HEADER).append('\n');
+        for(Key key:new Key[]{VOICE_OUTPUT,BUILTIN_PREDICTIONS,CURSOR_PREDICTIONS}) {
+            text.append(key.id()).append('\t').append(key.type()).append('\t')
+                    .append(snapshot.get(key)).append('\n');
+        }
+        return utf8(text.toString());
+    }
+
+    static Map<Key,Object> mergePortable(byte[] bytes,byte[] current)throws IOException {
+        if(bytes.length>1024)throw new IOException("跨平台设置文件过大");
+        String text=decodeUtf8(bytes);
+        if(text.startsWith("\uFEFF"))text=text.substring(1);
+        String[] lines=text.split("\\r?\\n",-1);
+        if(!lines[0].equals(PORTABLE_HEADER))throw new IOException("不支持的跨平台设置版本");
+        Map<String,Key> allowed=new HashMap<>();
+        for(Key key:new Key[]{VOICE_OUTPUT,BUILTIN_PREDICTIONS,CURSOR_PREDICTIONS})allowed.put(key.id(),key);
+        Map<Key,Object> selected=new HashMap<>();
+        boolean windowsPhrasesSeen=false;
+        for(int i=1;i<lines.length;i++) {
+            if(i==lines.length-1&&lines[i].isEmpty())continue;
+            String[] fields=lines[i].split("\t",-1);
+            if(fields.length!=4)throw new IOException("跨平台设置行格式错误");
+            String id=fields[0]+"\t"+fields[1];
+            if(id.equals(WINDOWS_PHRASES)&&!windowsPhrasesSeen&&fields[2].equals("b")) {
+                portableBoolean(fields[3]);
+                windowsPhrasesSeen=true;
+                continue;
+            }
+            Key key=allowed.get(id);
+            if(key==null||selected.containsKey(key)||!fields[2].equals(String.valueOf(key.type())))
+                throw new IOException("未知、重复或不兼容的跨平台设置");
+            if(key==VOICE_OUTPUT) {
+                if(fields[3].length()!=1||fields[3].charAt(0)<'0'||fields[3].charAt(0)>'2')
+                    throw new IOException("语音格式超出范围");
+                selected.put(key,fields[3].charAt(0)-'0');
+            } else {
+                selected.put(key,portableBoolean(fields[3]));
+            }
+        }
+        if(selected.size()!=allowed.size())throw new IOException("跨平台设置备份不完整");
+        Map<Key,Object> merged=new LinkedHashMap<>(decode(current));
+        merged.putAll(selected);
+        return Collections.unmodifiableMap(merged);
+    }
+
+    private static boolean portableBoolean(String value)throws IOException {
+        if(value.equals("true"))return true;
+        if(value.equals("false"))return false;
+        throw new IOException("跨平台设置开关格式错误");
+    }
+
     static byte[] encode(Values values)throws IOException {
         StringBuilder out=new StringBuilder(HEADER).append('\n');
         for(Key key:KEYS){Object value=key.check(values.read(key));
@@ -61,18 +133,34 @@ final class SettingsBackup {
     static Map<Key,Object> decode(byte[] bytes)throws IOException {
         if(bytes==null||bytes.length>MAX_BYTES)throw new IOException("设置文件超过 64 KiB");
         String text=decodeUtf8(bytes);if(text.startsWith("\uFEFF"))text=text.substring(1);
-        String[] lines=text.split("\\r?\\n",-1);if(lines.length==0||!HEADER.equals(lines[0]))throw new IOException("不是受支持的望舒设置备份");
+        String[] lines=text.split("\\r?\\n",-1);
+        int version;
+        switch(lines[0]){
+            case FORMAT+"1": version=1;break;
+            case FORMAT+"2": version=2;break;
+            case FORMAT+"3": version=3;break;
+            case FORMAT+"4": version=4;break;
+            case HEADER: version=5;break;
+            default: throw new IOException("不是受支持的望舒设置备份");
+        }
         LinkedHashMap<String,Key> allowed=new LinkedHashMap<>();for(Key key:KEYS)allowed.put(key.id(),key);
         LinkedHashMap<Key,Object> result=new LinkedHashMap<>();
         for(int i=1;i<lines.length;i++){if(i==lines.length-1&&lines[i].isEmpty())continue;
             String[] fields=lines[i].split("\t",-1);if(fields.length!=4)throw new IOException("设置文件第 "+(i+1)+" 行格式错误");
             Key key=allowed.get(fields[0]+"\t"+fields[1]);if(key==null||!fields[2].equals(String.valueOf(key.type()))||result.containsKey(key))throw new IOException("未知、重复或不兼容的设置");
+            if((version<2&&key==VOICE_OUTPUT)||(version<3&&key==BUILTIN_PREDICTIONS)||
+                    (version<4&&key==NUMERIC_PREDICTIONS)||(version<5&&key==CURSOR_PREDICTIONS))
+                throw new IOException("旧版备份包含不支持的设置");
             Object value;try{if(key.type()=='b'){if(!fields[3].equals("true")&&!fields[3].equals("false"))throw new IllegalArgumentException();value=Boolean.valueOf(fields[3]);}
                 else if(key.type()=='i'){if(!fields[3].matches("-?(0|[1-9][0-9]*)"))throw new IllegalArgumentException();value=Integer.valueOf(fields[3]);}
                 else {byte[] decoded=Base64.getDecoder().decode(fields[3]);if(!Base64.getEncoder().encodeToString(decoded).equals(fields[3]))throw new IllegalArgumentException();value=decodeUtf8(decoded);}}
             catch(IllegalArgumentException bad){throw new IOException("设置值无效："+key.name,bad);}
             key.check(value);if(key.group.equals("clipboard")&&!Arrays.asList(1,7,30).contains(value))throw new IOException("剪贴板期限无效");result.put(key,value);
         }
+        if(version<2)result.put(VOICE_OUTPUT,VOICE_OUTPUT.fallback);
+        if(version<3)result.put(BUILTIN_PREDICTIONS,BUILTIN_PREDICTIONS.fallback);
+        if(version<4)result.put(NUMERIC_PREDICTIONS,NUMERIC_PREDICTIONS.fallback);
+        if(version<5)result.put(CURSOR_PREDICTIONS,CURSOR_PREDICTIONS.fallback);
         if(result.size()!=KEYS.size())throw new IOException("设置备份不完整；未还原任何设置");
         return Collections.unmodifiableMap(result);
     }

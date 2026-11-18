@@ -6,6 +6,9 @@
 #include <string>
 #include <functional>
 #include <mutex>
+#include <optional>
+#include "voice_format.h"
+#include "fuzzy_pinyin.h"
 #include "../staging/personal-native/personal_data.h"
 
 namespace wangshu {
@@ -24,6 +27,10 @@ struct LearningData {
     static constexpr unsigned long long DecayMillis=30ULL*24*60*60*1000;
     bool enabled=false;
     bool phraseAssociations=false; // Explicit opt-in; v1 migration defaults off.
+    bool builtinPredictions=false;
+    bool cursorPredictions=true;
+    voice_format::Mode speechFormat=voice_format::Mode::Raw;
+    unsigned fuzzyMask=0;
     std::vector<LearnedCandidate> entries;
     static LearningData parse(const std::string& bytes);
     std::string serialize()const;
@@ -42,6 +49,17 @@ struct LearningWriteGate {
     std::function<bool()> claim;   // Linearization point: already-claimed commit may finish.
 };
 struct LearningSnapshot {LearningData data;std::string revision;bool fromBackup=false;};
+
+struct PortableSettings {
+    voice_format::Mode speechFormat=voice_format::Mode::Raw;
+    bool builtinPredictions=false;
+    bool cursorPredictions=true;
+    std::optional<bool> windowsPhraseAssociations;
+    static PortableSettings parse(const std::string& bytes);
+    static PortableSettings from(const LearningData& data);
+    std::string serialize()const;
+    void apply(LearningData& data)const;
+};
 
 class WindowsPersonalStore {
     std::wstring file_;
@@ -76,5 +94,6 @@ public:
     static PersonalData parseImport(const std::string& bytes);
     static std::string readExternal(const std::wstring& path);
     static void exportNew(const std::wstring& path,const PersonalData& data);
+    void exportPortableSettingsNew(const std::wstring& path) const;
 };
 }

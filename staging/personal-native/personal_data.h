@@ -11,7 +11,8 @@ class PersonalData {
 public:
     std::vector<PersonalWord> words;
     std::vector<PersonalPhrase> phrases;
-    static PersonalData parse(const std::string& bytes);
+    using WordNormalizer = std::string (*)(const std::string&);
+    static PersonalData parse(const std::string& bytes, WordNormalizer normalizeWord=nullptr);
     std::string serialize()const;
     PersonalData merged(const PersonalData& source)const;
     std::vector<Candidate> lookup(const Engine& base,const std::string& input,size_t page=0)const;

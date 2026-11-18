@@ -17,15 +17,15 @@ public:
  HRESULT STDMETHODCALLTYPE ShiftEnd(TfEditCookie ec, LONG cchReq, LONG *pcch, const TF_HALTCOND *pHalt) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE ShiftStartToRange(TfEditCookie ec, ITfRange *pRange, TfAnchor aPos) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE ShiftEndToRange(TfEditCookie ec, ITfRange *pRange, TfAnchor aPos) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE ShiftStartRegion(TfEditCookie ec, TfShiftDir dir, WINBOOL *pfNoRegion) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE ShiftEndRegion(TfEditCookie ec, TfShiftDir dir, WINBOOL *pfNoRegion) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE IsEmpty(TfEditCookie ec, WINBOOL *pfEmpty) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE ShiftStartRegion(TfEditCookie ec, TfShiftDir dir, BOOL *pfNoRegion) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE ShiftEndRegion(TfEditCookie ec, TfShiftDir dir, BOOL *pfNoRegion) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE IsEmpty(TfEditCookie ec, BOOL *pfEmpty) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE Collapse(TfEditCookie ec, TfAnchor aPos) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE IsEqualStart(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, WINBOOL *pfEqual) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE IsEqualEnd(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, WINBOOL *pfEqual) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE IsEqualStart(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, BOOL *pfEqual) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE IsEqualEnd(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, BOOL *pfEqual) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE CompareStart(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, LONG *plResult) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE CompareEnd(TfEditCookie ec, ITfRange *pWith, TfAnchor aPos, LONG *plResult) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE AdjustForInsert(TfEditCookie ec, ULONG cchInsert, WINBOOL *pfInsertOk) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE AdjustForInsert(TfEditCookie ec, ULONG cchInsert, BOOL *pfInsertOk) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetGravity(TfGravity *pgStart, TfGravity *pgEnd) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE SetGravity(TfEditCookie ec, TfGravity gStart, TfGravity gEnd) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE Clone(ITfRange **ppClone) override{return E_NOTIMPL;}
@@ -39,7 +39,7 @@ public:
  ULONG STDMETHODCALLTYPE AddRef() override{return ++refs;}
  ULONG STDMETHODCALLTYPE Release() override{ULONG n=--refs;if(!n)delete this;return n;}
  HRESULT STDMETHODCALLTYPE RequestEditSession(TfClientId tid, ITfEditSession *pes, DWORD dwFlags, HRESULT *phrSession) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE InWriteSession(TfClientId tid, WINBOOL *pfWriteSession) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE InWriteSession(TfClientId tid, BOOL *pfWriteSession) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetSelection(TfEditCookie ec, ULONG ulIndex, ULONG ulCount, TF_SELECTION *pSelection, ULONG *pcFetched) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE SetSelection(TfEditCookie ec, ULONG ulCount, const TF_SELECTION *pSelection) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetStart(TfEditCookie ec, ITfRange **ppStart) override{return E_NOTIMPL;}
@@ -86,24 +86,24 @@ public:
  HRESULT STDMETHODCALLTYPE GetFocus(ITfDocumentMgr **ppdimFocus) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE SetFocus(ITfDocumentMgr *pdimFocus) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE AssociateFocus(HWND hwnd, ITfDocumentMgr *pdimNew, ITfDocumentMgr **ppdimPrev) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE IsThreadFocus(WINBOOL *pfThreadFocus) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE IsThreadFocus(BOOL *pfThreadFocus) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetFunctionProvider(REFCLSID clsid, ITfFunctionProvider **ppFuncProv) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE EnumFunctionProviders(IEnumTfFunctionProviders **ppEnum) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetGlobalCompartment(ITfCompartmentMgr **ppCompMgr) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE AdviseSink(REFIID riid, IUnknown *punk, DWORD *pdwCookie) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE UnadviseSink(DWORD dwCookie) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE AdviseKeyEventSink(TfClientId tid, ITfKeyEventSink *pSink, WINBOOL fForeground) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE AdviseKeyEventSink(TfClientId tid, ITfKeyEventSink *pSink, BOOL fForeground) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE UnadviseKeyEventSink(TfClientId tid) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetForeground(CLSID *pclsid) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE TestKeyDown(WPARAM wParam, LPARAM lParam, WINBOOL *pfEaten) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE TestKeyUp(WPARAM wParam, LPARAM lParam, WINBOOL *pfEaten) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE KeyDown(WPARAM wParam, LPARAM lParam, WINBOOL *pfEaten) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE KeyUp(WPARAM wParam, LPARAM lParam, WINBOOL *pfEaten) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE TestKeyDown(WPARAM wParam, LPARAM lParam, BOOL *pfEaten) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE TestKeyUp(WPARAM wParam, LPARAM lParam, BOOL *pfEaten) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE KeyDown(WPARAM wParam, LPARAM lParam, BOOL *pfEaten) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE KeyUp(WPARAM wParam, LPARAM lParam, BOOL *pfEaten) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetPreservedKey(ITfContext *pic, const TF_PRESERVEDKEY *pprekey, GUID *pguid) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE IsPreservedKey(REFGUID rguid, const TF_PRESERVEDKEY *pprekey, WINBOOL *pfRegistered) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE IsPreservedKey(REFGUID rguid, const TF_PRESERVEDKEY *pprekey, BOOL *pfRegistered) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE PreserveKey(TfClientId tid, REFGUID rguid, const TF_PRESERVEDKEY *prekey, const WCHAR *pchDesc, ULONG cchDesc) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE UnpreserveKey(REFGUID rguid, const TF_PRESERVEDKEY *pprekey) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE SetPreservedKeyDescription(REFGUID rguid, const WCHAR *pchDesc, ULONG cchDesc) override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE GetPreservedKeyDescription(REFGUID rguid, BSTR *pbstrDesc) override{return E_NOTIMPL;}
- HRESULT STDMETHODCALLTYPE SimulatePreservedKey(ITfContext *pic, REFGUID rguid, WINBOOL *pfEaten) override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE SimulatePreservedKey(ITfContext *pic, REFGUID rguid, BOOL *pfEaten) override{return E_NOTIMPL;}
 };

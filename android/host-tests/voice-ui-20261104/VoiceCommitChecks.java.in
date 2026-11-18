@@ -1,0 +1,150 @@
+package org.wangshu.ime;
+
+import java.util.Locale;
+
+public final class VoiceCommitChecks {
+    private final InputConnection a = new InputConnection();
+    private final InputConnection b = new InputConnection();
+    private InputConnection active = a, reviewConnection;
+    private int inputSession = 8, reviewSession = -1;
+    private boolean password, reviewCanInsert, voiceCommitInFlight;
+    private long emojiSelectionRevision, voiceReviewRevision, voiceEditEpoch;
+    private final StringBuilder buffer = new StringBuilder();
+    private String voiceReview, voiceReviewReason;
+    private VoiceCommitUndo voiceUndo;
+    private String notice = "";
+    private static int tests, failures;
+
+    private final class InputConnection {
+        String document = "AZ";
+        int start = 1, end = 1, reads, finishes, writes;
+        boolean acknowledge = true, failAfterWrite, finishAccepted = true, silentlyIgnoreWrite;
+        Runnable firstRead = () -> {}, secondRead = () -> {}, onFinish = () -> {}, onCommit = () -> {};
+
+        SplitSelection.Snapshot snapshot() {
+            SplitSelection.Snapshot before = new SplitSelection.Snapshot(document, start, end);
+            ++reads;
+            if (reads == 1) firstRead.run();
+            if (reads == 2) secondRead.run();
+            return before;
+        }
+        boolean finishComposingText() {
+            ++finishes;
+            onFinish.run();
+            return finishAccepted;
+        }
+        boolean commitText(String text, int cursor) {
+            ++writes;
+            if (!silentlyIgnoreWrite) {
+                document = document.substring(0, start) + text + document.substring(end);
+                start += text.length();
+                end = start;
+                ++emojiSelectionRevision;
+            }
+            onCommit.run();
+            if (failAfterWrite) throw new IllegalStateException("synthetic uncertain reply");
+            return acknowledge;
+        }
+    }
+
+    private InputConnection getCurrentInputConnection() { return active; }
+    private SplitSelection.Snapshot voiceSnapshot(InputConnection editor) { return editor.snapshot(); }
+    private void rebuild() {}
+    private void toast(String message) { notice = message; }
+    private void switchToB() { active = b; ++inputSession; }
+    private void moveSelection() { a.start = 0; a.end = 1; ++emojiSelectionRevision; }
+    private void cancelReview() { ++voiceReviewRevision; voiceReview = null; reviewCanInsert = false; }
+    private void prepare(String value) { showVoiceReview(value, "please review", a, inputSession, true); }
+    private void press(long generation) { /* PRESS */ }
+    private void auto() { attemptVoiceCommit("语音", a, new SplitSelection.Snapshot("AZ", 1, 1), inputSession); }
+    private boolean unchanged() { return a.document.equals("AZ") && b.document.equals("AZ") && a.writes == 0 && b.writes == 0; }
+    private static void check(boolean pass, String label) {
+        ++tests;
+        if (!pass) ++failures;
+        System.out.println((pass ? "PASS " : "FAIL ") + label);
+    }
+
+    /* METHODS */
+
+    public static void main(String[] args) {
+        VoiceCommitChecks h = new VoiceCommitChecks();
+        h.auto();
+        check(h.a.document.equals("A语音Z") && h.a.writes == 1 && h.voiceUndo != null,
+              "confirmed insertion survives the expected post-commit caret notification");
+
+        h = new VoiceCommitChecks();
+        h.a.firstRead = h::switchToB;
+        h.auto();
+        check(h.unchanged() && h.a.finishes == 0 && h.voiceReview == null,
+              "switch during first read sends neither finish nor commit to the old editor");
+
+        h = new VoiceCommitChecks();
+        h.a.secondRead = h::switchToB;
+        h.auto();
+        check(h.unchanged() && h.voiceReview == null,
+              "switch during final read cannot write old or new editor or publish review");
+
+        h = new VoiceCommitChecks();
+        h.a.secondRead = h::moveSelection;
+        h.auto();
+        check(h.unchanged() && h.reviewCanInsert && "语音".equals(h.voiceReview),
+              "stale read with a same-editor selection move preserves both documents and keeps review");
+
+        h = new VoiceCommitChecks();
+        final VoiceCommitChecks composing = h;
+        h.a.secondRead = () -> composing.buffer.append("ni");
+        h.auto();
+        check(h.unchanged() && h.buffer.toString().equals("ni") && h.reviewCanInsert,
+              "new pending pinyin during last read is never replaced");
+
+        h = new VoiceCommitChecks();
+        h.a.onFinish = h::switchToB;
+        h.auto();
+        check(h.unchanged() && h.a.reads == 1, "finish callback switches editor before the next read");
+
+        h = new VoiceCommitChecks();
+        h.prepare("语音");
+        final VoiceCommitChecks reentrant = h;
+        long activeGeneration = h.voiceReviewRevision;
+        h.a.onCommit = () -> {
+            if (reentrant.a.writes == 1) reentrant.press(activeGeneration);
+        };
+        h.press(activeGeneration);
+        check(h.a.writes == 1 && h.a.document.equals("A语音Z") && h.voiceUndo != null,
+              "review callback reentered during commit dispatches at most once");
+
+        h = new VoiceCommitChecks();
+        h.prepare("旧");
+        long oldButton = h.voiceReviewRevision;
+        h.prepare("新");
+        h.press(oldButton);
+        check(h.unchanged() && "新".equals(h.voiceReview), "retired review button cannot insert a newer result");
+
+        h = new VoiceCommitChecks();
+        h.prepare("语音");
+        h.a.secondRead = h::cancelReview;
+        h.press(h.voiceReviewRevision);
+        check(h.unchanged() && h.voiceReview == null, "cancel during read prevents both insertion and review resurrection");
+
+        h = new VoiceCommitChecks();
+        h.prepare("语音");
+        h.a.failAfterWrite = true;
+        h.press(h.voiceReviewRevision);
+        h.press(h.voiceReviewRevision);
+        check(h.a.writes == 1 && h.a.document.equals("A语音Z") && !h.reviewCanInsert && h.voiceUndo == null,
+              "uncertain write keeps only copy/review and is never retried");
+
+        h = new VoiceCommitChecks();
+        h.a.silentlyIgnoreWrite = true;
+        h.auto();
+        check(h.a.writes == 1 && !h.reviewCanInsert && h.voiceUndo == null,
+              "host acknowledgment without exact readback offers no insertion retry or undo");
+        h = new VoiceCommitChecks();
+        final VoiceCommitChecks otherInput = h;
+        h.a.onFinish = () -> otherInput.voiceEditEpoch++;
+        h.auto();
+        check(h.unchanged(), "other input during finish invalidates the held result");
+        System.out.printf("TOTAL %d checks; %d failures%n", tests, failures);
+        if (failures != 0) System.exit(1);
+    }
+}

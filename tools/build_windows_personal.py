@@ -39,8 +39,8 @@ def compiler(arch):
     path=Path(found).expanduser().resolve()
     if not path.is_file() or not os.access(path,os.X_OK):raise SystemExit('Compiler is not an executable file: '+str(path))
     return path
-native=[PROJECT/'windows/personal_store.cpp',PROJECT/'staging/personal-native/personal_data.cpp',PROJECT/'core/engine.cpp']
-libs=['-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lwinpthread']
+native=[PROJECT/'windows/personal_store.cpp',PROJECT/'windows/clipboard_store.cpp',PROJECT/'staging/personal-native/personal_data.cpp',PROJECT/'core/engine.cpp']
+libs=['-lole32','-loleaut32','-luuid','-lsapi','-luser32','-lgdi32','-ladvapi32','-lnormaliz','-lcrypt32','-lwinpthread']
 commands=[];names=[];toolchains={}
 def add(arch,name,flags,sources,extra):
     if arch not in toolchains:toolchains[arch]=compiler(arch)
@@ -59,7 +59,7 @@ else:
     if not options.voice_helper_only:
         for arch in dict.fromkeys(options.architectures):
             add(arch,'wangshu-ime-'+arch+'.dll',['-static-libgcc','-static-libstdc++','-shared','-Wl,--no-undefined','-Wl,--kill-at'],[PROJECT/'windows/text_service.cpp']+native,libs+['-static'])
-            add(arch,'wangshu-personal-settings-'+arch+'.exe',['-municode','-mwindows','-static'],[PROJECT/'windows/personal_settings.cpp']+native,['-luser32','-lgdi32','-lcomdlg32','-lshell32','-lole32','-lnormaliz','-lwinpthread'])
+            add(arch,'wangshu-personal-settings-'+arch+'.exe',['-municode','-mwindows','-static'],[PROJECT/'windows/personal_settings.cpp']+native,['-luser32','-lgdi32','-lcomdlg32','-lshell32','-lole32','-lnormaliz','-lcrypt32','-lwinpthread'])
     add('x64','wangshu-voice-helper.exe',['-municode','-static'],[PROJECT/'windows/voice_helper.cpp'],['-lwinmm','-lbcrypt'])
 before=inputs();compiler_before={arch:{'path':str(path),'sha256':sha(path)} for arch,path in toolchains.items()}
 if options.describe_commands:

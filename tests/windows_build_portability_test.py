@@ -6,7 +6,7 @@ base=PROJECT/'windows/build-portability-fixtures';base.mkdir(parents=True,exist_
 root=Path(tempfile.mkdtemp(prefix='retained-',dir=base));project=root/'arbitrary-project-name';project.mkdir()
 for folder in ['tools','windows','core','staging/personal-native','third_party/nlohmann','third_party/sherpa','tests','data']:(project/folder).mkdir(parents=True)
 (project/'tools/build_windows_personal.py').write_bytes((PROJECT/'tools/build_windows_personal.py').read_bytes())
-for name in ['tools/build_windows.sh','windows/dll_smoke.cpp','tests/tsf_edit_test.cpp','tests/windows_personal_store_test.cpp','tests/windows_personal_tsf_test.cpp','windows/phrase_association_tsf_test.cpp','windows/personal_store.cpp','staging/personal-native/personal_data.cpp','core/engine.cpp','windows/text_service.cpp','windows/personal_settings.cpp','windows/voice_helper.cpp','third_party/sherpa/c-api.h','third_party/nlohmann/json.hpp','data/synthetic.tsv']:(project/name).write_text('// synthetic owned fixture\n')
+for name in ['tools/build_windows.sh','windows/dll_smoke.cpp','tests/tsf_edit_test.cpp','tests/windows_personal_store_test.cpp','tests/windows_personal_tsf_test.cpp','windows/phrase_association_tsf_test.cpp','windows/personal_store.cpp','staging/personal-native/personal_data.cpp','core/engine.cpp','windows/text_service.cpp','windows/personal_settings.cpp','windows/clipboard_store.cpp','windows/voice_helper.cpp','third_party/sherpa/c-api.h','third_party/nlohmann/json.hpp','data/synthetic.tsv']:(project/name).write_text('// synthetic owned fixture\n')
 compiler=root/'fake-compiler.py';compiler.write_text('''#!/usr/bin/env python3
 import os,sys
 from pathlib import Path
@@ -50,6 +50,10 @@ r=run('--voice-helper-only','--cxx-x64',compiler,'--output',root/'helper')
 check('helper-only needs x64 only and compiles exactly once',r.returncode==0 and invocations()==count+1 and (root/'helper/voice-helper-source-attestation.json').is_file())
 r=run('--architectures','x86','--cxx-x64',compiler,'--cxx-x86',compiler,'--output',root/'x86-plan','--describe-commands');plan=json.loads(r.stdout)
 check('selected x86 production still explicitly plans x64 voice helper',r.returncode==0 and len(plan['commands'])==3 and set(plan['compilers'])=={'x64','x86'} and not (root/'x86-plan').exists())
+settings=next(c for c in plan['commands'] if 'wangshu-personal-settings-x86.exe' in c[c.index('-o')+1])
+check('personal manager links clipboard persistence and Windows user protection',str(project/'windows/clipboard_store.cpp') in settings and '-lcrypt32' in settings)
+service=next(c for c in plan['commands'] if 'wangshu-ime-x86.dll' in c[c.index('-o')+1])
+check('TSF service links clipboard persistence and Windows user protection',str(project/'windows/clipboard_store.cpp') in service and '-lcrypt32' in service)
 r=run(*opts('failed'),action='fail');receipt=json.loads((root/'failed/last-tests-build.json').read_text())
 check('compiler failure preserves receipt without success attestation',r.returncode==9 and len(receipt['commands'])==1 and not (root/'failed/tests-source-attestation.json').exists())
 r=run(*opts('missing'),action='missing');receipt=json.loads((root/'missing/last-tests-build.json').read_text())

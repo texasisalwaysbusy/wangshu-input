@@ -66,17 +66,26 @@ final class EditorActions {
         ExtractedText frozen=new ExtractedText();frozen.text=text;frozen.selectionStart=start;frozen.selectionEnd=end;
         return frozen;
     }
-    private boolean setSelection(Owner owner,int start,int end){
+    private boolean setSelection(Owner owner,ExtractedText before,int start,int end){
         if(!current(owner))return false;
         long revision=selectionRevision;
         boolean accepted=owner.connection.setSelection(start,end);
-        return accepted&&sameOwner(owner)&&(selectionRevision==revision||(notifiedStart==start&&notifiedEnd==end));
+        if(!accepted||!sameOwner(owner))return false;
+        if(selectionRevision!=revision&&(notifiedStart!=start||notifiedEnd!=end))return false;
+        return verifyAfterWrite(owner,before.text.toString(),start,end,false);
+    }
+    private boolean verifyAfterWrite(Owner owner,String expected,int start,int end,boolean rejectComposing){
+        if(!sameOwner(owner))return false;
+        Owner readbackOwner=new Owner(owner.connection,owner.session,owner.generation,selectionRevision);
+        ExtractedText observed=snapshot(readbackOwner,rejectComposing);
+        return observed!=null&&observed.selectionStart==start&&observed.selectionEnd==end
+                &&expected.contentEquals(observed.text)&&current(readbackOwner);
     }
     boolean toggle(){
         Owner owner=begin();if(owner==null)return false;
         try{
             ExtractedText value=snapshot(owner);if(value==null)return false;
-            if(selecting){int end=value.selectionEnd;if(!setSelection(owner,end,end))return false;selecting=false;anchor=end;return true;}
+            if(selecting){int end=value.selectionEnd;if(!setSelection(owner,value,end,end))return false;selecting=false;anchor=end;return true;}
             if(!current(owner))return false;anchor=value.selectionStart;selecting=true;return true;
         }catch(RuntimeException uncertain){return false;}finally{busy=false;}
     }
@@ -90,7 +99,7 @@ final class EditorActions {
             else if(!selecting&&value.selectionStart!=value.selectionEnd)next=direction<0?Math.min(value.selectionStart,value.selectionEnd):Math.max(value.selectionStart,value.selectionEnd);
             else{BreakIterator boundary=BreakIterator.getCharacterInstance(Locale.ROOT);boundary.setText(value.text.toString());next=direction<0?boundary.preceding(current):boundary.following(current);if(next==BreakIterator.DONE)next=current;}
             int from=selecting?(anchor<0?value.selectionStart:anchor):next;
-            if(from<0||from>value.text.length()||!setSelection(owner,from,next))return false;
+            if(from<0||from>value.text.length()||!setSelection(owner,value,from,next))return false;
             anchor=selecting?from:next;return true;
         }catch(RuntimeException uncertain){return false;}finally{busy=false;}
     }
@@ -108,39 +117,66 @@ final class EditorActions {
             return down&&up&&sameOwner(owner);
         }catch(RuntimeException uncertain){return false;}finally{busy=false;}
     }
-    static final class Deletion {final boolean accepted,changed,newline;Deletion(boolean a,boolean c,boolean n){accepted=a;changed=c;newline=n;}}
-    private static Deletion rejected(){return new Deletion(false,false,false);}
+    enum DeleteFailure {
+        OWNER("编辑会话或选区已变化"),
+        SNAPSHOT("编辑器未提供完整可核对的文字和选区"),
+        GRAPHEME("选区未落在完整字符边界"),
+        COMPOSING("编辑器未确认结束组合输入"),
+        CHANGED("结束组合输入后未能确认文字和选区一致"),
+        READBACK("编辑器未读回预期的删除结果"),
+        WRITE("编辑器未确认删除结果");
+
+        final String message;
+        DeleteFailure(String message){this.message=message;}
+    }
+    static final class Deletion {
+        final boolean accepted,changed,newline;
+        final DeleteFailure failure;
+        Deletion(boolean accepted,boolean changed,boolean newline){
+            this.accepted=accepted;this.changed=changed;this.newline=newline;
+            failure=accepted?null:DeleteFailure.WRITE;
+        }
+        Deletion(DeleteFailure failure){
+            accepted=changed=newline=false;
+            this.failure=failure;
+        }
+    }
     boolean delete(boolean forward){return deleteDetails(forward).accepted;}
     Deletion deleteDetails(boolean forward){
-        Owner owner=begin();if(owner==null)return rejected();
+        Owner owner=begin();if(owner==null)return new Deletion(DeleteFailure.OWNER);
         try{
             // Separate surrounding/selected-text APIs may withhold or truncate data,
             // even below their requested limits. Only a complete bounded snapshot
             // can establish both selection endpoints and Unicode grapheme context.
-            ExtractedText value=snapshot(owner);if(value==null)return rejected();
+            ExtractedText value=snapshot(owner);if(value==null)return new Deletion(DeleteFailure.SNAPSHOT);
             String text=value.text.toString();int start=Math.min(value.selectionStart,value.selectionEnd),end=Math.max(value.selectionStart,value.selectionEnd);
             BreakIterator boundary=BreakIterator.getCharacterInstance(Locale.ROOT);boundary.setText(text);
-            if(!boundary.isBoundary(start)||!boundary.isBoundary(end))return rejected();
+            if(!boundary.isBoundary(start)||!boundary.isBoundary(end))return new Deletion(DeleteFailure.GRAPHEME);
             int next=start!=end?end:forward?boundary.following(end):boundary.preceding(start);
-            if(next==BreakIterator.DONE)return current(owner)?new Deletion(true,false,false):rejected();
-            if(!current(owner))return rejected();
+            if(next==BreakIterator.DONE)return current(owner)?new Deletion(true,false,false):new Deletion(DeleteFailure.OWNER);
+            if(!current(owner))return new Deletion(DeleteFailure.OWNER);
             // Composing markers need not survive cross-process styled-text copies.
             // Acknowledge ending composition, then require unchanged text/selection;
             // a false/throwing finish is never followed by a guessed deletion.
-            if(!owner.connection.finishComposingText()||!sameOwner(owner))return rejected();
+            if(!owner.connection.finishComposingText())return new Deletion(DeleteFailure.COMPOSING);
+            if(!sameOwner(owner))return new Deletion(DeleteFailure.OWNER);
             owner=new Owner(owner.connection,owner.session,owner.generation,selectionRevision);
             ExtractedText after=snapshot(owner,true);
-            if(after==null||value.selectionStart!=after.selectionStart||value.selectionEnd!=after.selectionEnd||!text.equals(after.text.toString())||!current(owner))return rejected();
-            if(start!=end){
-                String removed=text.substring(start,end);clearSelection();
-                boolean accepted=owner.connection.commitText("",1)&&sameOwner(owner);
-                return new Deletion(accepted,accepted,removed.indexOf('\n')>=0||removed.indexOf('\r')>=0);
-            }
-            int size=Math.abs(next-start);if(size<1)return rejected();
-            String removed=text.substring(Math.min(start,next),Math.max(start,next));clearSelection();
-            boolean accepted=owner.connection.deleteSurroundingText(forward?0:size,forward?size:0)&&sameOwner(owner);
-            return new Deletion(accepted,accepted,removed.indexOf('\n')>=0||removed.indexOf('\r')>=0);
-        }catch(RuntimeException uncertain){return rejected();}finally{busy=false;}
+            if(after==null||value.selectionStart!=after.selectionStart||value.selectionEnd!=after.selectionEnd||!text.equals(after.text.toString())||!current(owner))return new Deletion(DeleteFailure.CHANGED);
+            boolean selected=start!=end;
+            int from=selected?start:Math.min(start,next);
+            int to=selected?end:Math.max(start,next);
+            int units=to-from;
+            if(units==0)return new Deletion(DeleteFailure.GRAPHEME);
+            clearSelection();
+            boolean accepted=selected?owner.connection.commitText("",1)
+                    :owner.connection.deleteSurroundingText(forward?0:units,forward?units:0);
+            if(!accepted)return new Deletion(DeleteFailure.WRITE);
+            String expected=text.substring(0,from)+text.substring(to);
+            if(!verifyAfterWrite(owner,expected,from,from,true))return new Deletion(DeleteFailure.READBACK);
+            String removed=text.substring(from,to);
+            return new Deletion(true,true,removed.indexOf('\n')>=0||removed.indexOf('\r')>=0);
+        }catch(RuntimeException uncertain){return new Deletion(DeleteFailure.WRITE);}finally{busy=false;}
     }
     boolean menu(int id){
         Owner owner=begin();if(owner==null)return false;

@@ -1,0 +1,15 @@
+id	category	keys	correct_key	expected	mask
+initial-late	holdout	wsh	wanshanghao	晚上好	0
+initial-transit	holdout	ggqc	gonggongqiche	公共汽车	0
+initial-workday	holdout	gzr	gongzuori	工作日	0
+initial-gate	holdout	ntm	nantianmen	南天门	0
+initial-folder	holdout	wjj	wenjianjia	文件夹	0
+initial-database	holdout	sjk	shujuku	数据库	0
+initial-expressway	holdout	gsgl	gaosugonglu	高速公路	0
+initial-urban	holdout	csh	chengshihua	城市化	0
+initial-garden	holdout	ymy	yuanmingyuan	圆明园	0
+initial-city	holdout	zjk	zhangjiakou	张家口	0
+initial-engineer	holdout	gcs	gongchengshi	工程师	0
+control-expressway	full-control	gaosugonglu	gaosugonglu	高速公路	0
+control-urban	full-control	chengshihua	chengshihua	城市化	0
+control-evening	full-control	wanshanghao	wanshanghao	晚上好	0
