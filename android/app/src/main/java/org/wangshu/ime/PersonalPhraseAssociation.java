@@ -4,6 +4,7 @@ import android.os.*;
 import android.view.inputmethod.InputConnection;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 
 /** Optional local continuations. Saved phrases keep priority; original finite local examples are separately enabled. */
 final class PersonalPhraseAssociation implements AutoCloseable {
@@ -11,7 +12,27 @@ final class PersonalPhraseAssociation implements AutoCloseable {
     static final class Choice {final String suffix,label;final boolean builtin;Choice(String value,String source,boolean local){suffix=value;label=source;builtin=local;}}
     static final class Display {final long generation,revision;final int session;final InputConnection owner;final SplitSelection.Snapshot snapshot;final PersonalPhraseSuggestions.Language language;final String suffix;final List<Choice> choices;final boolean numericPanel,fromMovement;
         Display(long g,long r,int s,InputConnection o,SplitSelection.Snapshot snap,PersonalPhraseSuggestions.Language l,List<Choice> values,boolean numeric,boolean movement){generation=g;revision=r;session=s;owner=o;snapshot=snap;language=l;choices=Collections.unmodifiableList(new ArrayList<>(values));suffix=choices.get(0).suffix;numericPanel=numeric;fromMovement=movement;}}
-    interface Host {boolean allowed();int session();InputConnection connection();PersonalPhraseSuggestions.Language language();SplitSelection.Snapshot read(InputConnection owner);PhraseData phrases()throws Exception;long revision();void show(Display d);boolean insert(String text);void unavailable();default boolean savedEnabled(){return true;}default boolean localEnabled(){return false;}default boolean numericPanel(){return false;}default boolean cursorEnabled(){return true;}default List<Choice> localSuggestions(String before,String after,PersonalPhraseSuggestions.Language language,boolean numericPanel){return Collections.emptyList();}default boolean retract(InputConnection owner,int session,int utf16){return false;}}
+    interface Host {
+        boolean allowed();
+        int session();
+        InputConnection connection();
+        PersonalPhraseSuggestions.Language language();
+        SplitSelection.Snapshot read(InputConnection owner);
+        PhraseData phrases()throws Exception;
+        long revision();
+        void show(Display display);
+        boolean insert(InputConnection owner,int session,SplitSelection.Snapshot expected,
+                       BooleanSupplier current,String text);
+        void unavailable();
+        default boolean savedEnabled(){return true;}
+        default boolean localEnabled(){return false;}
+        default boolean numericPanel(){return false;}
+        default boolean cursorEnabled(){return true;}
+        default List<Choice> localSuggestions(String before,String after,
+                PersonalPhraseSuggestions.Language language,boolean numericPanel){return Collections.emptyList();}
+        default boolean retract(InputConnection owner,int session,SplitSelection.Snapshot expected,
+                                BooleanSupplier current,int utf16){return false;}
+    }
     private final Host host;private final Handler handler=new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(1),r->{Thread t=new Thread(r,"personal-phrase-candidate");t.setDaemon(true);return t;},new ThreadPoolExecutor.DiscardOldestPolicy());
     private volatile long generation;private volatile boolean closed;private Runnable debounce,timeout;private Future<?> running;private Display visible;private Undo undo;private boolean editing;
@@ -20,7 +41,7 @@ final class PersonalPhraseAssociation implements AutoCloseable {
     private InputConnection observedOwner;
     private int observedSession;
     private boolean selectionPending, selectionUnsettled, acknowledgedEdit;
-    private static final class Undo {final int session;final InputConnection owner;final PersonalPhraseSuggestions.Language language;final SplitSelection.Snapshot before,after;final int units;Undo(Display display,SplitSelection.Snapshot result,int length){session=display.session;owner=display.owner;language=display.language;before=display.snapshot;after=result;units=length;}}
+    private static final class Undo {final Object ticket=new Object();final int session;final InputConnection owner;final PersonalPhraseSuggestions.Language language;final SplitSelection.Snapshot before,after;final int units;Undo(Display display,SplitSelection.Snapshot result,int length){session=display.session;owner=display.owner;language=display.language;before=display.snapshot;after=result;units=length;}}
     PersonalPhraseAssociation(Host host){this.host=host;}
     private void main(){if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Main thread required");}
     private boolean sameEditor(int session,InputConnection owner,PersonalPhraseSuggestions.Language language){
@@ -102,6 +123,11 @@ final class PersonalPhraseAssociation implements AutoCloseable {
             });};handler.postDelayed(debounce,120);
     }
     boolean hasUndo(){return undo!=null&&!closed;}
+    Runnable undoAction(){
+        if(!hasUndo())return null;
+        Object ticket=undo.ticket;
+        return ()->undo(ticket);
+    }
     private boolean revision(Display selected,Choice choice){return choice.builtin?host.localEnabled():host.savedEnabled()&&host.revision()==selected.revision;}
     private boolean selectionCurrent(Display selected,Choice choice,long id){
         return current(id,selected.session,selected.owner,selected.language)&&revision(selected,choice)&&
@@ -119,7 +145,10 @@ final class PersonalPhraseAssociation implements AutoCloseable {
             if(!selectionCurrent(selected,choice,next)){host.unavailable();return;}
             try{now=host.read(selected.owner);}catch(RuntimeException refused){now=null;}
             if(!selectionCurrent(selected,choice,next)||!WangshuIme.sameVoiceSnapshot(selected.snapshot,now)){host.unavailable();return;}
-            boolean accepted;try{accepted=host.insert(choice.suffix);}catch(RuntimeException uncertain){accepted=false;}
+            boolean accepted;
+            try{accepted=host.insert(selected.owner,selected.session,selected.snapshot,
+                    ()->selectionCurrent(selected,choice,next),choice.suffix);}
+            catch(RuntimeException uncertain){accepted=false;}
             if(!accepted){host.unavailable();return;}
             // An acknowledged insert is not enough for Undo. Retain a token only
             // after exact text/caret readback in the same editor and input session.
@@ -133,8 +162,12 @@ final class PersonalPhraseAssociation implements AutoCloseable {
         if(before==null||after==null||before.start!=before.end||after.start!=before.start+suffix.length()||after.end!=after.start)return false;
         return after.text.equals(before.text.substring(0,before.start)+suffix+before.text.substring(before.end));
     }
-    void undo(){
-        main();if(editing)return;Undo saved=undo;undo=null;if(saved==null){host.unavailable();return;}
+    private void undo(Object ticket){
+        main();
+        if(editing)return;
+        Undo saved=undo;
+        if(saved==null||saved.ticket!=ticket){host.unavailable();return;}
+        undo=null;
         editing=true;try{
             long id=generation;
             if(!current(id,saved.session,saved.owner,saved.language)){host.unavailable();host.show(null);return;}
@@ -142,7 +175,10 @@ final class PersonalPhraseAssociation implements AutoCloseable {
             if(!current(id,saved.session,saved.owner,saved.language)||!WangshuIme.sameVoiceSnapshot(saved.after,now)){host.unavailable();host.show(null);return;}
             // Single targeted delete, never replace all matching text, poll, retry,
             // or roll back after an uncertain editor response.
-            boolean accepted;try{accepted=host.retract(saved.owner,saved.session,saved.units);}catch(RuntimeException uncertain){accepted=false;}
+            boolean accepted;
+            try{accepted=host.retract(saved.owner,saved.session,saved.after,
+                    ()->current(id,saved.session,saved.owner,saved.language),saved.units);}
+            catch(RuntimeException uncertain){accepted=false;}
             if(!sameEditor(saved.session,saved.owner,saved.language)){host.unavailable();host.show(null);return;}
             try{now=host.read(saved.owner);}catch(RuntimeException refused){now=null;}
             if(!accepted||!sameEditor(saved.session,saved.owner,saved.language)||!WangshuIme.sameVoiceSnapshot(saved.before,now))host.unavailable();

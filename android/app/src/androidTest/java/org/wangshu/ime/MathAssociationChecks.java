@@ -55,8 +55,10 @@ public final class MathAssociationChecks {
             Scope owner=scopes.get(captured);return owner==null?null:owner.snapshot;
         }
         public void show(MathAssociation.Display value){ui();visible=value;if(value==null){hides.incrementAndGet();Runnable action=onNextHide;onNextHide=null;if(action!=null)action.run();}else{positiveShows.incrementAndGet();displayedValues.add(value.candidate.text);shown.countDown();}}
-        public boolean insert(String value){
-            ui();inserts.incrementAndGet();inserted=value;if(insertThrows)throw new IllegalStateException("synthetic insert outcome unavailable");if(!insertAccepted)return false;
+        public boolean insert(InputConnection owner,int expectedSession,SplitSelection.Snapshot expected,
+                              java.util.function.BooleanSupplier current,String value){
+            ui();if(!current.getAsBoolean()||scope.identity!=owner||session!=expectedSession)return false;
+            inserts.incrementAndGet();inserted=value;if(insertThrows)throw new IllegalStateException("synthetic insert outcome unavailable");if(!insertAccepted)return false;
             SplitSelection.Snapshot old=scope.snapshot;int caret=old.start;
             scope.snapshot=new SplitSelection.Snapshot(old.text.substring(0,caret)+value+old.text.substring(old.end),caret+value.length(),caret+value.length());return true;
         }

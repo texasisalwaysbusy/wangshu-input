@@ -10,12 +10,21 @@ s=s.replace('if(swapOnInsert){','if(privatizeOnInsert){allowed=false;}if(swapOnI
 s=s.replace('deletes++;if(refuse)','deletes++;if(privatizeOnRetract)allowed=false;if(refuse)')
 start=s.index(' public static void main(String[]args)')
 s=s[:start]+''' public static void main(String[]args)throws Exception{
- try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.allowed=false;f.controller.undo();check(f.readCalls==before,"undo does not read a now-private editor (reads delta="+(f.readCalls-before)+")");check(f.deletes==0,"private undo does not delete");}
- try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.owner=new InputConnection(){};f.session++;f.controller.undo();check(f.readCalls==before,"undo does not read old editor after session/owner replacement (reads delta="+(f.readCalls-before)+")");}
+ try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.allowed=false;f.undo();check(f.readCalls==before,"undo does not read a now-private editor (reads delta="+(f.readCalls-before)+")");check(f.deletes==0,"private undo does not delete");}
+ try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.owner=new InputConnection(){};f.session++;f.undo();check(f.readCalls==before,"undo does not read old editor after session/owner replacement (reads delta="+(f.readCalls-before)+")");}
  try(F f=new F()){f.request();int before=f.readCalls;f.privatizeOnInsert=true;f.controller.accept(f.visible);check(f.readCalls-before==2,"post-insert privacy transition stops readback (reads delta="+(f.readCalls-before)+")");check(!f.controller.hasUndo(),"private insert readback has no undo token");}
- try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.privatizeOnRetract=true;f.controller.undo();check(f.readCalls-before==1,"post-delete privacy transition stops readback (reads delta="+(f.readCalls-before)+")");}
+ try(F f=new F()){f.request();f.controller.accept(f.visible);int before=f.readCalls;f.privatizeOnRetract=true;f.undo();check(f.readCalls-before==1,"post-delete privacy transition stops readback (reads delta="+(f.readCalls-before)+")");}
  try(F f=new F()){f.request();int before=f.readCalls;f.privatizeOnHide=true;f.controller.accept(f.visible);check(f.readCalls-before==1&&f.inserts==0,"hide callback privacy/session transition stops second snapshot read (reads delta="+(f.readCalls-before)+")");}
  try(F f=new F()){f.request();f.connectionCalls=0;f.clearOnThirdConnection=true;f.controller.accept(f.visible);check(f.inserts==0,"final owner lookup reentry cannot insert into invalidated private scope (inserts="+f.inserts+")");}
+ try(F f=new F()){
+  f.request();f.controller.accept(f.visible);Runnable old=f.controller.undoAction();
+  f.controller.clear();f.owner=new InputConnection(){};f.session++;
+  f.text="Thank you ";f.caret=f.text.length();f.request();f.controller.accept(f.visible);
+  Runnable current=f.controller.undoAction();String second=f.text;int reads=f.readCalls;
+  old.run();check(f.deletes==0&&f.readCalls==reads&&f.text.equals(second)&&f.controller.hasUndo(),"old rendered undo cannot inspect or delete a newer continuation");
+  current.run();current.run();
+  check(f.deletes==1&&f.text.equals("Thank you ")&&!f.controller.hasUndo(),"new rendered undo works exactly once");
+ }
  System.out.println("TOTAL "+checks+" checks; failures="+failures+"; actual production controller, synthetic host only");if(failures>0)System.exit(1);}
 }
 '''

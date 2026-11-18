@@ -1,0 +1,117 @@
+package org.wangshu.ime;
+
+import java.util.function.BooleanSupplier;
+
+final class DisplayedEditorActions {
+    static final class InputConnection {
+        String text;
+        int caret,writes;
+        InputConnection(String value){text=value;caret=value.length();}
+        boolean commitText(String value,int cursor){
+            text=text.substring(0,caret)+value+text.substring(caret);
+            caret+=value.length();
+            writes++;
+            return true;
+        }
+        boolean deleteSurroundingText(int before,int after){
+            if(before>caret||after!=0)return false;
+            text=text.substring(0,caret-before)+text.substring(caret);
+            caret-=before;
+            writes++;
+            return true;
+        }
+    }
+    static final class Undo {void invalidate(){}}
+    static final class Association {void textEdited(){}}
+    final InputConnection first=new InputConnection("ORIGINAL");
+    final InputConnection second=new InputConnection("SECOND");
+    InputConnection editor=first;
+    int inputSession=5;
+    long emojiViewGeneration=4,emojiSelectionRevision;
+    boolean math=true,editing,phrasesOpen,pendingCommitInFlight,candidateChoiceInFlight,inputEntryInFlight;
+    Undo beforeCaret=new Undo();
+    Association phraseAssociation;
+    Runnable onCancel,onRead,onConnection;
+    InputConnection getCurrentInputConnection(){
+        InputConnection result=editor;
+        if(onConnection!=null){Runnable action=onConnection;onConnection=null;action.run();}
+        return result;
+    }
+    boolean isInputViewShown(){return true;}
+    void cancelBackspace(){}
+    void cancelHoldForOtherInput(){if(onCancel!=null){Runnable action=onCancel;onCancel=null;action.run();}}
+    boolean commit(String value){return editor.commitText(value,1);}
+    void toast(String value){}
+    static final class TextWrite {
+        final String raw="";
+        final int session;
+        final InputConnection owner;
+        TextWrite(DisplayedEditorActions host){session=host.inputSession;owner=host.getCurrentInputConnection();}
+    }
+    boolean textWriteCurrent(TextWrite action,String pending){
+        return action.session==inputSession&&action.owner==getCurrentInputConnection()&&action.session==inputSession;
+    }
+    boolean prepareTextWrite(TextWrite action,boolean invalidateUndo){return textWriteCurrent(action,action.raw);}
+    boolean insertEditorText(InputConnection owner,String value){return owner.commitText(value,1);}
+    SplitSelection.Snapshot connectionSnapshot(InputConnection owner,boolean privateGuard){
+        if(onRead!=null){Runnable action=onRead;onRead=null;action.run();}
+        return new SplitSelection.Snapshot(owner.text,owner.caret,owner.caret);
+    }
+    static boolean sameVoiceSnapshot(SplitSelection.Snapshot a,SplitSelection.Snapshot b){
+        return a!=null&&b!=null&&a.start==b.start&&a.end==b.end&&a.text.equals(b.text);
+    }
+    void switchField(){editor=second;inputSession++;emojiViewGeneration++;}
+    /* PRODUCTION */
+    boolean displayed(SplitSelection.Snapshot expected,String text,int delete,BooleanSupplier allowed)throws Exception {
+        java.lang.reflect.Method method=getClass().getDeclaredMethod("writeDisplayedAction",InputConnection.class,
+                int.class,SplitSelection.Snapshot.class,BooleanSupplier.class,String.class,int.class);
+        return (boolean)method.invoke(this,first,inputSession,expected,allowed,text,delete);
+    }
+    static int passed,failed;
+    static void check(boolean ok,String name){
+        if(ok)passed++;else failed++;
+        System.out.println((ok?"PASS ":"FAIL ")+name);
+    }
+    public static void main(String[] args)throws Exception {
+        DisplayedEditorActions f=new DisplayedEditorActions();
+        f.chooseSymbol("√",5,4,f.first);
+        check(f.first.text.equals("ORIGINAL√")&&f.first.writes==1&&f.second.writes==0,"current symbol writes to the original editor once");
+        DisplayedEditorActions cleanup=new DisplayedEditorActions();
+        cleanup.onCancel=cleanup::switchField;
+        cleanup.chooseSymbol("√",5,4,cleanup.first);
+        check(cleanup.first.writes==0&&cleanup.second.writes==0,"field switch inside symbol cleanup prevents any write");
+        DisplayedEditorActions move=new DisplayedEditorActions();
+        move.onCancel=()->{move.first.caret=2;move.emojiSelectionRevision++;};
+        move.chooseSymbol("√",5,4,move.first);
+        check(move.first.writes==0&&move.first.caret==2,"caret change inside symbol cleanup protects the new position");
+        DisplayedEditorActions acquire=new DisplayedEditorActions();
+        acquire.onConnection=acquire::switchField;
+        acquire.chooseSymbol("√",5,4,acquire.first);
+        check(acquire.first.writes==0&&acquire.second.writes==0,"old connection returned by reentrant getter cannot redirect a symbol");
+        if(PRODUCTION_HAS_BOUND_WRITER){
+            DisplayedEditorActions association=new DisplayedEditorActions();
+            SplitSelection.Snapshot initial=association.connectionSnapshot(association.first,true);
+            check(association.displayed(initial," suffix",0,()->true)&&association.first.text.equals("ORIGINAL suffix")&&
+                    association.first.writes==1,"displayed continuation writes once against verified editor state");
+            SplitSelection.Snapshot after=association.connectionSnapshot(association.first,true);
+            check(association.displayed(after,"",7,()->true)&&association.first.text.equals("ORIGINAL")&&
+                    association.first.writes==2,"displayed undo deletes exactly the verified suffix");
+            DisplayedEditorActions changed=new DisplayedEditorActions();
+            SplitSelection.Snapshot before=changed.connectionSnapshot(changed.first,true);
+            changed.onRead=changed::switchField;
+            check(!changed.displayed(before," suffix",0,()->true)&&changed.first.writes==0&&changed.second.writes==0,
+                    "late field change during snapshot cannot redirect a continuation");
+            DisplayedEditorActions moved=new DisplayedEditorActions();
+            SplitSelection.Snapshot expected=moved.connectionSnapshot(moved.first,true);
+            moved.onCancel=()->moved.first.caret=2;
+            check(!moved.displayed(expected,"",4,()->true)&&moved.first.writes==0,
+                    "snapshot rescanned after cleanup protects an unreported caret move before undo");
+            DisplayedEditorActions invalidated=new DisplayedEditorActions();
+            SplitSelection.Snapshot origin=invalidated.connectionSnapshot(invalidated.first,true);
+            check(!invalidated.displayed(origin," suffix",0,()->false)&&invalidated.first.writes==0,
+                    "invalidated candidate gate refuses a write to an unchanged field");
+        }
+        System.out.println("TOTAL "+passed+" PASS, "+failed+" FAIL; production Android methods with synthetic boundaries");
+        if(failed>0)System.exit(1);
+    }
+}

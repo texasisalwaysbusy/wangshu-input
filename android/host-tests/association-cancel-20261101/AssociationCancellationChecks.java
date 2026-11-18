@@ -73,7 +73,11 @@ public final class AssociationCancellationChecks {
                 public PersonalPhraseAssociation.PhraseData phrases() { compute(); return new PersonalPhraseAssociation.PhraseData(1, List.of("thank you")); }
                 public long revision() { mainOnly(); return 1; }
                 public void show(PersonalPhraseAssociation.Display value) { showFixture(value); }
-                public boolean insert(String value) { mainOnly(); inserted++; return true; }
+                public boolean insert(InputConnection owner,int expectedSession,SplitSelection.Snapshot expected,
+                                      BooleanSupplier current,String value) {
+                    mainOnly();if(owner!=connection||expectedSession!=session||!current.getAsBoolean())return false;
+                    inserted++;return true;
+                }
                 public void unavailable() { mainOnly(); unavailable++; }
             });
             else controller = new MathAssociation(new MathAssociation.Host() {
@@ -82,7 +86,11 @@ public final class AssociationCancellationChecks {
                 public InputConnection connection() { mainOnly(); return connection; }
                 public SplitSelection.Snapshot read(InputConnection owner) { return readFixture(owner); }
                 public void show(MathAssociation.Display value) { showFixture(value); }
-                public boolean insert(String value) { mainOnly(); inserted++; return true; }
+                public boolean insert(InputConnection owner,int expectedSession,SplitSelection.Snapshot expected,
+                                      BooleanSupplier current,String value) {
+                    mainOnly();if(owner!=connection||expectedSession!=session||!current.getAsBoolean())return false;
+                    inserted++;return true;
+                }
                 public void unavailable() { mainOnly(); unavailable++; }
             }, (context, expression) -> { compute(); return ContextMathCandidates.suggest(context, expression); });
             Field field = controller.getClass().getDeclaredField("worker"); field.setAccessible(true);

@@ -11,7 +11,10 @@ public final class PhrasePrivacyRaceTest {
   public boolean allowed(){return allowed;}public int session(){return session;}public InputConnection connection(){return reused;}public PersonalPhraseSuggestions.Language language(){return PersonalPhraseSuggestions.Language.ENGLISH;}
   public SplitSelection.Snapshot read(InputConnection owner){int count=reads.incrementAndGet();if(count==1){session++;allowed=false;}return new SplitSelection.Snapshot("thank ",6,6);}
   public PersonalPhraseAssociation.PhraseData phrases(){if(!allowed)privatePhraseReads.incrementAndGet();return new PersonalPhraseAssociation.PhraseData(1,List.of("thank you"));}
-  public long revision(){return 1;}public void show(PersonalPhraseAssociation.Display d){shown=d;}public boolean insert(String value){throw new AssertionError("unexpected insertion");}public void unavailable(){}
+  public long revision(){return 1;}public void show(PersonalPhraseAssociation.Display d){shown=d;}
+  public boolean insert(InputConnection owner,int session,SplitSelection.Snapshot expected,
+                        java.util.function.BooleanSupplier current,String value){throw new AssertionError("unexpected insertion");}
+  public void unavailable(){}
  }
  public static void main(String[] args)throws Exception{
   Host host=new Host();PersonalPhraseAssociation provider=new PersonalPhraseAssociation(host);provider.request();long deadline=System.currentTimeMillis()+2000;

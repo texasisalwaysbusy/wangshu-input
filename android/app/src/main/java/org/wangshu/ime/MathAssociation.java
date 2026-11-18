@@ -3,6 +3,7 @@ package org.wangshu.ime;
 import android.os.*;
 import android.view.inputmethod.InputConnection;
 import java.util.concurrent.*;
+import java.util.function.BooleanSupplier;
 
 /** Local bounded provider controller. Reading/evaluation runs away from the keyboard UI thread. */
 final class MathAssociation implements AutoCloseable {
@@ -13,7 +14,8 @@ final class MathAssociation implements AutoCloseable {
         /** Read only this captured connection; do not access mutable views from the worker. */
         SplitSelection.Snapshot read(InputConnection connection);
         void show(Display display);
-        boolean insert(String value);
+        boolean insert(InputConnection owner,int session,SplitSelection.Snapshot expected,
+                       BooleanSupplier current,String value);
         void unavailable();
     }
     interface Provider {ContextMathCandidates.Result suggest(String context,String expression);}
@@ -29,7 +31,10 @@ final class MathAssociation implements AutoCloseable {
     MathAssociation(Host host){this(host,ContextMathCandidates::suggest);}
     MathAssociation(Host host,Provider provider){this.host=host;this.provider=provider;}
     private void main(){if(Looper.myLooper()!=Looper.getMainLooper())throw new IllegalStateException("Main thread required");}
-    private boolean current(long id,int session,InputConnection connection){return !closed&&id==generation&&host.allowed()&&host.session()==session&&host.connection()==connection;}
+    private boolean current(long id,int session,InputConnection connection){
+        return !closed&&id==generation&&host.allowed()&&host.session()==session&&host.connection()==connection&&
+                host.allowed()&&host.session()==session&&!closed&&id==generation;
+    }
     // Worker-only cancellation fence. Host eligibility belongs to the main thread;
     // cancellation stops later stages, but cannot interrupt an already-started IPC.
     private boolean workerCancelled(long id){return closed||id!=generation||Thread.currentThread().isInterrupted();}
@@ -89,7 +94,19 @@ final class MathAssociation implements AutoCloseable {
         main();if(selected==null||selected!=visible||!current(selected.generation,selected.session,selected.connection)){host.unavailable();request();return;}
         SplitSelection.Snapshot now;try{now=host.read(selected.connection);}catch(RuntimeException unreadable){now=null;}
         if(!current(selected.generation,selected.session,selected.connection)||!WangshuIme.sameVoiceSnapshot(selected.before,now)){host.unavailable();request();return;}
-        String value=selected.candidate.text;long acceptedEpoch=generation+1;clear();SplitSelection.Snapshot afterHide;try{afterHide=host.read(selected.connection);}catch(RuntimeException unreadable){afterHide=null;}if(!current(acceptedEpoch,selected.session,selected.connection)||!WangshuIme.sameVoiceSnapshot(selected.before,afterHide)){host.unavailable();request();return;}boolean accepted;try{accepted=host.insert(value);}catch(RuntimeException uncertain){accepted=false;}if(!accepted)host.unavailable();
+        long acceptedEpoch=generation+1;
+        clear();
+        BooleanSupplier owned=()->current(acceptedEpoch,selected.session,selected.connection);
+        if(!owned.getAsBoolean()){host.unavailable();request();return;}
+        SplitSelection.Snapshot afterHide;
+        try{afterHide=host.read(selected.connection);}catch(RuntimeException unreadable){afterHide=null;}
+        if(!owned.getAsBoolean()||!WangshuIme.sameVoiceSnapshot(selected.before,afterHide)){
+            host.unavailable();request();return;
+        }
+        boolean accepted;
+        try{accepted=host.insert(selected.connection,selected.session,selected.before,owned,selected.candidate.text);}
+        catch(RuntimeException uncertain){accepted=false;}
+        if(!accepted)host.unavailable();
     }
     @Override public void close(){main();clear();closed=true;worker.shutdownNow();}
 }
