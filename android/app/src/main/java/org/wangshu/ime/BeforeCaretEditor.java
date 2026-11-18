@@ -44,9 +44,12 @@ public final class BeforeCaretEditor {
         boolean same(Snapshot other){return other!=null&&start==other.start&&end==other.end&&text.equals(other.text);}
     }
     private static final class Undo {
+        final UndoTicket ticket=new UndoTicket();
         final InputSession owner;final String prefix,suffix;final long generation;
         Undo(InputSession owner,String prefix,String suffix,long generation){this.owner=owner;this.prefix=prefix;this.suffix=suffix;this.generation=generation;}
     }
+    /** Identifies a displayed undo action without retaining the deleted text. */
+    public static final class UndoTicket {private UndoTicket(){}}
     /** Ephemeral preview identity; release must still match its exact editor/text/caret. */
     public static final class Preview {
         private final InputSession owner;private final Snapshot before;private final long generation;
@@ -62,8 +65,8 @@ public final class BeforeCaretEditor {
     }
     /** Drops references only: Java immutable String storage cannot promise a zeroized heap. */
     public synchronized void invalidate(){generation++;undo=null;}
-    /** UI hint only; undo() rechecks exact host state before sending any edit. */
-    public synchronized boolean hasUndo(){return undo!=null&&undo.generation==generation;}
+    public synchronized UndoTicket undoTicket(){return undo!=null&&undo.generation==generation?undo.ticket:null;}
+    public synchronized boolean hasUndo(){return undoTicket()!=null;}
     private Result result(State state,Reason reason){return new Result(state,reason,hasUndo());}
     private InputSession current(){try{return provider.current();}catch(RuntimeException unavailable){return null;}}
     private boolean active(InputSession owner,long epoch){
@@ -107,19 +110,24 @@ public final class BeforeCaretEditor {
     /** Side-effect-free guard when moving back from a bulk preview to ordinary repeat. */
     public synchronized boolean matchesPreview(Preview expected){
         if(expected==null||Looper.myLooper()!=Looper.getMainLooper()||expected.generation!=generation)return false;
-        InputSession owner=current();Snapshot now=read(owner,generation);
+        InputSession owner=current();Snapshot now=read(owner,expected.generation);
         return now!=null&&expected.owner.connection==owner.connection&&expected.owner.id==owner.id&&expected.before.same(now);
     }
     public synchronized Result deleteBeforeCaret(){return deleteBeforeCaret(null);}
     public synchronized Result deleteBeforeCaret(Preview expected){
-        long priorGeneration=generation;undo=null;long epoch=++generation;
         if(Looper.myLooper()!=Looper.getMainLooper())return result(State.REJECTED,Reason.WRONG_THREAD);
-        InputSession owner=current();if(!active(owner,epoch))return result(State.REJECTED,Reason.UNAVAILABLE_OR_PRIVATE);
-        Snapshot before=read(owner,epoch);if(before==null)return result(State.REJECTED,Reason.UNSAFE_SNAPSHOT);
-        if(expected!=null&&(expected.generation!=priorGeneration||expected.owner.connection!=owner.connection||expected.owner.id!=owner.id||!expected.before.same(before)))return result(State.REJECTED,Reason.STALE_HOST);
+        long priorGeneration=generation;
+        if(expected!=null&&expected.generation!=priorGeneration)return result(State.REJECTED,Reason.STALE_HOST);
+        InputSession owner=current();if(!active(owner,priorGeneration))return result(State.REJECTED,Reason.UNAVAILABLE_OR_PRIVATE);
+        if(expected!=null&&(expected.owner.connection!=owner.connection||expected.owner.id!=owner.id))
+            return result(State.REJECTED,Reason.STALE_HOST);
+        Snapshot before=read(owner,priorGeneration);if(before==null)return result(State.REJECTED,Reason.UNSAFE_SNAPSHOT);
+        if(expected!=null&&!expected.before.same(before))return result(State.REJECTED,Reason.STALE_HOST);
         if(before.start!=before.end)return result(State.REJECTED,Reason.NON_COLLAPSED_SELECTION);
         if(before.start==0)return result(State.NO_OP,Reason.AT_START);
         String prefix=before.text.substring(0,before.start),suffix=before.text.substring(before.start);
+        undo=null;
+        long epoch=++generation;
         Result applied=replace(owner,epoch,before,0,before.start,"",new Snapshot(suffix,0,0));
         if(applied.state==State.APPLIED){
             if(!active(owner,epoch))return result(State.UNCERTAIN,Reason.WRITE_NOT_VERIFIED);
@@ -128,10 +136,14 @@ public final class BeforeCaretEditor {
         }
         return applied;
     }
-    public synchronized Result undo(){
-        Undo saved=undo;undo=null;long epoch=++generation;
+    public synchronized Result undo(){return undo(undoTicket());}
+    public synchronized Result undo(UndoTicket ticket){
         if(Looper.myLooper()!=Looper.getMainLooper())return result(State.REJECTED,Reason.WRONG_THREAD);
-        if(saved==null)return result(State.REJECTED,Reason.NO_UNDO);
+        Undo saved=undo;
+        if(saved==null||ticket==null)return result(State.REJECTED,Reason.NO_UNDO);
+        if(saved.ticket!=ticket||saved.generation!=generation)return result(State.REJECTED,Reason.STALE_HOST);
+        undo=null;
+        long epoch=++generation;
         if(!active(saved.owner,epoch))return result(State.REJECTED,Reason.UNAVAILABLE_OR_PRIVATE);
         Snapshot expected=new Snapshot(saved.suffix,0,0),actual=read(saved.owner,epoch);
         if(!expected.same(actual))return result(State.REJECTED,Reason.STALE_HOST);

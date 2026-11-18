@@ -225,8 +225,10 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         int top=dp(4);if(deleteKey!=null&&deleteKey.isShown()){android.graphics.Rect bounds=new android.graphics.Rect();deleteKey.getDrawingRect(bounds);try{inputSurface.offsetDescendantRectToMyCoords(deleteKey,bounds);top=Math.max(dp(4),bounds.top-dp(54));}catch(IllegalArgumentException detached){/* pending rebuild: keep hint within the attached surface */}}
         android.widget.FrameLayout.LayoutParams params=new android.widget.FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);params.topMargin=top;params.rightMargin=dp(8);deleteHint.setLayoutParams(params);deleteHint.bringToFront();
     }
-    private void undoBeforeCaret(){
-        cancelBackspace();BeforeCaretEditor.Result result=beforeCaret.undo();
+    private void undoBeforeCaret(BeforeCaretEditor.UndoTicket ticket){
+        if(beforeCaret==null||beforeCaret.undoTicket()!=ticket)return;
+        cancelBackspace();
+        BeforeCaretEditor.Result result=beforeCaret.undo(ticket);
         if(result.state!=BeforeCaretEditor.State.APPLIED)toast(result.state==BeforeCaretEditor.State.UNCERTAIN?"撤销结果不明，请核对原文；未自动重试":"文字、光标或输入会话已变化，未覆盖当前内容");rebuild();
     }
     private boolean functionLabel(String label){return java.util.Arrays.asList("↵","⌫","⌄","⌃","123","符号","ABC","中","英","密码·英","字母","数学","剪贴板","语音","数学语音","设置","完成","停止","返回").contains(label);}
@@ -501,7 +503,21 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private void refreshCompositionStatus(){
         if(composition==null)return;
         if(showVoiceUndo())return;
-        composition.setText(offlineTask!=null?voiceState:buffer.length()>0?MixedComposition.display(buffer.toString()):editing?"光标与文本编辑 · 按住中央按钮左右移动":numbers?"数字与常用符号 · 左侧可滚动":DataFiles.ready?"本地中文 · "+(math?"数学符号":english||password?"英文直输":"拼音 / \\数学命令"):DataFiles.failure.isEmpty()?"本地词典正在加载…":"词典初始化失败 · 可切英文，请打开设置");if(beforeCaret!=null&&beforeCaret.hasUndo()&&buffer.length()==0){composition.setText("已删除光标前内容 · 点此撤销");composition.setContentDescription("撤销本次删除光标前内容");composition.setTextColor(getColor(R.color.accent));composition.setMinHeight(dp(36));composition.setOnClickListener(v->undoBeforeCaret());}else{composition.setContentDescription(null);composition.setTextColor(getColor(buffer.length()>0||offlineTask!=null?R.color.ink:R.color.muted));composition.setTextSize(compact()?12:buffer.length()>0?14:12);composition.setMinHeight(0);composition.setOnClickListener(null);}
+        BeforeCaretEditor.UndoTicket bulkUndo=beforeCaret!=null&&buffer.length()==0?beforeCaret.undoTicket():null;
+        if(bulkUndo!=null){
+            composition.setText("已删除光标前内容 · 点此撤销");
+            composition.setContentDescription("撤销本次删除光标前内容");
+            composition.setTextColor(getColor(R.color.accent));
+            composition.setMinHeight(dp(36));
+            composition.setOnClickListener(v->undoBeforeCaret(bulkUndo));
+            return;
+        }
+        composition.setText(offlineTask!=null?voiceState:buffer.length()>0?MixedComposition.display(buffer.toString()):editing?"光标与文本编辑 · 按住中央按钮左右移动":numbers?"数字与常用符号 · 左侧可滚动":DataFiles.ready?"本地中文 · "+(math?"数学符号":english||password?"英文直输":"拼音 / \\数学命令"):DataFiles.failure.isEmpty()?"本地词典正在加载…":"词典初始化失败 · 可切英文，请打开设置");
+        composition.setContentDescription(null);
+        composition.setTextColor(getColor(buffer.length()>0||offlineTask!=null?R.color.ink:R.color.muted));
+        composition.setTextSize(compact()?12:buffer.length()>0?14:12);
+        composition.setMinHeight(0);
+        composition.setOnClickListener(null);
     }
     private void refresh(){if(root==null||composition==null||candidates==null)return;if(expandedCandidates&&buffer.length()==0){expandedCandidates=false;rebuild();return;}if(toolbar!=null)toolbar.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);if(candidateLine!=null)candidateLine.setVisibility(buffer.length()>0?View.VISIBLE:View.GONE);if(candidateScroll!=null)candidateScroll.setVisibility(expandedCandidates?View.GONE:View.VISIBLE);if(expandedSummary!=null)expandedSummary.setVisibility(expandedCandidates?View.VISIBLE:View.GONE);if(candidateToggle!=null){candidateToggle.setText(expandedCandidates?"⌃":"⌄");candidateToggle.setContentDescription(expandedCandidates?"收回候选框":"展开候选框");}if(hideButton!=null)hideButton.setVisibility(buffer.length()==0?View.VISIBLE:View.GONE);refreshCompositionStatus();candidates.removeAllViews();shownDictionaryReady=DataFiles.ready;current=!password&&shownDictionaryReady&&buffer.length()>0?lookup(buffer.toString(),page):new String[0];if(page==CandidatePages.ALTERNATIVES&&current.length==0){
             page=0;

@@ -15,6 +15,17 @@ public final class BeforeCaretBoundaryChecks {
   f=new F();f.chromeSnapshot=true;BeforeCaretEditor.Preview chromium=f.e.prepareDelete();check(chromium!=null&&f.e.deleteBeforeCaret(chromium).state==BeforeCaretEditor.State.APPLIED&&f.text.equals("XYZ"),"Chromium full snapshot prefix deletion");check(f.e.undo().state==BeforeCaretEditor.State.APPLIED&&f.text.equals("abcXYZ"),"Chromium full snapshot exact undo");
   f=new F();f.chromeSnapshot=true;f.partialStart=0;check(f.e.prepareDelete()==null&&f.e.deleteBeforeCaret().state==BeforeCaretEditor.State.REJECTED&&f.commits==0,"partial positive end still rejected");
   f=new F();f.partialStart=-2;check(f.e.prepareDelete()==null&&f.e.deleteBeforeCaret().state==BeforeCaretEditor.State.REJECTED&&f.commits==0,"unknown partial sentinel rejected");
+  f=new F();BeforeCaretEditor.Preview obsolete=f.e.prepareDelete();
+  check(obsolete!=null&&f.e.deleteBeforeCaret(obsolete).state==BeforeCaretEditor.State.APPLIED,"first deletion applies");
+  BeforeCaretEditor.UndoTicket oldUndo=f.e.undoTicket();
+  f.session++;f.e.invalidate();f.text="defUVW";f.start=f.end=3;
+  check(f.e.deleteBeforeCaret().state==BeforeCaretEditor.State.APPLIED&&f.text.equals("UVW"),"second deletion applies in new session");
+  int writes=f.commits;
+  BeforeCaretEditor.UndoTicket currentUndo=f.e.undoTicket();
+  check(f.e.deleteBeforeCaret(obsolete).state==BeforeCaretEditor.State.REJECTED&&f.commits==writes&&f.e.hasUndo(),"obsolete release cannot consume the newer deletion undo");
+  check(f.e.undo(oldUndo).state==BeforeCaretEditor.State.REJECTED&&f.commits==writes&&f.e.undoTicket()==currentUndo,"obsolete hint cannot apply or consume a new undo");
+  check(f.e.undo(currentUndo).state==BeforeCaretEditor.State.APPLIED&&f.text.equals("defUVW"),"newer hint restores exactly its own prefix");
+  check(f.e.undo(currentUndo).state==BeforeCaretEditor.State.REJECTED&&f.commits==writes+1,"replayed hint does not apply twice");
   System.out.println("PASS before-caret "+checks+" synthetic checks; native acceptance NOT_RUN");
  }
 }
