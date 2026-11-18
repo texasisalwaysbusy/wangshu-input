@@ -76,6 +76,11 @@ class DocumentManager final:public ITfDocumentMgr {
 public:
     explicit DocumentManager(ITfContext* c):context(c){c->AddRef();}
     ~DocumentManager(){context->Release();}
+    void setTop(ITfContext* next){
+        next->AddRef();
+        context->Release();
+        context=next;
+    }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id,void** out)override{if(!out)return E_POINTER;*out=nullptr;if(id!=IID_IUnknown&&id!=IID_ITfDocumentMgr)return E_NOINTERFACE;*out=this;AddRef();return S_OK;}
     ULONG STDMETHODCALLTYPE AddRef()override{return ++refs;}ULONG STDMETHODCALLTYPE Release()override{ULONG n=--refs;if(!n)delete this;return n;}
     HRESULT STDMETHODCALLTYPE CreateContext(TfClientId,DWORD,IUnknown*,ITfContext**,TfEditCookie*)override{return E_NOTIMPL;}

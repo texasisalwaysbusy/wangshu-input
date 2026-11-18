@@ -764,6 +764,26 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(FAILED(ended))try{status=L"旧输入文字已保留；编辑器尚未确认结束组合，请检查原输入框";}catch(...){}
         if(popup)ShowWindow(popup,SW_HIDE);
     }
+    bool backgroundContext(ITfContext* context){
+        if(!manager||!context)return false;
+        ITfDocumentMgr* owner=nullptr;
+        ITfDocumentMgr* foreground=nullptr;
+        const bool background=SUCCEEDED(context->GetDocumentMgr(&owner))&&owner&&
+            SUCCEEDED(manager->GetFocus(&foreground))&&foreground&&owner!=foreground;
+        drop(foreground);
+        drop(owner);
+        return background;
+    }
+    bool leaveCompositionFor(ITfContext* next){
+        auto* previous=composingContext;
+        if(!next||!previous||previous==next)return false;
+        auto* top=focused();
+        const bool current=top==next;
+        drop(top);
+        if(!current||composingContext!=previous)return false;
+        focusLost();
+        return true;
+    }
     HRESULT request(ITfContext* c,const std::wstring& value,bool finish,bool async=false,bool notify=false,const CandidateProof* proof=nullptr){if(!c||disabled(c))return E_FAIL;auto edit=new(std::nothrow)EditSession(this,c,value,finish,notify,revision,proof);if(!edit)return E_OUTOFMEMORY;HRESULT result=E_FAIL;HRESULT h=c->RequestEditSession(client,edit,(async?TF_ES_ASYNCDONTCARE:TF_ES_SYNC)|TF_ES_READWRITE,&result);edit->Release();return FAILED(h)?h:result;}
     void completeAsync(unsigned long long token,HRESULT result){if(token!=revision||token!=pendingRevision)return;pendingRevision=0;if(SUCCEEDED(result)){if(!voiceReview.empty())stopVoice();buffer.clear();page=0;finishLearningStatus();if(voiceUndo)status=VoiceUndoHint;}else if(!voiceRecovery.empty())status=L"语音位置无法核对；结果暂存，Ctrl+Shift+V 重新定位后再确认";else status=L"编辑器拒绝插入，候选和拼音仍保留，可重试";update();}
     bool acceptsAsync(unsigned long long token)const{return token==revision&&token==pendingRevision&&manager&&loaded;}
@@ -1705,6 +1725,9 @@ public:
         }else{
             backspaceClaim.reset();expiredBackspaceClaim=false;
         }
+        // A push callback may precede publication of the new top. Only the
+        // current context can start a fresh composition after that transition.
+        leaveCompositionFor(c);
         try{return keyDownImpl(c,k,l,eat);}
         catch(const std::bad_alloc&){*eat=FALSE;return E_OUTOFMEMORY;}
         catch(...){*eat=FALSE;return E_FAIL;}
@@ -1712,8 +1735,32 @@ public:
     HRESULT STDMETHODCALLTYPE OnInitDocumentMgr(ITfDocumentMgr*) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE OnUninitDocumentMgr(ITfDocumentMgr*) override{return S_OK;}
     HRESULT STDMETHODCALLTYPE OnSetFocus(ITfDocumentMgr*,ITfDocumentMgr*) override{focusLost();return S_OK;}
-    HRESULT STDMETHODCALLTYPE OnPushContext(ITfContext* c) override{clearUppercase();clearVoiceUndo();if(clipboardPanel){clearClipboard();status.clear();if(popup)ShowWindow(popup,SW_HIDE);}if(c!=voiceTarget&&(listening||!voiceReview.empty())){stopVoice(true);status.clear();if(popup)ShowWindow(popup,SW_HIDE);}clearCalculation();cancelLearning();++focusEpoch;invalidatePending();endCandidateUI();return S_OK;}
-    HRESULT STDMETHODCALLTYPE OnPopContext(ITfContext* c) override{clearUppercase();clearVoiceUndo();if(clipboardPanel){clearClipboard();status.clear();endCandidateUI();if(popup)ShowWindow(popup,SW_HIDE);}clearCalculation();cancelLearning();invalidatePending();if(c==voiceTarget){stopVoice(true);status.clear();if(popup)ShowWindow(popup,SW_HIDE);}if(uiCandidates&&uiCandidates->target==c)endCandidateUI();return S_OK;}
+    HRESULT STDMETHODCALLTYPE OnPushContext(ITfContext* c) override{
+        if(backgroundContext(c)||leaveCompositionFor(c))return S_OK;
+        clearUppercase();
+        clearVoiceUndo();
+        if(clipboardPanel){clearClipboard();status.clear();if(popup)ShowWindow(popup,SW_HIDE);}
+        if(c!=voiceTarget&&(listening||!voiceReview.empty())){stopVoice(true);status.clear();if(popup)ShowWindow(popup,SW_HIDE);}
+        clearCalculation();
+        cancelLearning();
+        ++focusEpoch;
+        invalidatePending();
+        endCandidateUI();
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE OnPopContext(ITfContext* c) override{
+        if(c&&c==composingContext){focusLost();return S_OK;}
+        if(backgroundContext(c))return S_OK;
+        clearUppercase();
+        clearVoiceUndo();
+        if(clipboardPanel){clearClipboard();status.clear();endCandidateUI();if(popup)ShowWindow(popup,SW_HIDE);}
+        clearCalculation();
+        cancelLearning();
+        invalidatePending();
+        if(c==voiceTarget){stopVoice(true);status.clear();if(popup)ShowWindow(popup,SW_HIDE);}
+        if(uiCandidates&&uiCandidates->target==c)endCandidateUI();
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE OnCompositionTerminated(TfEditCookie,ITfComposition* c) override{if(c==composition){clearUppercase();invalidatePending();drop(composition);drop(composingContext);compositionText.clear();buffer.clear();page=0;update();}return S_OK;}
 };
 #include "clipboard_panel.inc"
