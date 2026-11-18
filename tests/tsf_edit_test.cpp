@@ -100,11 +100,16 @@ public:
     HRESULT STDMETHODCALLTYPE GetEnd(TfEditCookie,ITfRange** out) override{*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,doc.value.size(),doc.value.size());return S_OK;}
     HRESULT STDMETHODCALLTYPE GetActiveView(ITfContextView** out) override{if(!layoutAvailable){*out=nullptr;return E_NOTIMPL;}*out=new ContextView(layout,clipped,layoutResult);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetAppProperty(REFGUID id,ITfReadOnlyProperty** out) override{if(id!=GUID_PROP_INPUTSCOPE)return E_NOTIMPL;*out=new ScopeProperty(scope);return S_OK;}
-    bool preserveSelectionRange=false, overrideSelectionStyle=false;
+    bool preserveSelectionRange=false, overrideSelectionStyle=false, queryCollapsed=false;
     TF_SELECTIONSTYLE selectionStyle{TF_AE_NONE,FALSE};
     HRESULT STDMETHODCALLTYPE GetSelection(TfEditCookie,ULONG,ULONG,TF_SELECTION* out,ULONG* count) override{if(doc.noSelection){out->range=nullptr;*count=0;return E_FAIL;}out->range=new Range(doc,std::min(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd),std::max(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd));out->style=selectionStyle;*count=1;return S_OK;}
     HRESULT STDMETHODCALLTYPE RequestEditSession(TfClientId,ITfEditSession* edit,DWORD flags,HRESULT* result) override{if(deferSynchronous||(deferred&&!(flags&TF_ES_SYNC))){edit->AddRef();queued.push_back(edit);*result=TF_S_ASYNC;}else *result=edit->DoEditSession(99);if((flags&TF_ES_READWRITE)==TF_ES_READ&&afterRead){auto fn=std::move(afterRead);afterRead={};fn();}return S_OK;}
-    HRESULT STDMETHODCALLTYPE InsertTextAtSelection(TfEditCookie,DWORD flags,const WCHAR*,LONG,ITfRange** out) override{if(!(flags&TF_IAS_QUERYONLY))return E_INVALIDARG;*out=new Range(doc,std::min(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd),std::max(doc.cursor,doc.selectionEnd<0?doc.cursor:doc.selectionEnd));return S_OK;}
+    HRESULT STDMETHODCALLTYPE InsertTextAtSelection(TfEditCookie,DWORD flags,const WCHAR*,LONG,ITfRange** out) override{
+        if(!(flags&TF_IAS_QUERYONLY))return E_INVALIDARG;
+        const LONG endpoint=queryCollapsed||doc.selectionEnd<0?doc.cursor:doc.selectionEnd;
+        *out=new Range(doc,std::min(doc.cursor,endpoint),std::max(doc.cursor,endpoint));
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE SetSelection(TfEditCookie,ULONG count,const TF_SELECTION* selected) override{
         if(doc.denySelection)return E_ACCESSDENIED;
         if(count!=1)return E_INVALIDARG;

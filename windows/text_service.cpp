@@ -373,7 +373,12 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     std::unique_ptr<wangshu::WindowsPersonalStore> personalStore;
     std::shared_ptr<wangshu::ConfirmedLearningQueue> learningQueue;unsigned long long seenLearningFailure=0,seenLearningCancelled=0;
     CandidateProof displayed;ITfContext* candidateContext=nullptr;unsigned long long focusEpoch=0;
-    std::wstring compositionText; // Last successfully written owned composition, never document history.
+    struct SelectedPreedit {
+        wangshu::voice_position::Range range;
+        std::optional<std::wstring> original;
+    };
+    std::shared_ptr<SelectedPreedit> selectedPreedit;
+    std::wstring compositionText; // Last accepted preedit, scoped to composingContext.
     std::string buffer;size_t page=0;std::vector<wangshu::Candidate> candidates;std::wstring status;
     ISpRecognizer* recognizer=nullptr;ISpRecoContext* recoContext=nullptr;ISpRecoGrammar* grammar=nullptr;ITfContext* voiceTarget=nullptr;
     const wangshu::Engine& dictionary()const{static const wangshu::Engine empty;return sharedEngine?*sharedEngine:empty;}
@@ -504,10 +509,53 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     }
     bool sameCandidateComposition(ITfContext* context,TfEditCookie cookie,const CandidateProof& proof){
         if(proof.input.empty())return true;
-        if(!composition||composingContext!=context)return false;
+        if(composingContext!=context)return false;
+        if(auto selected=selectedPreedit)
+            return compositionText==wide(wangshu::mixed::raw(proof.input))&&
+                selectedPreeditMatches(context,cookie,selected->range.get(),selected);
+        if(!composition)return false;
         auto release=[](ITfRange* value){if(value)value->Release();};
         ITfRange* raw=nullptr;HRESULT h=composition->GetRange(&raw);std::unique_ptr<ITfRange,decltype(release)> range(raw,release);
         return SUCCEEDED(h)&&sameCompositionRange(context,cookie,range.get(),wide(wangshu::mixed::raw(proof.input)));
+    }
+    static bool sameSelectionBounds(TfEditCookie cookie,ITfRange* range,ITfRange* expected){
+        LONG start=1,end=1;
+        return SUCCEEDED(range->CompareStart(cookie,expected,TF_ANCHOR_START,&start))&&start==0&&
+            SUCCEEDED(range->CompareEnd(cookie,expected,TF_ANCHOR_END,&end))&&end==0;
+    }
+    static wangshu::voice_position::Range currentSelection(ITfContext* context,TfEditCookie cookie){
+        TF_SELECTION selection{};
+        ULONG count=0;
+        HRESULT h=context->GetSelection(cookie,TF_DEFAULT_SELECTION,1,&selection,&count);
+        wangshu::voice_position::Range current(selection.range);
+        if(FAILED(h)||count!=1||selection.style.fInterimChar)current.reset();
+        return current;
+    }
+    static bool currentSelectionMatches(ITfContext* context,TfEditCookie cookie,ITfRange* expected){
+        auto current=currentSelection(context,cookie);
+        return current&&sameSelectionBounds(cookie,current.get(),expected);
+    }
+    bool selectedPreeditMatches(ITfContext* context,TfEditCookie cookie,ITfRange* target,
+                                const std::shared_ptr<SelectedPreedit>& selected){
+        const auto stamp=revision,epoch=focusEpoch;
+        if(!selected->original||composingContext!=context||
+                !sameSelectionBounds(cookie,target,selected->range.get())||
+                FAILED(inputScopeAllows(context,cookie,target,true)))return false;
+        std::wstring actual;
+        if(FAILED(wangshu::voice_position::read(cookie,target,actual))||actual!=*selected->original||
+                FAILED(inputScopeAllows(context,cookie,target,true))||
+                !currentSelectionMatches(context,cookie,target))return false;
+        auto* top=focused();
+        const bool current=top==context;
+        drop(top);
+        return current&&revision==stamp&&focusEpoch==epoch&&selectedPreedit==selected&&
+            composingContext==context;
+    }
+    void clearSelectedPreedit(){
+        if(!selectedPreedit)return;
+        selectedPreedit.reset();
+        drop(composingContext);
+        compositionText.clear();
     }
     bool selectCandidate(ITfContext* context,size_t index,bool async=false,const std::string& suffix=""){
         CandidateProof expected=displayed;
@@ -745,7 +793,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         // Detach before RequestEditSession: ASYNCDONTCARE may execute immediately
         // or after new input. Its sink callback must not clear the newer buffer.
         ITfComposition* old=composition;ITfContext* oldContext=composingContext;
-        composition=nullptr;composingContext=nullptr;compositionText.clear();
+        composition=nullptr;composingContext=nullptr;selectedPreedit.reset();compositionText.clear();
         if(!old){drop(oldContext);return S_OK;}
         auto finish=new(std::nothrow)EndCompositionSession(old);old->Release();
         if(!finish){drop(oldContext);return E_OUTOFMEMORY;}
@@ -785,12 +833,24 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         return true;
     }
     HRESULT request(ITfContext* c,const std::wstring& value,bool finish,bool async=false,bool notify=false,const CandidateProof* proof=nullptr){if(!c||disabled(c))return E_FAIL;auto edit=new(std::nothrow)EditSession(this,c,value,finish,notify,revision,proof);if(!edit)return E_OUTOFMEMORY;HRESULT result=E_FAIL;HRESULT h=c->RequestEditSession(client,edit,(async?TF_ES_ASYNCDONTCARE:TF_ES_SYNC)|TF_ES_READWRITE,&result);edit->Release();return FAILED(h)?h:result;}
+    bool acceptPreeditKey(ITfContext* context){
+        const auto stamp=revision;
+        const bool protectSelection=static_cast<bool>(selectedPreedit);
+        if(SUCCEEDED(request(context,wide(wangshu::mixed::raw(buffer)),false)))return true;
+        if(revision!=stamp)return true; // A nested focus change already discarded this key.
+        if(!buffer.empty())buffer.pop_back();
+        return protectSelection;
+    }
     void completeAsync(unsigned long long token,HRESULT result){if(token!=revision||token!=pendingRevision)return;pendingRevision=0;if(SUCCEEDED(result)){if(!voiceReview.empty())stopVoice();buffer.clear();page=0;finishLearningStatus();if(voiceUndo)status=VoiceUndoHint;}else if(!voiceRecovery.empty())status=L"语音位置无法核对；结果暂存，Ctrl+Shift+V 重新定位后再确认";else status=L"编辑器拒绝插入，候选和拼音仍保留，可重试";update();}
     bool acceptsAsync(unsigned long long token)const{return token==revision&&token==pendingRevision&&manager&&loaded;}
     bool commit(ITfContext* c,const std::string& value,bool async=false,const CandidateProof* proof=nullptr){
         // A delimiter-only preedit never created a host composition. An empty
         // commit here must clear only local grammar, not the selected document text.
-        if(!composition&&!buffer.empty()&&value.empty()&&voiceReview.empty()&&wangshu::mixed::raw(buffer).empty()){buffer.clear();page=0;status.clear();update();return true;}
+        if(!composition&&!buffer.empty()&&value.empty()&&voiceReview.empty()&&
+                (selectedPreedit?composingContext==c:wangshu::mixed::raw(buffer).empty())){
+            clearSelectedPreedit();
+            buffer.clear();page=0;status.clear();invalidatePending();update();return true;
+        }
         learningWriteFailed=false;
         if(async){unsigned long long token=++revision;pendingRevision=token;HRESULT h=request(c,wide(value),true,true,true,proof);if(h==TF_S_ASYNC){if(pendingRevision==token){status=L"正在等待编辑器插入，候选和拼音仍保留";update();}return true;}if(FAILED(h))completeAsync(token,h);return SUCCEEDED(h);}
         HRESULT h=request(c,wide(value),true,false,false,proof);if(SUCCEEDED(h)){if(!voiceReview.empty())stopVoice();buffer.clear();page=0;finishLearningStatus();if(voiceUndo)status=VoiceUndoHint;update();return true;}status=!voiceRecovery.empty()?L"语音位置无法核对；结果暂存，Ctrl+Shift+V 重新定位后再确认":L"编辑器暂时不接受输入；请重新聚焦后重试";update();return false;
@@ -1462,6 +1522,7 @@ public:
     HRESULT STDMETHODCALLTYPE ActivateEx(ITfThreadMgr* tm,TfClientId id,DWORD flags) override{HRESULT result=Activate(tm,id);if(SUCCEEDED(result))activationFlags=flags;return result;}
     HRESULT STDMETHODCALLTYPE Activate(ITfThreadMgr* tm,TfClientId id) override{try{return activateImpl(tm,id);}catch(const std::bad_alloc&){Deactivate();return E_OUTOFMEMORY;}catch(...){Deactivate();return E_FAIL;}}
     HRESULT STDMETHODCALLTYPE Deactivate() override{
+        clearSelectedPreedit();
         clearEditorPanel();editorKeyClaim.reset();
         clearBatchDelete();batchBackClaim.reset();batchUndoClaim.reset();batchEscapeClaim.reset();
         batchBackDown=batchUndoDown=false;
@@ -1471,7 +1532,13 @@ public:
                  const unsigned long long* expectedVoice=nullptr,const UppercaseKey* uppercase=nullptr,
                  const unsigned long long* uppercaseRevision=nullptr){
         if(confirmed)*confirmed=false;bool selectionPlaced=false,endAccepted=true;
-        if(composition&&composingContext!=c)return E_UNEXPECTED;
+        if(composingContext&&composingContext!=c)return E_UNEXPECTED;
+        const auto local=selectedPreedit;
+        const auto stamp=revision,epoch=focusEpoch;
+        auto sameLocalSession=[&]{
+            return revision==stamp&&focusEpoch==epoch&&selectedPreedit==local&&composingContext==c;
+        };
+        if(local&&finish&&text.empty()){clearSelectedPreedit();return S_OK;}
         auto currentUppercase=[&]{
             return !uppercase||(revision==*uppercaseRevision&&uppercaseCurrent(c,*uppercase->latch)&&
                                 buffer==uppercase->input&&revision==*uppercaseRevision);
@@ -1482,14 +1549,23 @@ public:
         if(!finish&&text.size()>128)return E_INVALIDARG;
         std::wstring nextCompositionText;if(!finish)nextCompositionText=text;
         ITfRange* range=nullptr;HRESULT h=S_OK;bool started=false;
+        if(!finish&&!composition&&!local){
+            // QUERYONLY describes a proposed edit, which a host can adjust.
+            // Detect the actual selection before asking for an insertion range.
+            auto selection=currentSelection(c,cookie);
+            LONG relation=0;
+            if(selection&&SUCCEEDED(selection->CompareStart(cookie,selection.get(),TF_ANCHOR_END,&relation))&&
+                    relation<0)range=selection.release();
+        }
         if(composition)h=composition->GetRange(&range);
-        else{ITfInsertAtSelection* insert=nullptr;h=c->QueryInterface(IID_ITfInsertAtSelection,reinterpret_cast<void**>(&insert));if(SUCCEEDED(h)){h=insert->InsertTextAtSelection(cookie,TF_IAS_QUERYONLY,L"",0,&range);insert->Release();}}
+        else if(!range){ITfInsertAtSelection* insert=nullptr;h=c->QueryInterface(IID_ITfInsertAtSelection,reinterpret_cast<void**>(&insert));if(SUCCEEDED(h)){h=insert->InsertTextAtSelection(cookie,TF_IAS_QUERYONLY,L"",0,&range);insert->Release();}}
+        wangshu::voice_position::Range rangeOwner(range);
         if(FAILED(h)||!range)return FAILED(h)?h:E_FAIL;
         // A password input scope may be exposed even when keyboard-disabled is unset.
-        bool privateValue=false;h=inputScopeAllows(c,cookie,range,expectedVoice!=nullptr,&privateValue);updateInputPrivacy(privateValue);if(FAILED(h)){range->Release();return h;}
+        bool privateValue=false;h=inputScopeAllows(c,cookie,range,expectedVoice!=nullptr,&privateValue);updateInputPrivacy(privateValue);if(FAILED(h))return h;
         // Guard every existing-composition write, including raw Enter, Escape,
         // backspace and continued typing, not only candidate selection.
-        if(composition&&!sameCompositionRange(c,cookie,range,compositionText)){range->Release();return E_ABORT;}
+        if(composition&&!sameCompositionRange(c,cookie,range,compositionText))return E_ABORT;
         auto matchesUppercase=[&]{
             if(!uppercase)return true;
             wangshu::voice_position::Snapshot actual;
@@ -1497,9 +1573,37 @@ public:
                    (composition?sameCompositionRange(c,cookie,range,compositionText):
                     wangshu::grapheme_backspace::sameCaret(c,cookie,range))&&currentUppercase();
         };
-        if(!matchesUppercase()){range->Release();return E_ABORT;}
+        if(!matchesUppercase())return E_ABORT;
+        if(local){
+            if(!sameLocalSession())return E_ABORT;
+            if(!finish){compositionText.swap(nextCompositionText);return S_OK;}
+            if(!selectedPreeditMatches(c,cookie,range,local)||!sameLocalSession())return E_ABORT;
+        }
         // Establish ownership before changing any text. A refused composition must be inert.
-        if(!finish&&!composition){
+        if(!finish&&!composition&&!local){
+            LONG relation=0;
+            h=range->CompareStart(cookie,range,TF_ANCHOR_END,&relation);
+            if(FAILED(h))return h;
+            if(relation<0){
+                // Leave the original selected text in the document while the user
+                // edits the candidate buffer. Only an explicit confirmation writes.
+                auto pending=std::make_shared<SelectedPreedit>();
+                std::wstring original;
+                if(SUCCEEDED(wangshu::voice_position::clone(range,pending->range))&&
+                        !privateValue&&!(activationFlags&TF_TMAE_SECUREMODE)&&
+                        currentSelectionMatches(c,cookie,range)&&
+                        SUCCEEDED(inputScopeAllows(c,cookie,range,true))&&
+                        SUCCEEDED(wangshu::voice_position::read(cookie,range,original)))
+                    pending->original=std::move(original);
+                auto* top=focused();
+                const bool elsewhere=top&&top!=c;
+                drop(top);
+                if(elsewhere||revision!=stamp||focusEpoch!=epoch||composingContext)return E_ABORT;
+                selectedPreedit=std::move(pending);
+                composingContext=c;c->AddRef();
+                compositionText.swap(nextCompositionText);
+                return S_OK;
+            }
             ITfContextComposition* cc=nullptr;
             ITfComposition* owned=nullptr;
             h=c->QueryInterface(IID_ITfContextComposition,reinterpret_cast<void**>(&cc));
@@ -1507,34 +1611,39 @@ public:
             if(uppercase){
                 if(FAILED(h)||!owned||composition||!matchesUppercase()){
                     if(owned){owned->EndComposition(cookie);owned->Release();}
-                    range->Release();
                     return FAILED(h)?h:E_ABORT;
                 }
                 composition=owned;
             }
-            if(FAILED(h)||!composition){range->Release();return FAILED(h)?h:E_ACCESSDENIED;}
+            if(FAILED(h)||!composition)return FAILED(h)?h:E_ACCESSDENIED;
             composingContext=c;c->AddRef();started=true;
         }
-        if(expectedVoice&&(*expectedVoice!=voiceGeneration||c!=voiceTarget||!voicePosition)){range->Release();return E_ABORT;}
+        if(expectedVoice&&(*expectedVoice!=voiceGeneration||c!=voiceTarget||!voicePosition))return E_ABORT;
         h=range->SetText(cookie,0,text.c_str(),static_cast<LONG>(text.size()));
-        if(!currentUppercase()){range->Release();return E_ABORT;}
+        if(!currentUppercase()||(local&&!sameLocalSession()))return E_ABORT;
         if(SUCCEEDED(h)){
             if(!finish&&composition)compositionText.swap(nextCompositionText);
             ITfRange* end=nullptr;
             if(SUCCEEDED(range->Clone(&end))&&end){
                 HRESULT collapsed=end->Collapse(cookie,TF_ANCHOR_END);TF_SELECTION selection{end,{TF_AE_NONE,FALSE}};
                 // An applied key is consumed even when later caret confirmation fails.
-                selectionPlaced=SUCCEEDED(collapsed)&&currentUppercase()&&SUCCEEDED(c->SetSelection(cookie,1,&selection));
+                selectionPlaced=SUCCEEDED(collapsed)&&currentUppercase()&&(!local||sameLocalSession())&&
+                    SUCCEEDED(c->SetSelection(cookie,1,&selection));
                 if(!selectionPlaced)try{status=L"文字已写入，编辑器未移动光标，请手动检查位置";}catch(...){}
             }
             if(end)end->Release();
         }
+        if(local&&!sameLocalSession())return E_ABORT;
         if(SUCCEEDED(h))captureCaret(c,cookie,range);
+        if(local){
+            if(!sameLocalSession())return E_ABORT;
+            if(SUCCEEDED(h))clearSelectedPreedit();
+        }
         if(composition&&((finish&&SUCCEEDED(h))||(started&&FAILED(h)))){
             auto old=composition;composition=nullptr;endAccepted=SUCCEEDED(old->EndComposition(cookie));old->Release();drop(composingContext);compositionText.clear();
         }
         if(confirmed&&SUCCEEDED(h)&&selectionPlaced&&endAccepted&&personalizationAllowed(c,cookie))*confirmed=sameCompositionRange(c,cookie,range,text,256);
-        range->Release();return h;
+        return h;
     }
     HRESULT STDMETHODCALLTYPE OnSetFocus(BOOL foreground) override{if(!foreground)focusLost();return S_OK;}
     HRESULT STDMETHODCALLTYPE OnTestKeyDown(ITfContext* c,WPARAM k,LPARAM message,BOOL* eat) override{
@@ -1657,31 +1766,41 @@ public:
         }
         char mixedKey=character(k);
         if((buffer.empty()||buffer[0]!='\\')&&(mixedKey=='`'||(wangshu::mixed::active(buffer)&&mixedKey>=32&&mixedKey<=126))){
-            if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(mixedKey);page=0;status=L"中英分段：反引号切换原文英段；关闭英段后空格确认，Enter原文";if(mixedKey=='`'){update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;
+            if(buffer.size()>=128){*eat=TRUE;return S_OK;}
+            buffer.push_back(mixedKey);page=0;status=L"中英分段：反引号切换原文英段；关闭英段后空格确认，Enter原文";
+            if(mixedKey!='`')*eat=acceptPreeditKey(c);
+            update();return S_OK;
         }
-        if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty()){buffer.push_back(static_cast<char>(k));page=0;*eat=SUCCEEDED(request(c,wide(wangshu::mixed::raw(buffer)),false));if(!*eat)buffer.pop_back();update();return S_OK;}
+        if(!buffer.empty()&&buffer[0]=='\\'&&k>='0'&&k<='9'&&!dictionary().lookup(buffer+static_cast<char>(k)).empty()){
+            buffer.push_back(static_cast<char>(k));page=0;*eat=acceptPreeditKey(c);update();return S_OK;
+        }
         if(!buffer.empty()&&k>='1'&&k<='9'){
+            const bool protectSelection=static_cast<bool>(selectedPreedit);
             size_t n=static_cast<size_t>(k-'1');
             bool openingCategory=buffer==wangshu::symbol_panel::Prefix;
-            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory;
+            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory||protectSelection;
             return S_OK;
         }
         if(k==VK_SPACE||k==VK_RETURN){
+            const bool protectSelection=static_cast<bool>(selectedPreedit);
             bool openingCategory=k==VK_SPACE&&buffer==wangshu::symbol_panel::Prefix&&!candidates.empty();
-            *eat=k==VK_RETURN||candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):
+            const bool confirmed=k==VK_RETURN||candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):
                 selectCandidate(c,uiCandidates?uiCandidates->selection():0)||openingCategory;
+            *eat=confirmed||protectSelection;
             return S_OK;
         }
         if(k==VK_ESCAPE){*eat=commit(c,"");return S_OK;}
         if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;if(wangshu::mixed::raw(previous)==wangshu::mixed::raw(buffer)){*eat=TRUE;update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
         char a=character(k);std::string punctuation=dictionary().punctuation(a,true);
         if(a&&std::strchr(",.?!;:",a)){
+            const bool protectSelection=static_cast<bool>(selectedPreedit);
             if(!buffer.empty()&&!candidates.empty()&&buffer!=wangshu::symbol_panel::Prefix)
-                *eat=selectCandidate(c,0,false,punctuation);
-            else *eat=commit(c,wangshu::mixed::raw(buffer)+punctuation);
+                *eat=selectCandidate(c,0,false,punctuation)||protectSelection;
+            else *eat=commit(c,wangshu::mixed::raw(buffer)+punctuation)||protectSelection;
             return S_OK;
         }
-        if(buffer.size()>=128){*eat=TRUE;return S_OK;}buffer.push_back(a);page=0;status.clear();HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),false);if(FAILED(h)){buffer.pop_back();*eat=FALSE;}update();return S_OK;
+        if(buffer.size()>=128){*eat=TRUE;return S_OK;}
+        buffer.push_back(a);page=0;status.clear();*eat=acceptPreeditKey(c);update();return S_OK;
     }
     HRESULT STDMETHODCALLTYPE OnKeyDown(ITfContext* c,WPARAM k,LPARAM l,BOOL* eat) override{
         if(!eat)return E_POINTER;
@@ -1782,7 +1901,11 @@ HRESULT EditSession::DoEditSession(TfEditCookie cookie){
         if(speech&&FAILED(voiceAllowed)){if(voiceAllowed==E_ACCESSDENIED){service->updateInputPrivacy(true);service->stopVoice();service->voiceRecovery.clear();}else service->retainVoice();result=voiceAllowed;}
         else if(!personalScope)result=E_ABORT;
         else if(speech&&FAILED(service->checkVoicePosition(context,cookie,voiceGeneration))){if(voiceGeneration==service->voiceGeneration)service->retainVoice();result=E_ABORT;}
-        else result=guarded&&(!service->validCandidate(context,proof)||!service->sameCandidateComposition(context,cookie,proof))?E_ABORT:service->edit(context,cookie,text,finish,guarded&&proof.autoLearn?&confirmed:nullptr,speech?&voiceGeneration:nullptr);
+        else if(guarded&&(!service->validCandidate(context,proof)||
+                !service->sameCandidateComposition(context,cookie,proof)))result=E_ABORT;
+        else if(expectedRevision!=service->revision)result=E_ABORT;
+        else result=service->edit(context,cookie,text,finish,guarded&&proof.autoLearn?&confirmed:nullptr,
+                                  speech?&voiceGeneration:nullptr);
         if(speech&&result==E_ACCESSDENIED&&service->privateInput){service->stopVoice();service->voiceRecovery.clear();}
         if(SUCCEEDED(result)&&speech)service->rememberVoiceWrite(context,cookie,text,voiceGeneration,expectedRevision);
         if(SUCCEEDED(result)&&confirmed)service->recordConfirmedSelection(context,proof,expectedRevision);
