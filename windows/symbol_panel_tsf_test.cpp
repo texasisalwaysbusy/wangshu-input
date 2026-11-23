@@ -36,6 +36,7 @@ struct SymbolFixture {
         }
     }
     void open() { key(VK_OEM_5); key(VK_OEM_5); }
+    void search() { open(); letters("find"); key(VK_OEM_5); }
     void letters(std::string_view text) {
         for (char letter : text) key(static_cast<WPARAM>(letter - 'a' + 'A'));
     }
@@ -112,6 +113,66 @@ int main() {
             check(fixture.row(0) == L"γ", "category can filter math symbols by an alias prefix");
             fixture.key(VK_ESCAPE);
             check(fixture.editor->doc.value == L"beforeafter", "Escape removes only the owned palette composition");
+        }
+        {
+            SymbolFixture fixture;
+            fixture.open(); fixture.key(VK_NEXT); fixture.key(VK_NEXT);
+            check(fixture.row(1) == L"表情和颜文字检索", "search is discoverable from the category list");
+            fixture.key('2');
+            const auto beforeQuery = fixture.editor->doc.value;
+            fixture.letters("weixiao");
+            check(fixture.row(0) == L"😄" && fixture.editor->doc.value == beforeQuery,
+                  "exact pinyin ranks first and the query never enters the document");
+            fixture.key(VK_RETURN);
+            check(fixture.editor->doc.value == L"before😄after", "Enter inserts only the chosen glyph");
+        }
+        {
+            SymbolFixture fixture;
+            fixture.search();
+            fixture.letters("mao");
+            check(fixture.row(0) == L"🐱", "exact name ranks above prefixes and interior matches");
+            fixture.letters("mi");
+            check(fixture.row(0) == L"( 'ω' )", "the same field finds kaomoji");
+            fixture.key(VK_BACK); fixture.key(VK_BACK);
+            check(fixture.row(0) == L"🐱", "backspace recomputes results without writing the query");
+            fixture.key(VK_ESCAPE);
+            check(fixture.editor->doc.value == L"beforeafter", "Escape clears the search composition only");
+        }
+        {
+            SymbolFixture fixture;
+            fixture.search();
+            const auto beforeQuery = fixture.editor->doc.value;
+            fixture.letters("zzzz");
+            fixture.key(VK_RETURN); fixture.key(VK_SPACE);
+            check(fixture.editor->doc.value == beforeQuery, "empty results never confirm the query or command");
+            fixture.key(VK_ESCAPE);
+            check(fixture.editor->doc.value == L"beforeafter", "empty results can be cancelled");
+        }
+        {
+            SymbolFixture fixture;
+            fixture.search(); fixture.letters("x");
+            const auto firstPage = fixture.row(0);
+            fixture.key(VK_NEXT);
+            check(fixture.row(0) != firstPage, "pinyin search pages through additional matches");
+            fixture.key(VK_PRIOR);
+            check(fixture.row(0) == firstPage, "previous page restores the original order");
+            const auto before = fixture.editor->doc.value;
+            fixture.editor->doc.cursor = 0;
+            fixture.key('1'); fixture.key(VK_RETURN);
+            check(fixture.editor->doc.value == before && fixture.editor->doc.cursor == 0,
+                  "a moved caret neither receives a stale glyph nor the confirmation key");
+        }
+        {
+            SymbolFixture fixture;
+            fixture.search(); fixture.letters("mao");
+            fixture.editor->deferred = true;
+            check(SUCCEEDED(fixture.finalize()), "search selection receives a guarded asynchronous ticket");
+            const auto beforeQuery = fixture.editor->doc.value;
+            fixture.letters("mi");
+            auto result = fixture.editor->flush();
+            check(result.size() == 1 && result[0] == E_ABORT && fixture.editor->doc.value == beforeQuery &&
+                      fixture.row(0) == L"( 'ω' )",
+                  "an old search selection cannot commit after the query changes");
         }
         {
             SymbolFixture fixture;

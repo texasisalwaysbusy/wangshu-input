@@ -10,6 +10,12 @@ The repository retains native x86/x64 TSF source and development `install.cmd` /
 
 Real registration, system enablement, GUI, multiple applications, 32-bit hosts, modern apps, candidate positioning and physical-microphone acceptance remain incomplete. Windows ARM64 is outside the supported scope. Development packages are not suitable as a primary or sensitive-input keyboard, and Android results do not establish Windows readiness.
 
+## 开发版的表情检索
+
+在中文模式按两次反斜杠打开符号分类，翻到第三页选择“表情和颜文字检索”。也可直接键入两个反斜杠、`find` 和一个反斜杠。输入无声调全拼，例如 `weixiao` 找“微笑”，或 `maomi` 找颜文字。数字键、空格或 Enter 确认，PgUp／PgDn 翻页，Esc 取消。拼音检索词留在候选窗中，沿用符号面板的组合范围保护。
+
+In Chinese mode, type two backslashes and select the emoji and kaomoji search on the third category page. For direct access, type two backslashes, `find`, and one backslash. Search with toneless pinyin such as `weixiao` or `maomi`. Select with a number, Space, or Enter. PgUp and PgDn page through results, and Esc cancels. The query stays in the candidate window and selection uses the symbol panel's composition checks.
+
 安装脚本会触及本项目 COM/TSF 注册状态，不能把“源码可读”理解为“脚本已获执行许可”。访问被拒绝或出现安全警告时应停止，不自动提权、不修改 ACL、不绕过警告。任何以后实际提供的 Windows 二进制，应由其独立发布说明给出签名、完整性、安装/回退与验收范围。
 
 Installation scripts change the project's COM/TSF registration state. Source availability is not permission or advice to run them. Stop on access denial or security warnings; do not automatically elevate, change ACLs or bypass warnings. Any later Windows binary should have its own release notes covering signing, integrity, installation/recovery and acceptance scope.

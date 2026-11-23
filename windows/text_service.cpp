@@ -507,16 +507,20 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         LONG start=1,end=1;HRESULT first=selected->CompareStart(cookie,range,TF_ANCHOR_END,&start),last=selected->CompareEnd(cookie,range,TF_ANCHOR_END,&end);
         return SUCCEEDED(first)&&SUCCEEDED(last)&&start==0&&end==0;
     }
+    static std::string compositionInput(const std::string& input) {
+        if(wangshu::symbol_panel::searching(input))return std::string(wangshu::symbol_panel::SearchPrefix);
+        return wangshu::mixed::raw(input);
+    }
     bool sameCandidateComposition(ITfContext* context,TfEditCookie cookie,const CandidateProof& proof){
         if(proof.input.empty())return true;
         if(composingContext!=context)return false;
         if(auto selected=selectedPreedit)
-            return compositionText==wide(wangshu::mixed::raw(proof.input))&&
+            return compositionText==wide(compositionInput(proof.input))&&
                 selectedPreeditMatches(context,cookie,selected->range.get(),selected);
         if(!composition)return false;
         auto release=[](ITfRange* value){if(value)value->Release();};
         ITfRange* raw=nullptr;HRESULT h=composition->GetRange(&raw);std::unique_ptr<ITfRange,decltype(release)> range(raw,release);
-        return SUCCEEDED(h)&&sameCompositionRange(context,cookie,range.get(),wide(wangshu::mixed::raw(proof.input)));
+        return SUCCEEDED(h)&&sameCompositionRange(context,cookie,range.get(),wide(compositionInput(proof.input)));
     }
     static bool sameSelectionBounds(TfEditCookie cookie,ITfRange* range,ITfRange* expected){
         LONG start=1,end=1;
@@ -744,7 +748,9 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         std::wstring hint=status;
         if(hint.empty()){
             if(buffer=="\\")hint=L"再按一次 \\ 打开符号分类";
-            else if(buffer==wangshu::symbol_panel::Prefix)hint=L"1–9打开分类 · 输入 clip 再按 Enter 打开剪贴板";
+            else if(buffer==wangshu::symbol_panel::Prefix)hint=L"1–9打开分类 · 第三页检索表情 · clip 后按 Enter 打开剪贴板";
+            else if(wangshu::symbol_panel::searching(buffer))hint=candidates.empty()?
+                L"输入表情名称的拼音（如 weixiao） · Esc 取消":L"1–9或空格插入 · PgUp/PgDn翻页 · Esc取消";
             else if(wangshu::symbol_panel::active(buffer))hint=L"1–9插入符号 · PgUp/PgDn翻页 · Esc取消";
             else if(page==QuickFuzzyPage)hint=L"模糊候选 · 1–9选词 · PgUp返回首组";
             else if(displayed.fuzzyShortcut)hint=L"1–9选词 · PgUp/PgDn翻页 · Shift+PgDn查看模糊";
@@ -836,7 +842,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     bool acceptPreeditKey(ITfContext* context){
         const auto stamp=revision;
         const bool protectSelection=static_cast<bool>(selectedPreedit);
-        if(SUCCEEDED(request(context,wide(wangshu::mixed::raw(buffer)),false)))return true;
+        if(SUCCEEDED(request(context,wide(compositionInput(buffer)),false)))return true;
         if(revision!=stamp)return true; // A nested focus change already discarded this key.
         if(!buffer.empty())buffer.pop_back();
         return protectSelection;
@@ -1736,6 +1742,7 @@ public:
         if(hadCalculation||predictionRequest)clearCalculation();
         if(hadCalculation){status.clear();update();}
         invalidatePending();*eat=eats(c,k);if(!*eat)return S_OK;
+        const bool emojiSearch=wangshu::symbol_panel::searching(buffer);
         if((k==VK_RETURN||k==VK_SPACE)&&buffer==wangshu::clipboard_edit::Command&&!ctrl()&&!shift()){
             auto proof=displayed;
             // This command has no preedit candidate row. Bind the existing
@@ -1748,14 +1755,15 @@ public:
         }
         if(ctrl()&&shift()&&k=='V'){
             if(message&PreviousKeyDown)return S_OK;
-            if(!buffer.empty()&&!(candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,0)))return S_OK;
+            if(emojiSearch){if(!commit(c,""))return S_OK;}
+            else if(!buffer.empty()&&!(candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,0)))return S_OK;
             startVoice(c);return S_OK;
         }
         if(listening&&k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}
         if(!voiceReview.empty()){if(k==VK_RETURN||k==VK_SPACE){std::string value=voiceReview;commit(c,value);*eat=TRUE;return S_OK;}if(k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}stopVoice(true);}
         if(listening)stopVoice();
         if(ctrl()&&shift()&&k=='M'){math=!math;status=math?L"数学模式 · \\alpha 符号 · 算式 = 后点选精确结果":L"";update();return S_OK;}
-        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
+        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,emojiSearch?"":wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
         if(k==VK_NEXT||k==VK_PRIOR){
             if(page==QuickFuzzyPage)page=0;
             else if(k==VK_NEXT&&shift()&&displayed.fuzzyShortcut)page=QuickFuzzyPage;
@@ -1778,10 +1786,14 @@ public:
             const bool protectSelection=static_cast<bool>(selectedPreedit);
             size_t n=static_cast<size_t>(k-'1');
             bool openingCategory=buffer==wangshu::symbol_panel::Prefix;
-            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory||protectSelection;
+            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory||protectSelection||emojiSearch;
             return S_OK;
         }
         if(k==VK_SPACE||k==VK_RETURN){
+            if(emojiSearch){
+                if(!candidates.empty())selectCandidate(c,uiCandidates?uiCandidates->selection():0);
+                return S_OK;
+            }
             const bool protectSelection=static_cast<bool>(selectedPreedit);
             bool openingCategory=k==VK_SPACE&&buffer==wangshu::symbol_panel::Prefix&&!candidates.empty();
             const bool confirmed=k==VK_RETURN||candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):
@@ -1790,8 +1802,21 @@ public:
             return S_OK;
         }
         if(k==VK_ESCAPE){*eat=commit(c,"");return S_OK;}
-        if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;if(wangshu::mixed::raw(previous)==wangshu::mixed::raw(buffer)){*eat=TRUE;update();return S_OK;}HRESULT h=request(c,wide(wangshu::mixed::raw(buffer)),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
+        if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;const auto input=compositionInput(buffer);if(compositionInput(previous)==input){*eat=TRUE;update();return S_OK;}HRESULT h=request(c,wide(input),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
         char a=character(k);std::string punctuation=dictionary().punctuation(a,true);
+        if(emojiSearch){
+            if(a&&std::strchr(",.?!;:",a)){commit(c,punctuation);return S_OK;}
+            if(((a>='a'&&a<='z')||(a>='A'&&a<='Z'))&&
+                    buffer.size()<wangshu::symbol_panel::SearchPrefix.size()+wangshu::symbol_panel::SearchLimit){
+                // The query stays in the palette. Only the owned command is
+                // shown as composing text until a candidate is confirmed.
+                buffer.push_back(a);
+                page=0;
+                status.clear();
+                update();
+            }
+            return S_OK;
+        }
         if(a&&std::strchr(",.?!;:",a)){
             const bool protectSelection=static_cast<bool>(selectedPreedit);
             if(!buffer.empty()&&!candidates.empty()&&buffer!=wangshu::symbol_panel::Prefix)

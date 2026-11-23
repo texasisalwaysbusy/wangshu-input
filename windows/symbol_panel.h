@@ -6,9 +6,11 @@
 namespace wangshu::symbol_panel {
 
 inline constexpr std::string_view Prefix{"\\\\", 2};
+inline constexpr std::string_view SearchPrefix{"\\\\find\\", 7};
+inline constexpr size_t SearchLimit = 40;
 inline constexpr size_t PageSize = 9;
 
-enum class Source { Dictionary, Emoji, English };
+enum class Source { Dictionary, Emoji, English, Search };
 struct Category {
     const char* key;
     const char* label;
@@ -34,9 +36,15 @@ inline constexpr Category Categories[] = {
     {"emoji", "符号", Source::Emoji},
     {"flags", "旗帜", Source::Emoji},
     {"kaomoji", "颜文字", Source::Emoji},
+    {"find", "表情和颜文字检索", Source::Search},
 };
 
-struct EmojiEntry { const char* category; const char* text; const char* description; };
+struct EmojiEntry {
+    const char* category;
+    const char* text;
+    const char* description;
+    const char* pinyin;
+};
 inline constexpr EmojiEntry Emoji[] = {
 #include "emoji_catalog.inc"
 };
@@ -48,17 +56,44 @@ inline bool active(std::string_view input) {
     return input.substr(0, Prefix.size()) == Prefix;
 }
 
+inline bool searching(std::string_view input) {
+    return input.substr(0, SearchPrefix.size()) == SearchPrefix;
+}
+
 inline std::vector<Candidate> lookup(const Engine& dictionary, std::string_view input, size_t page) {
     if (!active(input) || page > 100) return {};
-    input.remove_prefix(Prefix.size());
     std::vector<Candidate> result;
     size_t skip = page * PageSize;
     auto append = [&](const char* text, std::string annotation) {
         if (skip) --skip;
         else if (result.size() < PageSize) result.push_back({text, std::move(annotation)});
     };
+    if (searching(input)) {
+        input.remove_prefix(SearchPrefix.size());
+        if (input.empty() || input.size() > SearchLimit) return {};
+        std::string query(input);
+        for (auto& letter : query) {
+            if (letter >= 'A' && letter <= 'Z') letter += 'a' - 'A';
+            if (letter < 'a' || letter > 'z') return {};
+        }
+        // Exact names first, then pinyin prefixes, then matches inside a name.
+        for (int rank = 0; rank < 3 && result.size() < PageSize; ++rank)
+            for (const auto& entry : Emoji) {
+                std::string_view pinyin(entry.pinyin);
+                const auto position = pinyin.find(query);
+                if (position == std::string_view::npos) continue;
+                const int match = pinyin == query ? 0 : position == 0 ? 1 : 2;
+                if (match == rank) append(entry.text, entry.description);
+            }
+        return result;
+    }
+    input.remove_prefix(Prefix.size());
     if (input.empty()) {
-        for (const auto& group : Categories) append(group.label, std::string(Prefix) + std::string(group.key));
+        for (const auto& group : Categories) {
+            const auto command = group.source == Source::Search
+                ? std::string(SearchPrefix) : std::string(Prefix) + std::string(group.key);
+            append(group.label, command);
+        }
         return result;
     }
     const auto separator = input.find('\\');
@@ -82,6 +117,8 @@ inline std::vector<Candidate> lookup(const Engine& dictionary, std::string_view 
         case Source::English:
             if (filter.empty())
                 for (const auto* mark : EnglishPunctuation) append(mark, group.label);
+            break;
+        case Source::Search:
             break;
         }
         break;
