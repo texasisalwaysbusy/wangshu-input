@@ -8,6 +8,16 @@ The Windows source contains local personal-word/phrase storage and a native mana
 
 Import confirmation applies the result computed for the preview. If the local dictionary or its backup changes while the dialog is open, preview again. Confirmed repair preserves copies of damaged files.
 
+## 收藏、交换与旧版恢复 / Favorites, exchange and recovery
+
+在本地个人数据管理选择「收藏表情」，选择内置条目后按「收藏」或「取消收藏」。在中文模式键入两个反斜杠，翻到符号菜单第三页，选择「收藏表情与颜文字」即可输入。使用两个反斜杠加 `favorites` 可直接打开。备份预览显示收藏数量，完整恢复保留收藏顺序。
+
+In the local personal-data manager, open Favorites and select an authored emoji or kaomoji to add or remove it. The third page of the Chinese-mode symbol menu provides the saved list. Two backslashes followed by `favorites` open it directly. Import previews include the number of favorites.
+
+JSON v1 保留词库与常用语。含收藏时完整备份写为 JSON v2，`favorites` 为至多 64 个内置字形，去重后保留原顺序。Android 和 Windows 都可读取两种格式。准备回退到只读 v1 的旧版本时，先保留完整备份，再在新版选择旧版兼容导出。按旧版对应的恢复方案使用 v1 文件，收藏仍可从完整备份在支持 v2 的版本恢复。
+
+JSON v1 contains words and phrases. Complete backups with favorites use JSON v2 and add an ordered list of up to 64 catalog glyphs. Both platforms read both versions. Before a downgrade to a v1-only build, keep a complete backup and create a separate legacy export in the newer version. Use the v1 file with the older build's recovery procedure. Keep the complete backup for restoring favorites in a v2-capable build.
+
 Windows 与 Android 使用各自的平台存储实现。不要以 Android 的导入/导出、设置、隐私或生命周期结果推断 Windows 已完成。个人词条与常用语可能包含私人文字，JSON/TSV 不是加密格式；不要将真实备份附在公开 Issue 或开发包中。
 
 Windows and Android use separate platform storage implementations. Android import/export, settings, privacy or lifecycle results do not validate Windows. Personal entries can contain private text; JSON/TSV are not encrypted formats. Do not attach real backups to public issues or development packages.

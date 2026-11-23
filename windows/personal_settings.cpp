@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <algorithm>
 #include <iterator>
+#include "../core/emoji_catalog.h"
 #include "personal_store.h"
 #include "clipboard_store.h"
 #include "clipboard_source.h"
@@ -44,6 +45,7 @@ struct App {
     bool ranking()const{return SendMessageW(item(Tab),CB_GETCURSEL,0,0)==2;}
     bool phrases()const{return SendMessageW(item(Tab),CB_GETCURSEL,0,0)==1;}
     bool clipboardMode()const{return SendMessageW(item(Tab),CB_GETCURSEL,0,0)==3;}
+    bool favoritesMode()const{return SendMessageW(item(Tab),CB_GETCURSEL,0,0)==4;}
     HWND create(const wchar_t* type,const wchar_t* label,DWORD style,int id){HWND control=CreateWindowExW(type==std::wstring(L"EDIT")?WS_EX_CLIENTEDGE:0,type,label,WS_CHILD|WS_VISIBLE|(std::wstring(type)==L"STATIC"?0:WS_TABSTOP)|style,0,0,1,1,window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),GetModuleHandleW(nullptr),nullptr);if(!control)throw std::runtime_error("Cannot create native management control");children.push_back(control);return control;}
     void error(const std::exception& e){auto text=wide(e.what());MessageBoxW(window,(text+L"\n\n请刷新核对实际结果；失败不会自动清空个人词库。").c_str(),L"操作未完成",MB_OK|MB_ICONWARNING);}
     void newEntry(){if(clipboardMode()){saveClipboard();return;}SendMessageW(item(Key),EM_SETREADONLY,FALSE,0);SendMessageW(item(Text),EM_SETREADONLY,FALSE,0);if(ranking())SetWindowTextW(item(Save),L"固定候选");selected=-1;SendMessageW(item(List),LB_SETCURSEL,static_cast<WPARAM>(-1),0);SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");SetFocus(item(Key));}
@@ -51,12 +53,62 @@ struct App {
         for(int id:{ClipboardEnabled,ClipboardRetention,ClipboardClearAll})
             ShowWindow(item(id),clipboardMode()?SW_SHOW:SW_HIDE);
         for(int id:{LearnEnabled,AssociationsEnabled,PredictionsEnabled,CursorPredictions,SpeechFormat,PortableExport,PortableImport,FuzzySettings})
-            ShowWindow(item(id),clipboardMode()?SW_HIDE:SW_SHOW);
+            ShowWindow(item(id),clipboardMode()||favoritesMode()?SW_HIDE:SW_SHOW);
+        for(int id:{New,Delete})ShowWindow(item(id),favoritesMode()?SW_HIDE:SW_SHOW);
         ShowWindow(item(Import),ranking()?SW_HIDE:SW_SHOW);ShowWindow(item(Export),ranking()?SW_HIDE:SW_SHOW);
         SetWindowTextW(item(Import),clipboardMode()?L"预览恢复…":L"导入合并…");
         SetWindowTextW(item(Export),clipboardMode()?L"备份历史…":L"备份到新文件…");
         SetWindowTextW(item(New),ranking()?L"新增固定项":L"新增");SetWindowTextW(item(Save),ranking()?L"固定候选":L"保存");SetWindowTextW(item(Delete),ranking()?L"忘记个人权重":L"删除");SetWindowTextW(item(Recover),ranking()?L"恢复排序备份":L"恢复有效备份");
         SendMessageW(item(Key),EM_SETREADONLY,FALSE,0);SendMessageW(item(Text),EM_SETREADONLY,FALSE,0);
+    }
+    const wangshu::emoji_catalog::Entry* selectedFavorite()const{
+        const auto& entries=wangshu::emoji_catalog::Entries;
+        if(selected<0||static_cast<size_t>(selected)>=std::size(entries))return nullptr;
+        return &entries[selected];
+    }
+    void reloadFavorites(){
+        snapshot=store->read();
+        readError=false;
+        loading=true;
+        selected=-1;
+        SendMessageW(item(List),LB_RESETCONTENT,0,0);
+        LRESULT index=0;
+        for(const auto& entry:wangshu::emoji_catalog::Entries){
+            std::wstring row=snapshot.data.isFavorite(entry.text)?L"★ ":L"";
+            row+=wide(entry.text)+L" · "+wide(entry.description)+L" ("+wide(entry.pinyin)+L")";
+            if(SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(row.c_str()))!=index++)
+                throw std::runtime_error("Favorite catalog list could not be loaded");
+        }
+        loading=false;
+        EnableWindow(item(List),TRUE);
+        EnableWindow(item(Save),FALSE);
+        EnableWindow(item(Export),TRUE);
+        EnableWindow(item(Recover),snapshot.fromBackup);
+        SendMessageW(item(Key),EM_SETREADONLY,TRUE,0);
+        SendMessageW(item(Text),EM_SETREADONLY,TRUE,0);
+        SetWindowTextW(item(KeyLabel),L"目录名称");
+        SetWindowTextW(item(TextLabel),L"表情或颜文字");
+        SetWindowTextW(item(Key),L"");
+        SetWindowTextW(item(Text),L"");
+        SetWindowTextW(item(Save),L"收藏");
+        auto status=L"已收藏 "+std::to_wstring(snapshot.data.favorites.size())+L" / 64 项。";
+        status+=snapshot.fromBackup?L"请先确认恢复有效备份。":L"在键盘符号菜单的「收藏表情与颜文字」调用。";
+        SetWindowTextW(item(Status),status.c_str());
+    }
+    void selectFavorite(){
+        const auto* entry=selectedFavorite();
+        if(!entry)return;
+        SetWindowTextW(item(Key),wide(entry->description).c_str());
+        SetWindowTextW(item(Text),wide(entry->text).c_str());
+        SetWindowTextW(item(Save),snapshot.data.isFavorite(entry->text)?L"取消收藏":L"收藏");
+        EnableWindow(item(Save),!snapshot.fromBackup);
+    }
+    void saveFavorite(){
+        const auto* entry=selectedFavorite();
+        if(!entry||snapshot.fromBackup)return;
+        const bool pin=!snapshot.data.isFavorite(entry->text);
+        snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){data.setFavorite(entry->text,pin);});
+        reload();
     }
     std::uint64_t now() const {return wangshu::WindowsPersonalStore::learningNow();}
     const wangshu::ClipboardItem* selectedClipboard() const {
@@ -293,10 +345,10 @@ struct App {
         if(ranking()){if(MessageBoxW(window,L"确认恢复有效个人排序备份？损坏原文件会另存保留，不改变手动词库。",L"恢复排序确认",MB_OKCANCEL|MB_ICONQUESTION)==IDOK){learningSnapshot=store->restoreLearningBackup(learningSnapshot.revision);reload();}}
         else if(MessageBoxW(window,L"将有效备份恢复为当前数据？损坏原文件将另行保留。",L"恢复确认",MB_OKCANCEL|MB_ICONQUESTION)==IDOK){snapshot=store->restoreBackup(snapshot.revision);reload();}
     }
-    void select(){if(loading)return;LRESULT index=SendMessageW(item(List),LB_GETCURSEL,0,0);if(index==LB_ERR)return;selected=static_cast<int>(index);if(clipboardMode()){selectClipboard();return;}if(ranking()){if(static_cast<size_t>(selected)>=learningSnapshot.data.entries.size())return;const auto& value=learningSnapshot.data.entries[selected];SetWindowTextW(item(Key),wide(value.key).c_str());SetWindowTextW(item(Text),wide(value.text).c_str());SendMessageW(item(Key),EM_SETREADONLY,TRUE,0);SendMessageW(item(Text),EM_SETREADONLY,TRUE,0);SetWindowTextW(item(Save),value.pinned?L"取消固定":L"固定候选");return;}if(phrases()){if(static_cast<size_t>(selected)>=snapshot.data.phrases.size())return;const auto& p=snapshot.data.phrases[selected];SetWindowTextW(item(Key),wide(p.shortcut).c_str());SetWindowTextW(item(Text),wide(p.text).c_str());}else{if(static_cast<size_t>(selected)>=snapshot.data.words.size())return;const auto& w=snapshot.data.words[selected];SetWindowTextW(item(Key),wide(w.pinyin).c_str());SetWindowTextW(item(Text),wide(w.text).c_str());}}
-    void reload(){configureMode();if(clipboardMode()){reloadClipboard();return;}loadLearningControl();if(ranking()){reloadLearning();return;}EnableWindow(item(New),TRUE);auto fresh=store->read();snapshot=std::move(fresh);readError=false;EnableWindow(item(List),TRUE);EnableWindow(item(Save),TRUE);EnableWindow(item(Delete),TRUE);EnableWindow(item(Export),TRUE);loading=true;SendMessageW(item(List),LB_RESETCONTENT,0,0);if(phrases()){for(const auto& p:snapshot.data.phrases){auto line=(p.shortcut.empty()?L"":wide(p.shortcut)+L" · ")+preview(p.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}}else for(const auto& w:snapshot.data.words){auto line=wide(w.pinyin)+L" · "+preview(w.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}loading=false;selected=-1;SetWindowTextW(item(KeyLabel),phrases()?L"可选英文简称（1–32个字母）":L"完整拼音（ü 使用 v）");SetWindowTextW(item(TextLabel),phrases()?L"常用语内容（支持多行）":L"词条文字（仅词条使用 NFC 规范化）");SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");EnableWindow(item(Recover),snapshot.fromBackup);auto status=L"本地 · "+std::to_wstring(snapshot.data.words.size())+L" 个词条 / "+std::to_wstring(snapshot.data.phrases.size())+L" 条常用语";if(snapshot.fromBackup)status+=L" · 正在使用有效备份，原文件保留；可点“恢复有效备份”";else status+=L" · 不记录按键、剪贴板或录音";SetWindowTextW(item(Status),status.c_str());}
+    void select(){if(loading)return;LRESULT index=SendMessageW(item(List),LB_GETCURSEL,0,0);if(index==LB_ERR)return;selected=static_cast<int>(index);if(favoritesMode()){selectFavorite();return;}if(clipboardMode()){selectClipboard();return;}if(ranking()){if(static_cast<size_t>(selected)>=learningSnapshot.data.entries.size())return;const auto& value=learningSnapshot.data.entries[selected];SetWindowTextW(item(Key),wide(value.key).c_str());SetWindowTextW(item(Text),wide(value.text).c_str());SendMessageW(item(Key),EM_SETREADONLY,TRUE,0);SendMessageW(item(Text),EM_SETREADONLY,TRUE,0);SetWindowTextW(item(Save),value.pinned?L"取消固定":L"固定候选");return;}if(phrases()){if(static_cast<size_t>(selected)>=snapshot.data.phrases.size())return;const auto& p=snapshot.data.phrases[selected];SetWindowTextW(item(Key),wide(p.shortcut).c_str());SetWindowTextW(item(Text),wide(p.text).c_str());}else{if(static_cast<size_t>(selected)>=snapshot.data.words.size())return;const auto& w=snapshot.data.words[selected];SetWindowTextW(item(Key),wide(w.pinyin).c_str());SetWindowTextW(item(Text),wide(w.text).c_str());}}
+    void reload(){configureMode();if(favoritesMode()){reloadFavorites();return;}if(clipboardMode()){reloadClipboard();return;}loadLearningControl();if(ranking()){reloadLearning();return;}EnableWindow(item(New),TRUE);auto fresh=store->read();snapshot=std::move(fresh);readError=false;EnableWindow(item(List),TRUE);EnableWindow(item(Save),TRUE);EnableWindow(item(Delete),TRUE);EnableWindow(item(Export),TRUE);loading=true;SendMessageW(item(List),LB_RESETCONTENT,0,0);if(phrases()){for(const auto& p:snapshot.data.phrases){auto line=(p.shortcut.empty()?L"":wide(p.shortcut)+L" · ")+preview(p.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}}else for(const auto& w:snapshot.data.words){auto line=wide(w.pinyin)+L" · "+preview(w.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}loading=false;selected=-1;SetWindowTextW(item(KeyLabel),phrases()?L"可选英文简称（1–32个字母）":L"完整拼音（ü 使用 v）");SetWindowTextW(item(TextLabel),phrases()?L"常用语内容（支持多行）":L"词条文字（仅词条使用 NFC 规范化）");SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");EnableWindow(item(Recover),snapshot.fromBackup);auto status=L"本地 · "+std::to_wstring(snapshot.data.words.size())+L" 个词条 / "+std::to_wstring(snapshot.data.phrases.size())+L" 条常用语";if(snapshot.fromBackup)status+=L" · 正在使用有效备份，原文件保留；可点“恢复有效备份”";else status+=L" · 不记录按键、剪贴板或录音";SetWindowTextW(item(Status),status.c_str());}
     void loadSafely(){try{reload();}catch(const std::exception&){readError=true;loading=true;SendMessageW(item(List),LB_RESETCONTENT,0,0);SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");loading=false;EnableWindow(item(List),FALSE);EnableWindow(item(Save),FALSE);EnableWindow(item(Delete),FALSE);EnableWindow(item(Export),FALSE);EnableWindow(item(Recover),FALSE);SetWindowTextW(item(Status),L"个人文件不可读，未重置。可刷新重试，或导入有效备份并确认修复；损坏原文件会另存保留。");}}
-    void save(){if(clipboardMode()){pinClipboard();return;}if(ranking()){saveLearning();return;}std::string key=narrow(controlText(item(Key))),text=narrow(controlText(item(Text)));int index=selected;bool phrase=phrases();snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){if(phrase){wangshu::PersonalPhrase p{key,text};if(index<0)data.phrases.push_back(std::move(p));else{if(static_cast<size_t>(index)>=data.phrases.size())throw std::runtime_error("Phrase changed; refresh first");data.phrases[index]=std::move(p);}}else{wangshu::PersonalWord w{wangshu::PersonalData::key(key),text};if(index<0)data.words.push_back(std::move(w));else{if(static_cast<size_t>(index)>=data.words.size())throw std::runtime_error("Word changed; refresh first");data.words[index]=std::move(w);}}});reload();}
+    void save(){if(favoritesMode()){saveFavorite();return;}if(clipboardMode()){pinClipboard();return;}if(ranking()){saveLearning();return;}std::string key=narrow(controlText(item(Key))),text=narrow(controlText(item(Text)));int index=selected;bool phrase=phrases();snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){if(phrase){wangshu::PersonalPhrase p{key,text};if(index<0)data.phrases.push_back(std::move(p));else{if(static_cast<size_t>(index)>=data.phrases.size())throw std::runtime_error("Phrase changed; refresh first");data.phrases[index]=std::move(p);}}else{wangshu::PersonalWord w{wangshu::PersonalData::key(key),text};if(index<0)data.words.push_back(std::move(w));else{if(static_cast<size_t>(index)>=data.words.size())throw std::runtime_error("Word changed; refresh first");data.words[index]=std::move(w);}}});reload();}
     void remove(){if(clipboardMode()){removeClipboard();return;}if(ranking()){removeLearning();return;}if(selected<0){MessageBoxW(window,L"先选择要删除的个人条目。",L"选择条目",MB_OK);return;}if(MessageBoxW(window,L"只删除这条个人数据，不影响内置词库。是否继续？",L"删除条目",MB_YESNO|MB_ICONQUESTION)!=IDYES)return;int index=selected;bool phrase=phrases();snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){if(phrase){if(static_cast<size_t>(index)>=data.phrases.size())throw std::runtime_error("Phrase changed");data.phrases.erase(data.phrases.begin()+index);}else{if(static_cast<size_t>(index)>=data.words.size())throw std::runtime_error("Word changed");data.words.erase(data.words.begin()+index);}});reload();}
     std::wstring choose(bool output,FileKind kind=FileKind::Personal){
         std::vector<wchar_t> path(32768);
@@ -369,21 +421,36 @@ struct App {
         auto& merged=preview.data();
         const bool repair=preview.repair();
         auto message=L"完成后将有 "+std::to_wstring(merged.words.size())+L" 个词条、"+
-            std::to_wstring(merged.phrases.size())+L" 条常用语。\n";
+            std::to_wstring(merged.phrases.size())+L" 条常用语、"+
+            std::to_wstring(merged.favorites.size())+L" 项收藏。\n";
         message+=repair?L"将以所选备份修复，损坏文件另存保留。":L"保留已有内容，重复条目去重。";
         message+=L"\n本机文件变化后，请重新预览。";
         if(MessageBoxW(window,message.c_str(),repair?L"备份修复预览":L"导入预览",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
         snapshot=store->confirmImport(preview);
         reload();
     }
-    void exportFile(){if(clipboardMode()){exportClipboard();return;}if(ranking())return;auto path=choose(true);if(path.empty())return;auto current=store->read();wangshu::WindowsPersonalStore::exportNew(path,current.data);MessageBoxW(window,L"个人词库与常用语已保存。备份不包含剪贴板、录音或设置。",L"备份完成",MB_OK|MB_ICONINFORMATION);}
+    void exportFile(){
+        if(clipboardMode()){exportClipboard();return;}
+        if(ranking())return;
+        auto current=store->read();
+        if(!current.data.favorites.empty()){
+            int mode=MessageBoxW(window,L"备份是否包含收藏？\n是：完整备份。\n否：导出旧版兼容词库和常用语。",
+                                 L"个人数据备份",MB_YESNOCANCEL|MB_ICONQUESTION);
+            if(mode==IDNO)current.data.favorites.clear();
+            else if(mode!=IDYES)return;
+        }
+        auto path=choose(true);
+        if(path.empty())return;
+        wangshu::WindowsPersonalStore::exportNew(path,current.data);
+        MessageBoxW(window,L"备份已写入所选文件。",L"备份完成",MB_OK|MB_ICONINFORMATION);
+    }
     void resize(){
         RECT area{};GetClientRect(window,&area);
         int width=area.right,height=area.bottom,pad=px(20),gap=px(12),top=px(18);
         int available=std::max(px(180),width-2*pad-gap);
         int leftWidth=pad+available*43/100,right=leftWidth+gap,fieldWidth=std::max(1,width-right-pad);
         bool narrow=width<px(620);int mainRows=fieldWidth<px(280)?3:1,footerRows=ranking()?1:narrow?2:1;
-        const int listTop=clipboardMode()?216:438;
+        const int listTop=favoritesMode()?72:clipboardMode()?216:438;
         int minimum=px(listTop+28+120+16+mainRows*48+12+footerRows*44+40);
         virtualHeight=std::max(height,minimum);scrollY=std::max(0,std::min(scrollY,virtualHeight-height));
         SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_RANGE|SIF_PAGE|SIF_POS;info.nMin=0;info.nMax=virtualHeight-1;info.nPage=height;info.nPos=scrollY;SetScrollInfo(window,SB_VERT,&info,TRUE);
@@ -411,6 +478,7 @@ struct App {
 
     void applyFont(){HFONT previous=font;dpi=GetDpiForWindow(window);if(!dpi)dpi=96;font=CreateFontW(-px(16),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Microsoft YaHei UI");for(HWND child:children)SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(font),TRUE);if(previous)DeleteObject(previous);}
     void initialize(){store=std::make_unique<wangshu::WindowsPersonalStore>();create(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,Tab);SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"个人词库"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"常用语"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"个人排序"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"剪贴板"));SendMessageW(item(Tab),CB_SETCURSEL,0,0);create(L"LISTBOX",L"",LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|WS_VSCROLL|WS_BORDER,List);create(L"STATIC",L"",0,KeyLabel);create(L"EDIT",L"",ES_AUTOHSCROLL,Key);create(L"STATIC",L"",0,TextLabel);create(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|WS_VSCROLL,Text);for(const auto& entry:std::vector<std::pair<int,const wchar_t*>>{{New,L"新增"},{Save,L"保存"},{Delete,L"删除"},{Import,L"导入合并…"},{Export,L"备份到新文件…"},{Refresh,L"刷新"},{Recover,L"恢复有效备份"}})create(L"BUTTON",entry.second,BS_PUSHBUTTON|BS_NOTIFY,entry.first);create(L"BUTTON",L"自动学习已确认选词（默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,LearnEnabled);create(L"BUTTON",L"本地常用语中英联想（框末，默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,AssociationsEnabled);create(L"BUTTON",L"本地补全与下一词（默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,PredictionsEnabled);create(L"BUTTON",L"允许保存剪贴板文本",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,ClipboardEnabled);
+        SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"收藏表情"));
         create(L"BUTTON",L"方向键移动后更新本地联想",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,CursorPredictions);
         create(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,SpeechFormat);
         for(const auto* label:{L"语音格式 · 原文",L"语音格式 · 数学术语",L"语音格式 · 数字与日期"})

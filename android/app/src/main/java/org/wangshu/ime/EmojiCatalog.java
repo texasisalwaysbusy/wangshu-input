@@ -46,6 +46,17 @@ public final class EmojiCatalog {
     }
     public static List<String> categories(Kind kind){if(kind==null)return Collections.emptyList();ArrayList<String> out=new ArrayList<>();for(Map.Entry<String,List<Item>> e:CATEGORIES.entrySet())if(!e.getValue().isEmpty()&&e.getValue().get(0).kind==kind)out.add(e.getKey());return Collections.unmodifiableList(out);}
     public static List<Item> category(String name){List<Item> items=CATEGORIES.get(name);return items==null?Collections.emptyList():items;}
+    static List<Item> items() {
+        List<Item> items = new ArrayList<>();
+        for (List<Item> group : CATEGORIES.values()) items.addAll(group);
+        return Collections.unmodifiableList(items);
+    }
+    static Item find(String glyph) {
+        for (List<Item> group : CATEGORIES.values())
+            for (Item item : group)
+                if (item.text.equals(glyph)) return item;
+        return null;
+    }
     /** Search only authored descriptions or exact glyphs, never editor context or history. */
     public static List<Item> search(String query,Kind kind){if(query==null||kind==null||query.length()>40)return Collections.emptyList();String needle=query.trim().toLowerCase(Locale.ROOT);if(needle.isEmpty())return Collections.emptyList();ArrayList<Item> out=new ArrayList<>();for(List<Item> group:CATEGORIES.values())for(Item item:group)if(item.kind==kind&&(item.description.toLowerCase(Locale.ROOT).contains(needle)||item.text.contains(needle))){out.add(item);if(out.size()==48)return Collections.unmodifiableList(out);}return Collections.unmodifiableList(out);}
     static final int PINYIN_LIMIT = 40;

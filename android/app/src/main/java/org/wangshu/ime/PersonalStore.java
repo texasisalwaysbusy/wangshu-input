@@ -10,7 +10,7 @@ import java.util.*;
 
 /** Explicitly authored local data only. No key logging, clipboard capture or audio. */
 final class PersonalStore {
-    static final int MAX_BYTES=1024*1024, MAX_WORDS=2000, MAX_PHRASES=1000;
+    static final int MAX_BYTES=1024*1024, MAX_WORDS=2000, MAX_PHRASES=1000, MAX_FAVORITES=64;
     private static final int MAX_JSON_DEPTH=16, MAX_JSON_CONTAINERS=4096, MAX_JSON_SEPARATORS=32000;
     private static PersonalStore instance;
     private final AtomicFile file;
@@ -132,8 +132,12 @@ final class PersonalStore {
         try{
             JSONTokener tokens=new JSONTokener(decoded);Object value=tokens.nextValue();
             if(!(value instanceof JSONObject)||tokens.nextClean()!=0)throw new IOException("需要单个 JSON 对象");JSONObject input=(JSONObject)value;
-            if(!"wangshu-personal".equals(input.getString("kind"))||!(input.get("version") instanceof Integer)||input.getInt("version")!=1)throw new IOException("不支持的个人词库格式或版本");
-            fields(input,"kind","version","words","phrases");JSONArray words=input.getJSONArray("words"),phrases=input.getJSONArray("phrases");
+            if(!"wangshu-personal".equals(input.getString("kind"))||!(input.get("version") instanceof Integer))throw new IOException("不支持的个人词库格式或版本");
+            int version=input.getInt("version");
+            if(version==2)fields(input,"kind","version","words","phrases","favorites");
+            else if(version==1)fields(input,"kind","version","words","phrases");
+            else throw new IOException("不支持的个人词库格式或版本");
+            JSONArray words=input.getJSONArray("words"),phrases=input.getJSONArray("phrases");
             if(words.length()>MAX_WORDS||phrases.length()>MAX_PHRASES)throw new IOException("条目超过词库 2000 / 常用语 1000 限制");
             JSONObject clean=empty();Set<String> seen=new HashSet<>();
             for(int i=0;i<words.length();i++){JSONObject w=words.getJSONObject(i);fields(w,"pinyin","text");String k=key(field(w,"pinyin")),t=wordText(field(w,"text"));if(seen.add(k+"\u0000"+t))clean.getJSONArray("words").put(new JSONObject().put("pinyin",k).put("text",t));}
@@ -145,8 +149,31 @@ final class PersonalStore {
                 s=s.toLowerCase(Locale.ROOT);
                 if(seen.add(s+"\u0000"+t))clean.getJSONArray("phrases").put(new JSONObject().put("text",t).put("shortcut",s));
             }
+            if(version==2)writeFavorites(clean,readFavorites(input.getJSONArray("favorites")));
             return clean;
         }catch(JSONException e){throw new IOException("个人词库文件不完整或格式不正确",e);}
+    }
+    private static LinkedHashSet<String> readFavorites(JSONArray entries)throws IOException {
+        LinkedHashSet<String> favorites=new LinkedHashSet<>();
+        if(entries==null)return favorites;
+        if(entries.length()>MAX_FAVORITES)throw new IOException("表情和颜文字收藏最多 64 项");
+        for(int i=0;i<entries.length();i++){
+            Object value=entries.opt(i);
+            if(!(value instanceof String)||EmojiCatalog.find((String)value)==null)
+                throw new IOException("收藏项不在内置表情和颜文字目录");
+            favorites.add((String)value);
+        }
+        return favorites;
+    }
+    private static void writeFavorites(JSONObject data,Set<String> favorites)throws IOException,JSONException {
+        if(favorites.size()>MAX_FAVORITES)throw new IOException("表情和颜文字收藏最多 64 项");
+        data.put("version",favorites.isEmpty()?1:2);
+        if(favorites.isEmpty())data.remove("favorites");
+        else data.put("favorites",new JSONArray(favorites));
+    }
+    static int favoriteCount(JSONObject data) {
+        JSONArray favorites=data.optJSONArray("favorites");
+        return favorites==null?0:favorites.length();
     }
     static final class ImportData {
         final JSONObject data;final String format;
@@ -228,12 +255,39 @@ final class PersonalStore {
     synchronized void remove(String type,int index)throws IOException {
         try{JSONObject next=snapshot();JSONArray list=next.getJSONArray(type);if(index<0||index>=list.length())throw new IOException("条目已改变，请重新打开");list.remove(index);save(next);}catch(JSONException e){throw new IOException("无法删除条目",e);}
     }
+    static final class FavoriteSnapshot {
+        final long revision;
+        final Set<String> glyphs;
+        FavoriteSnapshot(long revision,Set<String> glyphs){
+            this.revision=revision;
+            this.glyphs=Collections.unmodifiableSet(glyphs);
+        }
+    }
+    synchronized FavoriteSnapshot favoriteSnapshot()throws IOException {
+        ensureReadable();
+        return new FavoriteSnapshot(revision,readFavorites(data.optJSONArray("favorites")));
+    }
+    synchronized void setFavorite(String glyph,boolean pin,long expected)throws IOException {
+        ensureReadable();
+        if(revision!=expected)throw new StaleDataException();
+        if(EmojiCatalog.find(glyph)==null)throw new IOException("只可收藏内置表情或颜文字");
+        try{
+            JSONObject next=snapshot();
+            LinkedHashSet<String> favorites=readFavorites(next.optJSONArray("favorites"));
+            boolean changed=pin?favorites.add(glyph):favorites.remove(glyph);
+            if(changed){writeFavorites(next,favorites);save(next);}
+        }catch(JSONException invalid){throw new IOException("收藏未保存",invalid);}
+    }
     synchronized JSONObject previewMerge(JSONObject incoming)throws IOException {
         try{JSONObject current=snapshot(),checked=parse(bytes(incoming)),merged=empty();
             for(String type:new String[]{"words","phrases"}){Set<String> seen=new HashSet<>();JSONArray target=merged.getJSONArray(type);
                 for(JSONObject source:new JSONObject[]{current,checked}){JSONArray entries=source.getJSONArray(type);for(int i=0;i<entries.length();i++){JSONObject item=entries.getJSONObject(i);String identity=item.getString(type.equals("words")?"pinyin":"shortcut")+"\u0000"+item.getString("text");if(seen.add(identity))target.put(item);}}
                 if(target.length()>(type.equals("words")?MAX_WORDS:MAX_PHRASES))throw new IOException("合并后条目超过词库 2000 / 常用语 1000 限制");
-            }return parse(bytes(merged));
+            }
+            LinkedHashSet<String> favorites=readFavorites(current.optJSONArray("favorites"));
+            favorites.addAll(readFavorites(checked.optJSONArray("favorites")));
+            writeFavorites(merged,favorites);
+            return parse(bytes(merged));
         }catch(JSONException e){throw new IOException("无法合并文件",e);}
     }
     synchronized void merge(JSONObject incoming)throws IOException {save(previewMerge(incoming));}
@@ -241,7 +295,7 @@ final class PersonalStore {
         private final PersonalStore owner;
         private final long revision;
         private final byte[] payload;
-        final int wordCount,phraseCount;
+        final int wordCount,phraseCount,favoriteCount;
 
         private ImportPreview(PersonalStore owner,long revision,JSONObject merged)throws JSONException,IOException {
             this.owner=owner;
@@ -249,6 +303,7 @@ final class PersonalStore {
             payload=bytes(merged);
             wordCount=merged.getJSONArray("words").length();
             phraseCount=merged.getJSONArray("phrases").length();
+            favoriteCount=PersonalStore.favoriteCount(merged);
         }
     }
     synchronized ImportPreview prepareImport(JSONObject incoming)throws IOException {
@@ -260,6 +315,13 @@ final class PersonalStore {
         save(parse(preview.payload));
     }
     synchronized byte[] export()throws IOException {return bytes(snapshot());}
+    synchronized byte[] exportLegacy()throws IOException {
+        try{
+            JSONObject copy=snapshot();
+            writeFavorites(copy,Collections.emptySet());
+            return bytes(copy);
+        }catch(JSONException invalid){throw new IOException("无法导出旧版词库",invalid);}
+    }
     synchronized String[] words(String input)throws IOException {
         ensureReadable();String k;try{k=key(input);}catch(IOException e){return new String[0];}
         LinkedHashSet<String> out=new LinkedHashSet<>();try{JSONArray list=data.getJSONArray("words");for(int i=0;i<list.length();i++){JSONObject w=list.getJSONObject(i);if(k.equals(w.getString("pinyin")))out.add(w.getString("text"));}list=data.getJSONArray("phrases");for(int i=0;i<list.length();i++){JSONObject p=list.getJSONObject(i);if(k.equals(p.optString("shortcut","").toLowerCase(Locale.ROOT)))out.add(p.getString("text"));}}catch(JSONException e){throw new IOException("无法读取个人词库",e);}return out.toArray(new String[0]);

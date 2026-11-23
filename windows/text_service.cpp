@@ -435,6 +435,19 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         return current;
     }
     std::vector<wangshu::Candidate> personalLookup(const std::string& input,size_t candidatePage=0,CandidateProof* proof=nullptr){
+        if(input==wangshu::symbol_panel::Favorites){
+            if(privateInput||noLearn||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE)))return {};
+            try{
+                if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();
+                auto saved=personalStore->read();
+                if(saved.fromBackup)return {};
+                if(proof){proof->personal=true;proof->readable=true;proof->personalRevision=saved.revision;}
+                return wangshu::symbol_panel::favoritePage(saved.data.favorites,candidatePage);
+            }catch(const std::exception&){
+                if(status.empty())status=L"收藏暂不可读，请打开本地个人数据";
+                return {};
+            }
+        }
         if(wangshu::symbol_panel::active(input))
             return candidatePage==QuickFuzzyPage?std::vector<wangshu::Candidate>{}:wangshu::symbol_panel::lookup(dictionary(),input,candidatePage);
         if(input.empty()||input[0]=='\\'||input.find('`')!=std::string::npos||privateInput||(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_CONSOLE))){
@@ -484,7 +497,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(proof.builtin&&(noLearn||privateInput||builtinCandidates.empty()))return false;
         if(!manager||!loaded||!context||context!=proof.context||focusEpoch!=proof.epoch||buffer!=proof.input||voiceReview!=proof.voice||calculation!=proof.calculation||(!proof.calculation.empty()&&(calculationGeneration!=proof.calculationGeneration||calculationKind!=proof.calculationKind))||(!proof.voice.empty()&&voiceGeneration!=proof.voiceGeneration)||page!=proof.page||candidateModes()!=proof.modes||disabled(context))return false;
         ITfContext* current=focused();bool scope=current?current==context:composingContext==context||voiceTarget==context;drop(current);if(!scope)return false;
-        if(proof.personal){try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();auto now=personalStore->readFresh();if(proof.association&&now.fromBackup)return false;if(!proof.readable||now.revision!=proof.personalRevision)return false;}catch(...){if(proof.readable)return false;}}
+        if(proof.personal){try{if(!personalStore)personalStore=std::make_unique<wangshu::WindowsPersonalStore>();auto now=personalStore->readFresh();if((proof.association||proof.input==wangshu::symbol_panel::Favorites)&&now.fromBackup)return false;if(!proof.readable||now.revision!=proof.personalRevision)return false;}catch(...){if(proof.readable)return false;}}
         if(proof.ranking){try{
             if(!personalStore)return false;
             auto now=personalStore->readLearningFresh();
@@ -751,6 +764,8 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
             else if(buffer==wangshu::symbol_panel::Prefix)hint=L"1–9打开分类 · 第三页检索表情 · clip 后按 Enter 打开剪贴板";
             else if(wangshu::symbol_panel::searching(buffer))hint=candidates.empty()?
                 L"输入表情名称的拼音（如 weixiao） · Esc 取消":L"1–9或空格插入 · PgUp/PgDn翻页 · Esc取消";
+            else if(buffer==wangshu::symbol_panel::Favorites)hint=candidates.empty()?
+                L"在本地个人数据管理中添加收藏 · Esc 取消":L"1–9或空格插入收藏 · PgUp/PgDn翻页 · Esc取消";
             else if(wangshu::symbol_panel::active(buffer))hint=L"1–9插入符号 · PgUp/PgDn翻页 · Esc取消";
             else if(page==QuickFuzzyPage)hint=L"模糊候选 · 1–9选词 · PgUp返回首组";
             else if(displayed.fuzzyShortcut)hint=L"1–9选词 · PgUp/PgDn翻页 · Shift+PgDn查看模糊";
@@ -1743,6 +1758,8 @@ public:
         if(hadCalculation){status.clear();update();}
         invalidatePending();*eat=eats(c,k);if(!*eat)return S_OK;
         const bool emojiSearch=wangshu::symbol_panel::searching(buffer);
+        const bool emojiFavorites=buffer==wangshu::symbol_panel::Favorites;
+        const bool emojiPicker=emojiSearch||emojiFavorites;
         if((k==VK_RETURN||k==VK_SPACE)&&buffer==wangshu::clipboard_edit::Command&&!ctrl()&&!shift()){
             auto proof=displayed;
             // This command has no preedit candidate row. Bind the existing
@@ -1755,7 +1772,7 @@ public:
         }
         if(ctrl()&&shift()&&k=='V'){
             if(message&PreviousKeyDown)return S_OK;
-            if(emojiSearch){if(!commit(c,""))return S_OK;}
+            if(emojiPicker){if(!commit(c,""))return S_OK;}
             else if(!buffer.empty()&&!(candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,0)))return S_OK;
             startVoice(c);return S_OK;
         }
@@ -1763,7 +1780,7 @@ public:
         if(!voiceReview.empty()){if(k==VK_RETURN||k==VK_SPACE){std::string value=voiceReview;commit(c,value);*eat=TRUE;return S_OK;}if(k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}stopVoice(true);}
         if(listening)stopVoice();
         if(ctrl()&&shift()&&k=='M'){math=!math;status=math?L"数学模式 · \\alpha 符号 · 算式 = 后点选精确结果":L"";update();return S_OK;}
-        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,emojiSearch?"":wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
+        if(k==VK_SPACE&&shift()){if(!buffer.empty()&&!commit(c,emojiPicker?"":wangshu::mixed::raw(buffer)))return S_OK;chinese=!chinese;status=chinese?L"中文输入":L"English";update();return S_OK;}
         if(k==VK_NEXT||k==VK_PRIOR){
             if(page==QuickFuzzyPage)page=0;
             else if(k==VK_NEXT&&shift()&&displayed.fuzzyShortcut)page=QuickFuzzyPage;
@@ -1786,11 +1803,11 @@ public:
             const bool protectSelection=static_cast<bool>(selectedPreedit);
             size_t n=static_cast<size_t>(k-'1');
             bool openingCategory=buffer==wangshu::symbol_panel::Prefix;
-            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory||protectSelection||emojiSearch;
+            if(n<candidates.size())*eat=selectCandidate(c,n)||openingCategory||protectSelection||emojiPicker;
             return S_OK;
         }
         if(k==VK_SPACE||k==VK_RETURN){
-            if(emojiSearch){
+            if(emojiPicker){
                 if(!candidates.empty())selectCandidate(c,uiCandidates?uiCandidates->selection():0);
                 return S_OK;
             }
@@ -1804,9 +1821,9 @@ public:
         if(k==VK_ESCAPE){*eat=commit(c,"");return S_OK;}
         if(k==VK_BACK){std::string previous=buffer;size_t previousPage=page;if(!buffer.empty())buffer.pop_back();page=0;const auto input=compositionInput(buffer);if(compositionInput(previous)==input){*eat=TRUE;update();return S_OK;}HRESULT h=request(c,wide(input),buffer.empty());if(FAILED(h)){buffer=std::move(previous);page=previousPage;status=L"编辑器暂时拒绝删除，拼音仍保留，可重试";}*eat=TRUE;update();return S_OK;}
         char a=character(k);std::string punctuation=dictionary().punctuation(a,true);
-        if(emojiSearch){
+        if(emojiPicker){
             if(a&&std::strchr(",.?!;:",a)){commit(c,punctuation);return S_OK;}
-            if(((a>='a'&&a<='z')||(a>='A'&&a<='Z'))&&
+            if(emojiSearch&&((a>='a'&&a<='z')||(a>='A'&&a<='Z'))&&
                     buffer.size()<wangshu::symbol_panel::SearchPrefix.size()+wangshu::symbol_panel::SearchLimit){
                 // The query stays in the palette. Only the owned command is
                 // shown as composing text until a candidate is confirmed.

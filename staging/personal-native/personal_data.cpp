@@ -1,5 +1,7 @@
 #include "personal_data.h"
+#include "../../core/emoji_catalog.h"
 #include "../../third_party/nlohmann/json.hpp"
+#include <algorithm>
 #include <set>
 #include <limits>
 namespace wangshu {
@@ -17,9 +19,12 @@ PersonalData PersonalData::parse(const std::string& bytes, WordNormalizer normal
             return true;
         });
     }catch(const Json::exception&){throw std::runtime_error("Malformed personal JSON");}
-    fields(root,{"kind","version","words","phrases"});
     if(field(root,"kind")!="wangshu-personal"||!root.contains("version")||
-            !root["version"].is_number_integer()||root["version"]!=1)throw std::runtime_error("Unsupported personal version");
+            !root["version"].is_number_integer()||(root["version"]!=1&&root["version"]!=2))
+        throw std::runtime_error("Unsupported personal version");
+    const bool hasFavorites=root["version"]==2;
+    if(hasFavorites)fields(root,{"kind","version","words","phrases","favorites"});
+    else fields(root,{"kind","version","words","phrases"});
     if(!root.contains("words")||!root["words"].is_array()||!root.contains("phrases")||!root["phrases"].is_array())
         throw std::runtime_error("Missing arrays");
     if(root["words"].size()>2000||root["phrases"].size()>1000)throw std::runtime_error("Too many personal records");
@@ -49,9 +54,29 @@ PersonalData PersonalData::parse(const std::string& bytes, WordNormalizer normal
         }
         if(seen.emplace(shortcut,text).second)result.phrases.push_back({shortcut,text});
     }
+    if(hasFavorites){
+        if(!root.contains("favorites")||!root["favorites"].is_array()||root["favorites"].size()>MaxFavorites)
+            throw std::runtime_error("Invalid favorite list");
+        for(const auto& entry:root["favorites"]){
+            if(!entry.is_string())throw std::runtime_error("Expected favorite string");
+            result.setFavorite(entry.get<std::string>(),true);
+        }
+    }
     return result;
 }
-std::string PersonalData::serialize()const{Json object={{"kind","wangshu-personal"},{"version",1},{"words",Json::array()},{"phrases",Json::array()}};for(const auto& w:words)object["words"].push_back({{"pinyin",w.pinyin},{"text",w.text}});for(const auto& p:phrases)object["phrases"].push_back({{"shortcut",p.shortcut},{"text",p.text}});std::string raw;try{raw=object.dump();}catch(const Json::exception&){throw std::runtime_error("Invalid personal Unicode");}PersonalData::parse(raw);return raw;}
-PersonalData PersonalData::merged(const PersonalData& other)const{PersonalData result;std::set<std::pair<std::string,std::string>> seenWords,seenPhrases;for(const auto* source:{this,&other}){auto checked=parse(source->serialize());for(const auto& word:checked.words)if(seenWords.emplace(word.pinyin,word.text).second)result.words.push_back(word);for(const auto& phrase:checked.phrases)if(seenPhrases.emplace(phrase.shortcut,phrase.text).second)result.phrases.push_back(phrase);}return parse(result.serialize());}
+bool PersonalData::isFavorite(const std::string& glyph) const {
+    return std::find(favorites.begin(),favorites.end(),glyph)!=favorites.end();
+}
+void PersonalData::setFavorite(const std::string& glyph,bool favorite) {
+    if(!emoji_catalog::find(glyph))throw std::runtime_error("Favorite is not in the built-in emoji catalog");
+    auto found=std::find(favorites.begin(),favorites.end(),glyph);
+    if(favorite){
+        if(found!=favorites.end())return;
+        if(favorites.size()>=MaxFavorites)throw std::runtime_error("At most 64 favorite emoji and kaomoji");
+        favorites.push_back(glyph);
+    }else if(found!=favorites.end())favorites.erase(found);
+}
+std::string PersonalData::serialize()const{Json object={{"kind","wangshu-personal"},{"version",favorites.empty()?1:2},{"words",Json::array()},{"phrases",Json::array()}};for(const auto& w:words)object["words"].push_back({{"pinyin",w.pinyin},{"text",w.text}});for(const auto& p:phrases)object["phrases"].push_back({{"shortcut",p.shortcut},{"text",p.text}});if(!favorites.empty())object["favorites"]=favorites;std::string raw;try{raw=object.dump();}catch(const Json::exception&){throw std::runtime_error("Invalid personal Unicode");}PersonalData::parse(raw);return raw;}
+PersonalData PersonalData::merged(const PersonalData& other)const{PersonalData result;std::set<std::pair<std::string,std::string>> seenWords,seenPhrases;for(const auto* source:{this,&other}){auto checked=parse(source->serialize());for(const auto& word:checked.words)if(seenWords.emplace(word.pinyin,word.text).second)result.words.push_back(word);for(const auto& phrase:checked.phrases)if(seenPhrases.emplace(phrase.shortcut,phrase.text).second)result.phrases.push_back(phrase);for(const auto& glyph:checked.favorites)result.setFavorite(glyph,true);}return parse(result.serialize());}
 std::vector<Candidate> PersonalData::lookup(const Engine& base,const std::string& input,size_t page)const{if(input.empty()||input[0]=='\\'||page>1000)return base.lookup(input,9,page);std::string normalized;try{normalized=key(input);}catch(const std::exception&){return base.lookup(input,9,page);}std::vector<Candidate> values;std::set<std::string> unique;for(const auto& word:words)if(word.pinyin==normalized&&unique.insert(word.text).second)values.push_back({word.text,"个人",0});for(const auto& phrase:phrases)if(phrase.shortcut==normalized&&unique.insert(phrase.text).second)values.push_back({phrase.text,"常用语",0});if(values.empty())return base.lookup(input,9,page);size_t needed=(page+1)*9;for(size_t i=0;i<=page&&values.size()<needed;i++){auto chunk=base.lookup(input,9,i);for(auto& value:chunk)if(unique.insert(value.text).second)values.push_back(std::move(value));if(chunk.size()<9)break;}size_t from=page*9;if(from>=values.size())return {};size_t to=std::min(values.size(),needed);return {values.begin()+static_cast<std::ptrdiff_t>(from),values.begin()+static_cast<std::ptrdiff_t>(to)};}
 }

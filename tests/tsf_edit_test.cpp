@@ -143,6 +143,9 @@ public:
     HRESULT STDMETHODCALLTYPE UnadviseKeyEventSink(TfClientId) override{drop(keys);return S_OK;}
 };
 struct TextServiceTestAccess {
+    static void usePersonalStore(TextService* service,const std::wstring& path){
+        service->personalStore=std::make_unique<wangshu::WindowsPersonalStore>(path);
+    }
     static bool stageVoice(TextService* service,ITfContext* c,const std::string& text){service->stopVoice();service->voiceRecovery.clear();auto manager=dynamic_cast<Manager*>(service->manager);if(manager&&!manager->document)manager->document=new DocumentManager(c);if(FAILED(service->bindVoice(c)))return false;service->reviewVoice(text);return !service->voiceReview.empty();}
     static bool beginVoice(TextService* service,ITfContext* c){service->stopVoice();service->voiceRecovery.clear();return SUCCEEDED(service->bindVoice(c));}
     static bool beginVoicePreviewFixture(TextService* service,ITfContext* c,const std::filesystem::path& folder){

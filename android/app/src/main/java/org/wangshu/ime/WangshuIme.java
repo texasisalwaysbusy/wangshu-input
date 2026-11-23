@@ -96,6 +96,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private String symbolCategory=SymbolPanelCatalog.DEFAULT_CATEGORY, emojiCategory="笑脸";
     private EmojiCatalog.Kind emojiSearchKind;
     private EmojiPanel.Search emojiSearchView;
+    private boolean emojiFavoritesOpen;
     private long emojiViewGeneration=0, emojiSelectionRevision=0;
     private final EmojiScrollMemory emojiScrollMemory=new EmojiScrollMemory();
     private HorizontalScrollView emojiOuterScroll,emojiTabsScroll;private ScrollView emojiItemsScroll;private EmojiScrollMemory.Offsets emojiPendingOffsets;
@@ -255,7 +256,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private void add(LinearLayout r,String label,float weight,Runnable action){r.addView(button(label,action),new LinearLayout.LayoutParams(0,dp(keyHeight()),weight));}
     private void rebuild(){
         resetEmojiSearchView();
-        if(!emojiPanelActive())emojiSearchKind=null;
+        if(!emojiPanelActive()){emojiSearchKind=null;emojiFavoritesOpen=false;}
         if(root==null)return;rememberEmojiScroll();emojiViewGeneration++;if(voiceHold!=null&&voiceHold.state().showVoiceLayer()){showVoiceHold(voiceHold.state());return;}voiceOverlay=null;if(landscapeViewport!=null)landscapeViewport.setVoiceLayer(null);if(inputSurface!=null){inputSurface.spaceKey(null);inputSurface.backspaceKey(null);}deleteKey=null;root.removeAllViews();root.addView(buildToolbar());
         composition=new TextView(this);composition.setTextSize(compact()?12:14);composition.setSingleLine(true);composition.setEllipsize(android.text.TextUtils.TruncateAt.START);composition.setTextColor(getColor(R.color.ink));composition.setPadding(dp(8),0,dp(8),0);
         candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page==CandidatePages.ALTERNATIVES||page>0)moveCandidatePage(-1);});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;if(!expandedCandidates&&page==CandidatePages.ALTERNATIVES)page=0;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
@@ -408,6 +409,11 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private void clearEmojiSearch() {
         resetEmojiSearchView();
         emojiSearchKind=null;
+        emojiFavoritesOpen=false;
+    }
+    private PersonalStore.FavoriteSnapshot emojiFavorites() {
+        try{return PersonalStore.get(this).favoriteSnapshot();}
+        catch(java.io.IOException unavailable){return null;}
     }
     private void mathKeys(){
         final long viewGeneration=emojiViewGeneration;final int viewSession=inputSession;
@@ -417,12 +423,27 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         emojiOuterScroll=tabs;emojiScrollSession=inputSession;emojiScrollSymbol=symbolCategory;emojiScrollCategory=symbolCategory.equals("颜文字")?"颜文字":emojiCategory;
         if(emojiPanelActive()){
             final int session=inputSession;final long generation=emojiViewGeneration,selection=emojiSelectionRevision;final InputConnection editor=getCurrentInputConnection();
+            EmojiCatalog.Kind kind=symbolCategory.equals("颜文字")?EmojiCatalog.Kind.KAOMOJI:EmojiCatalog.Kind.EMOJI;
+            String selected=kind==EmojiCatalog.Kind.KAOMOJI?"颜文字":emojiCategory;
+            final boolean searching=emojiSearchKind==kind;
+            final boolean favoritesAllowed=!privateInput();
+            final boolean showingFavorites=emojiFavoritesOpen&&favoritesAllowed&&!searching;
+            final PersonalStore.FavoriteSnapshot favorites=showingFavorites?emojiFavorites():null;
             EmojiSelection.Host guard=new EmojiSelection.Host(){
                 public long session(){return inputSession;}public long generation(){return emojiViewGeneration;}public long selectionRevision(){return emojiSelectionRevision;}public Object connection(){return getCurrentInputConnection();}public boolean active(){return emojiPanelActive();}
-                public boolean send(Object expected,String text){cancelBackspace();if(beforeCaret!=null)beforeCaret.invalidate();cancelHoldForOtherInput();if(hasVoiceWork())cancelVoice();if(session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision||editor==null||expected!=editor||editor!=getCurrentInputConnection()||!emojiPanelActive()||!isInputViewShown()||session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision)return false;return editor.commitText(text,1);}
+                public boolean send(Object expected,String text){
+                    cancelBackspace();if(beforeCaret!=null)beforeCaret.invalidate();cancelHoldForOtherInput();if(hasVoiceWork())cancelVoice();
+                    if(showingFavorites&&(favorites==null||privateInput()||personalRevision()!=favorites.revision))return false;
+                    if(session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision||editor==null||expected!=editor||editor!=getCurrentInputConnection()||!emojiPanelActive()||!isInputViewShown()||session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision)return false;
+                    return editor.commitText(text,1);
+                }
             };
-            EmojiSelection.Token token=EmojiSelection.capture(guard);EmojiCatalog.Kind kind=symbolCategory.equals("颜文字")?EmojiCatalog.Kind.KAOMOJI:EmojiCatalog.Kind.EMOJI;String selected=kind==EmojiCatalog.Kind.KAOMOJI?"颜文字":emojiCategory;
-            final boolean searching=emojiSearchKind==kind;
+            EmojiSelection.Token token=EmojiSelection.capture(guard);
+            java.util.List<EmojiCatalog.Item> favoriteItems=new java.util.ArrayList<>();
+            if(favorites!=null)for(String glyph:favorites.glyphs){
+                EmojiCatalog.Item item=EmojiCatalog.find(glyph);
+                if(item.kind==kind)favoriteItems.add(item);
+            }
             EmojiPanel.Host host=new EmojiPanel.Host(){
                 public void bind(ScrollView items,HorizontalScrollView innerTabs){emojiItemsScroll=items;emojiTabsScroll=innerTabs;}
                 public void category(String name){if(!EmojiSelection.current(guard,token)){toast("输入位置已变化，请重新选择");return;}emojiCategory=name;rebuild();}
@@ -436,7 +457,31 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                     clearEmojiSearch();
                     rebuild();
                 }
-                public void choose(EmojiCatalog.Item item){if(item.kind!=kind||(!searching&&!EmojiCatalog.category(selected).contains(item)))return;EmojiSelection.Outcome result=EmojiSelection.select(guard,token,item.text);if(result==EmojiSelection.Outcome.STALE)toast("输入位置已变化，请重新选择");else if(result==EmojiSelection.Outcome.UNCERTAIN)toast("插入结果未确认，请检查；不会自动重试");}
+                public void favorites(boolean open){
+                    if(!EmojiSelection.current(guard,token)||!isInputViewShown()||privateInput())return;
+                    emojiFavoritesOpen=open;
+                    rebuild();
+                }
+                public void manageFavorites(){
+                    if(!showingFavorites||!EmojiSelection.current(guard,token)||!isInputViewShown()||privateInput())return;
+                    startActivity(new Intent(WangshuIme.this,PersonalActivity.class)
+                            .putExtra("favorites",true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                }
+                public void choose(EmojiCatalog.Item item){
+                    if(item.kind!=kind)return;
+                    if(showingFavorites){
+                        if(!EmojiSelection.current(guard,token)||!isInputViewShown())return;
+                        if(privateInput()||favorites==null||!favoriteItems.contains(item)
+                                ||personalRevision()!=favorites.revision){
+                            toast("收藏已变化，请重新选择");
+                            rebuild();
+                            return;
+                        }
+                    }else if(!searching&&!EmojiCatalog.category(selected).contains(item))return;
+                    EmojiSelection.Outcome result=EmojiSelection.select(guard,token,item.text);
+                    if(result==EmojiSelection.Outcome.STALE)toast("输入位置已变化，请重新选择");
+                    else if(result==EmojiSelection.Outcome.UNCERTAIN)toast("插入结果未确认，请检查；不会自动重试");
+                }
             };
             if(searching){
                 tabs.setVisibility(View.GONE);
@@ -445,11 +490,13 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                 keys.addView(emojiSearchView.view);
                 return;
             }
-            keys.addView(EmojiPanel.build(this,kind,selected,compact(),host));
-            final ScrollView items=emojiItemsScroll;final HorizontalScrollView innerTabs=emojiTabsScroll;final String viewSymbol=symbolCategory,viewCategory=selected;
+            keys.addView(EmojiPanel.build(this,kind,selected,compact(),showingFavorites,
+                    favoritesAllowed?favoriteItems:null,host));
+            final ScrollView items=emojiItemsScroll;final HorizontalScrollView innerTabs=emojiTabsScroll;final String viewSymbol=symbolCategory,viewCategory=showingFavorites?"收藏":selected;
+            emojiScrollCategory=viewCategory;
             EmojiScrollMemory.Offsets offsets=emojiScrollMemory.get(inputSession,viewSymbol,viewCategory);
             emojiPendingOffsets=offsets;
-            tabs.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){public void onLayoutChange(View view,int left,int top,int right,int bottom,int oldLeft,int oldTop,int oldRight,int oldBottom){view.removeOnLayoutChangeListener(this);view.post(()->{if(inputSession!=session||emojiViewGeneration!=generation||emojiOuterScroll!=tabs||emojiItemsScroll!=items||emojiTabsScroll!=innerTabs||emojiPendingOffsets!=offsets||!emojiPanelActive()||!symbolCategory.equals(viewSymbol)||(kind==EmojiCatalog.Kind.EMOJI&&!emojiCategory.equals(viewCategory)))return;tabs.scrollTo(offsets.outer,0);if(innerTabs!=null)innerTabs.scrollTo(offsets.tabs,0);if(items!=null)items.scrollTo(0,offsets.items);emojiPendingOffsets=null;});}});
+            tabs.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){public void onLayoutChange(View view,int left,int top,int right,int bottom,int oldLeft,int oldTop,int oldRight,int oldBottom){view.removeOnLayoutChangeListener(this);view.post(()->{if(inputSession!=session||emojiViewGeneration!=generation||emojiOuterScroll!=tabs||emojiItemsScroll!=items||emojiTabsScroll!=innerTabs||emojiPendingOffsets!=offsets||!emojiPanelActive()||!symbolCategory.equals(viewSymbol))return;tabs.scrollTo(offsets.outer,0);if(innerTabs!=null)innerTabs.scrollTo(offsets.tabs,0);if(items!=null)items.scrollTo(0,offsets.items);emojiPendingOffsets=null;});}});
         }else{
             ScrollView scroll=new ScrollView(this);LinearLayout rows=column();final InputConnection symbolEditor=getCurrentInputConnection();String[] builtins=SymbolPanelCatalog.builtinSymbols(symbolCategory);String[] values=builtins!=null?builtins:DataFiles.ready?NativeBridge.symbols(symbolCategory):new String[0];LinearLayout r=null;for(int i=0;i<values.length;i+=2){if((i/2)%6==0){r=row();rows.addView(r);}String symbol=values[i],alias=values[i+1];Button b=symbolButton(symbol,alias,builtins!=null,viewSession,viewGeneration,symbolEditor);r.addView(b,new LinearLayout.LayoutParams(0,dp(keyHeight()),1));}if(r!=null){int remainder=(values.length/2)%6;if(remainder!=0)for(int empty=remainder;empty<6;empty++)r.addView(new Space(this),new LinearLayout.LayoutParams(0,dp(keyHeight()),1));}scroll.addView(rows);keys.addView(scroll,new LinearLayout.LayoutParams(-1,dp(compact()?72:152)));
         }

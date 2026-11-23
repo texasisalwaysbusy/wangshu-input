@@ -1,16 +1,18 @@
 #pragma once
 
 #include "../core/engine.h"
+#include "../core/emoji_catalog.h"
 #include <string_view>
 
 namespace wangshu::symbol_panel {
 
 inline constexpr std::string_view Prefix{"\\\\", 2};
 inline constexpr std::string_view SearchPrefix{"\\\\find\\", 7};
+inline constexpr std::string_view Favorites{"\\\\favorites", 11};
 inline constexpr size_t SearchLimit = 40;
 inline constexpr size_t PageSize = 9;
 
-enum class Source { Dictionary, Emoji, English, Search };
+enum class Source { Dictionary, Emoji, English, Search, Favorites };
 struct Category {
     const char* key;
     const char* label;
@@ -37,17 +39,9 @@ inline constexpr Category Categories[] = {
     {"flags", "旗帜", Source::Emoji},
     {"kaomoji", "颜文字", Source::Emoji},
     {"find", "表情和颜文字检索", Source::Search},
+    {"favorites", "收藏表情与颜文字", Source::Favorites},
 };
 
-struct EmojiEntry {
-    const char* category;
-    const char* text;
-    const char* description;
-    const char* pinyin;
-};
-inline constexpr EmojiEntry Emoji[] = {
-#include "emoji_catalog.inc"
-};
 inline constexpr const char* EnglishPunctuation[] = {
     ",", ".", "?", "!", ":", ";", "'", "\"", "-", "_", "(", ")", "[", "]", "{", "}", "@", "#",
 };
@@ -78,7 +72,7 @@ inline std::vector<Candidate> lookup(const Engine& dictionary, std::string_view 
         }
         // Exact names first, then pinyin prefixes, then matches inside a name.
         for (int rank = 0; rank < 3 && result.size() < PageSize; ++rank)
-            for (const auto& entry : Emoji) {
+            for (const auto& entry : emoji_catalog::Entries) {
                 std::string_view pinyin(entry.pinyin);
                 const auto position = pinyin.find(query);
                 if (position == std::string_view::npos) continue;
@@ -110,7 +104,7 @@ inline std::vector<Candidate> lookup(const Engine& dictionary, std::string_view 
             break;
         case Source::Emoji:
             if (filter.empty()) {
-                for (const auto& entry : Emoji)
+                for (const auto& entry : emoji_catalog::Entries)
                     if (std::string_view(entry.category) == group.label) append(entry.text, entry.description);
             }
             break;
@@ -119,10 +113,20 @@ inline std::vector<Candidate> lookup(const Engine& dictionary, std::string_view 
                 for (const auto* mark : EnglishPunctuation) append(mark, group.label);
             break;
         case Source::Search:
+        case Source::Favorites:
             break;
         }
         break;
     }
+    return result;
+}
+
+inline std::vector<Candidate> favoritePage(const std::vector<std::string>& glyphs,size_t page) {
+    if(page>=1+glyphs.size()/PageSize)return {};
+    std::vector<Candidate> result;
+    for(size_t index=page*PageSize;index<glyphs.size()&&result.size()<PageSize;++index)
+        if(const auto* item=emoji_catalog::find(glyphs[index]))
+            result.push_back({item->text,item->description});
     return result;
 }
 

@@ -66,8 +66,38 @@ private:
     }
 };
 
-int main() {
+static void favorites(const std::filesystem::path& newFolder) {
+    if(!std::filesystem::create_directory(newFolder))throw std::runtime_error("Expected a new favorite fixture folder");
+    const auto path=(newFolder/L"personal.json").wstring();
+    wangshu::WindowsPersonalStore store(path);
+    auto saved=store.modify(store.readFresh().revision,[](wangshu::PersonalData& data){
+        data.setFavorite("👩🏽‍💻",true);
+        data.setFavorite("( 'ω' )",true);
+    });
+    SymbolFixture fixture;
+    TextServiceTestAccess::usePersonalStore(fixture.service,path);
+    fixture.open();fixture.key(VK_NEXT);fixture.key(VK_NEXT);
+    check(fixture.row(2)==L"收藏表情与颜文字","favorites category is reachable");
+    fixture.key('3');
+    check(fixture.row(0)==L"👩🏽‍💻"&&fixture.row(1)==L"( 'ω' )","shows favorites in saved order");
+    fixture.editor->deferred=true;
+    check(SUCCEEDED(fixture.finalize()),"host requests selected favorite through normal edit validation");
+    const auto before=fixture.editor->doc.value;
+    store.modify(saved.revision,[](wangshu::PersonalData& data){data.setFavorite("👩🏽‍💻",false);});
+    const auto edits=fixture.editor->flush();
+    check(edits.size()==1&&edits[0]==E_ABORT&&fixture.editor->doc.value==before,
+          "a removed favorite is not committed by a delayed callback");
+    fixture.editor->deferred=false;
+    fixture.key(VK_ESCAPE);
+    check(fixture.editor->doc.value==L"beforeafter","stale confirmation preserves the original document");
+    fixture.open();fixture.letters("favorites");
+    fixture.key('1');
+    check(fixture.editor->doc.value==L"before( 'ω' )after","fresh favorite inserts unchanged into its owner");
+}
+
+int wmain(int argc,wchar_t** argv) {
     try {
+        if(argc>2)return 2;
         {
             SymbolFixture fixture;
             ScriptedKeyboardState ambientShift(true);
@@ -195,6 +225,8 @@ int main() {
             fixture.key(VK_SPACE);
             check(fixture.editor->doc.value == before, "changed caret consumes category actions without writing");
         }
+        if(argc==2)favorites(std::filesystem::absolute(argv[1]));
+        else std::cout << "NOT_RUN favorite transaction requires a new fixture directory\n";
         check(objectCount == 0, "symbol panel releases all synthetic TSF references");
         std::cout << "TOTAL " << checks << " PASS; symbol panel, native Windows with mock TSF only\n";
         return 0;

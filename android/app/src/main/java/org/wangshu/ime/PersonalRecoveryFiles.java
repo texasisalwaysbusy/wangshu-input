@@ -154,7 +154,7 @@ final class PersonalRecoveryFiles {
         private final byte[][] originals;
         private final byte[] payload;
         final String source;
-        final int words, phrases;
+        final int words, phrases, favorites;
 
         private Plan(Path file, byte[][] originals, JSONObject selected, String source) throws IOException {
             this.file = file;
@@ -163,6 +163,7 @@ final class PersonalRecoveryFiles {
             this.source = source;
             this.words = selected.optJSONArray("words").length();
             this.phrases = selected.optJSONArray("phrases").length();
+            this.favorites = PersonalStore.favoriteCount(selected);
         }
 
         JSONObject data() throws IOException {
