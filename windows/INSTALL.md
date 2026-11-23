@@ -14,6 +14,18 @@ Real registration, system enablement, GUI, multiple applications, 32-bit hosts, 
 
 Installation scripts change the project's COM/TSF registration state. Source availability is not permission or advice to run them. Stop on access denial or security warnings; do not automatically elevate, change ACLs or bypass warnings. Any later Windows binary should have its own release notes covering signing, integrity, installation/recovery and acceptance scope.
 
-项目代码沿用仓库 Apache-2.0 许可；词典及依赖保留自己的许可。此说明不修改任何脚本，不运行注册、不更改用户机器或输入法设置。
+## 文件预检与回退准备
 
-Project code follows the repository's Apache-2.0 license; dictionary and dependencies retain separate licenses. This document changes no script, executes no registration and alters no machine or input-method settings.
+在解压后的开发包目录可用 `install.cmd --preflight` 或 `uninstall.cmd --preflight` 检查所需注册工具和文件是否存在且非空。x64 主机一次检查 x64 和 x86 两个架构。该模式不执行注册工具。签名、哈希与架构身份按候选收据另行核对。
+
+在获准注册或更新前，记下当前默认输入法，保留此前版本的两种架构文件、位置、哈希和个人数据备份。使用独立版本目录。若注册在中途失败，保留两步结果和目录，先确认各架构的注册状态，再按已确认的恢复方案使用原版匹配文件恢复。不要重跑脚本、删除原目录或清理个人数据来试错。
+
+## File preflight and recovery preparation
+
+From the extracted development package, run `install.cmd --preflight` or `uninstall.cmd --preflight` to verify that the required registrars and files are present and nonempty. On an x64 host both architectures are checked together. This mode launches no registrar. Use the candidate receipt to check signatures, hashes and architecture separately.
+
+Before an approved registration or upgrade, record the current default input method and retain the previous version's files and hashes for both architectures, their locations and the personal-data backup. Keep each version in its own directory. If only one operation succeeds, preserve both results and the files, establish the registration state for each architecture, then recover with the matching prior files under the approved recovery procedure. Avoid blind retries or clearing data.
+
+项目代码沿用仓库 Apache-2.0 许可。词典及依赖保留自己的许可。
+
+Project code follows the repository's Apache-2.0 license. Dictionary and dependencies retain separate licenses.

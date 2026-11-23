@@ -162,13 +162,13 @@ def main():
             'Binary packages require explicit --production-receipt, --tests-receipt and --runtime; otherwise use --source-only')
     production = load_build(args.production_receipt, 'production')
     tests = load_build(args.tests_receipt, 'tests')
-    # The unchanged installer registers both x64 and x86 on x64 Windows.
+    # The installer registers both x64 and x86 on x64 Windows.
     require(all('wangshu-ime-' + arch + '.dll' in production['record']['outputs'] for arch in ('x64', 'x86')),
             'This installer package requires both x64 and x86 production builds')
     runtime = load_runtime(args.runtime, production, tests, args.synthetic_contract)
     destination = new_destination(args.destination, [PROJECT, production['root'], tests['root'], runtime['root']])
     members = {name: child(production['root'], name) for name in production['record']['outputs']}
-    for name in ('install.cmd', 'uninstall.cmd', 'INSTALL.md', 'PERSONAL-DATA.md'):
+    for name in ('install.cmd', 'uninstall.cmd', 'registration.cmd', 'INSTALL.md', 'PERSONAL-DATA.md'):
         members[name] = child(PROJECT, 'windows/' + name)
     for name in ('ACCEPTANCE.md', 'PRIVACY.md', 'VOICE.md', 'WINDOWS-COMPATIBILITY.md'):
         members['docs/' + name] = child(PROJECT, 'docs/' + name)

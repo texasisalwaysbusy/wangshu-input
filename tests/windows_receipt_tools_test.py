@@ -100,7 +100,7 @@ def make_case(label, architectures=('x64', 'x86')):
                  'windows/text_service.cpp', 'windows/personal_settings.cpp', 'windows/clipboard_store.cpp', 'windows/voice_helper.cpp',
                  'third_party/sherpa/c-api.h', 'third_party/nlohmann/json.hpp',
                  'third_party/nlohmann/LICENSE.MIT', 'third_party/nlohmann/SOURCE.json',
-                 'windows/install.cmd', 'windows/uninstall.cmd', 'windows/INSTALL.md',
+                 'windows/install.cmd', 'windows/uninstall.cmd', 'windows/registration.cmd', 'windows/INSTALL.md',
                  'windows/PERSONAL-DATA.md', 'docs/ACCEPTANCE.md', 'docs/PRIVACY.md',
                  'docs/VOICE.md', 'docs/WINDOWS-COMPATIBILITY.md', 'data/synthetic.tsv'):
         (project / name).write_text('SYNTHETIC CONTRACT FIXTURE. NOT REAL SOURCE/DATA.\n')

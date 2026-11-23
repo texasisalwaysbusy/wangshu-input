@@ -73,14 +73,21 @@ identity is checked for consistency, not independently rerun or rehashed.
 python tools/package_windows_personal.py --production-receipt <production>/source-attestation.json --tests-receipt <tests>/tests-source-attestation.json --runtime <runtime-evidence>/runtime.json --destination <new-binary-package>
 ```
 
-The unchanged installer needs **both x64 and x86 production pairs**; x64-only
+The installer needs **both x64 and x86 production pairs**; x64-only
 builds may run x64 checks but are refused by this packaging mode. The archive
 includes both architecture pairs, the built x64 voice helper, dictionaries,
-notices, install/uninstall scripts, selected docs and runtime evidence. It does
+notices, install/uninstall scripts and their shared registration script, selected
+docs and runtime evidence. It does
 not execute the scripts, bundle voice models/engine, or include private working
 stores. Every ZIP member is rehashed and CRC-checked. Add `--verify-only` for a
 no-write check. The runtime root and original runner must remain available for
 validation; this is not a portable re-verification mechanism after relocation.
+
+On Windows, `python -B tests/windows_registration_preflight_test.py <new-E-drive-directory>`
+checks the batch entry points with synthetic paths and non-executable files.
+The check leaves fixtures for review and performs no registration. The package's
+`install.cmd --preflight` and `uninstall.cmd --preflight` perform the same file
+checks on the extracted package without invoking a registrar.
 
 ## Evidence limits and synthetic contract tests
 
