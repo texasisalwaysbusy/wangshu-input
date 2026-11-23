@@ -54,6 +54,8 @@ FireRedASR2 CTC 在静音上返回词表标记 `<sil>`。Qwen3-ASR 的静音返�
 
 在同一批 30 条开发 WAV 上，X-ASR 160 毫秒流式版的首字对应音频 P95 为 1.8 秒，480 毫秒基准为 1.6 秒。整段贪心与四路均把英文 WER 从 26.2% 降到 16.5%，最差单句仍超过 60%。混合英文词保留分别为 17/31 和 19/31。五个对照配置均通过 1 秒及 3 秒全零 PCM，四个新配置均未通过开发质量筛选。独立集、Android 设备与麦克风为 NOT_RUN。 [上游模型和分块配置](https://k2-fsa.github.io/sherpa/onnx/x-asr/index.html)
 
+同一批 WAV 的 Fun-ASR Nano INT8 纯英文 WER 为 21.4%，混合词保留 23/31，仍有两句混合未达标，两条全零 PCM 均生成文字。Omnilingual CTC 300M INT8 复现上游英文音频的文档转写，在该开发集上英文 WER 为 100%、混合词保留 0/31。两个整段配置均未通过开发筛选。按参考辅助择词的混合上限升至 25/31，严格口径仍将连写 `baseline` 与分写参考分别计分。独立集为 NOT_RUN。 [Fun-ASR Nano 转换](https://k2-fsa.github.io/sherpa/onnx/funasr-nano/pretrained.html) · [Omnilingual 上游英文控制](https://k2-fsa.github.io/sherpa/onnx/omnilingual-asr/models.html)
+
 ## 自动标点开发评估
 
 CT-Transformer 的直接输出在 7 条结构化文本中拆开了 5 条里的小数、版本号、网址等内容。原文对齐原型只插入可对齐的标点，在 10 条保护检查和 7 条结构化探针中保住原词、大小写和空白。新的 24 条合成文字中，中文、英文和混合标点的类别与位置 micro-F1 分别为 0.824、0.625、0.848。英文未达 0.75 阈值。英文轻量模型在相同英文样本上为 0.333。自动标点继续作为开发候选，实际 ASR 输出和设备验收待做。 [CT-Transformer 与轻量英文模型](https://k2-fsa.github.io/sherpa/onnx/punctuation/pretrained_models.html)
