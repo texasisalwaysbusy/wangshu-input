@@ -1,4 +1,5 @@
 # Retain Windows batch line endings in source exports and cross-platform packages.
 windows/*.cmd -text
 windows/emoji_catalog.inc text eol=lf
+core/long_english_data.inc text eol=lf
 android/app/src/main/java/org/wangshu/ime/EmojiPinyin.java text eol=lf

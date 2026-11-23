@@ -1,0 +1,13 @@
+{
+  "source": "Tatoeba contributors, English sentence export",
+  "download_page": "https://tatoeba.org/en/downloads",
+  "license": "CC BY 2.0 FR",
+  "source_export_sha256": "1a2d75ac07aa5d035bff4e2bf053139dfd3b1f1645f6fd3d76fc852cc9ef6020",
+  "fitted_gain_tsv_sha256": "5f61384cbe2cdcb7655ae733c1c9312ed11cc531bca91bf6c6b153fc0e64027e",
+  "base_context_source_lf_sha256": "4443b09d10ce37dd453e693defec066d2b2106f02586ab50b8a368064f325051",
+  "english_word_count": 24576,
+  "block_groups": 32,
+  "groups": 198891,
+  "rows": 677829,
+  "static_byte_limit": 4194304
+}

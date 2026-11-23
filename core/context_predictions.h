@@ -137,6 +137,10 @@ inline void completeEnglish(std::u16string_view prefix, std::u16string_view afte
     }
 }
 
+namespace long_english {
+inline std::vector<Result> rerank(std::u16string_view line, std::vector<Result> baseline, size_t limit);
+}
+
 inline std::vector<Result> english(std::u16string_view line, std::u16string_view after, size_t limit) {
     std::u16string_view preceding = line;
     std::u16string_view typed;
@@ -168,6 +172,9 @@ inline std::vector<Result> english(std::u16string_view line, std::u16string_view
     if (last && result.size() < limit) fromEnglishContext(last, prefix, after, uppercase, limit, result);
     if (!prefix.empty() && result.size() < limit)
         completeEnglish(prefix, after, uppercase, limit, result);
+    if (prefix.empty() && after.empty()) return long_english::rerank(line, std::move(result), limit);
     return result;
 }
 }
+
+#include "long_english_prediction.h"
