@@ -38,10 +38,63 @@ int wmain(int argc,wchar_t** argv){try{
     auto exportPath=(folder/L"backup-中国.json").wstring();WindowsPersonalStore::exportNew(exportPath,store.read().data);check(WindowsPersonalStore::parseImport(WindowsPersonalStore::readExternal(exportPath)).phrases[0].text=="谢谢\nThank you 👩‍🔬","explicit new-file export is Android-compatible JSON with Unicode path");stable=WindowsPersonalStore::readExternal(exportPath);invalid=false;try{WindowsPersonalStore::exportNew(exportPath,PersonalData{});}catch(...){invalid=true;}check(invalid&&WindowsPersonalStore::readExternal(exportPath)==stable,"export refuses an existing output without overwriting it");
     auto recoverPath=(folder/L"recover.json").wstring();WindowsPersonalStore recovery(recoverPath);recovery.merge(one("first"));recovery.merge(one("second"));writeOwned(recoverPath,"incomplete corrupt canonical");auto recovered=recovery.read();check(recovered.fromBackup&&recovered.data.words.size()==1&&recovered.data.words[0].text=="first","corrupt canonical loads previous valid backup without resetting either file");check(WindowsPersonalStore::readExternal(recoverPath)=="incomplete corrupt canonical","read-only fallback does not silently rewrite corrupt canonical");recovery.restoreBackup(recovered.revision);check(!recovery.read().fromBackup&&recovery.read().data.words.size()==1,"explicit backup restore commits a valid canonical");bool archived=false;for(const auto& entry:std::filesystem::directory_iterator(folder))if(entry.path().extension()==L".invalid")archived|=WindowsPersonalStore::readExternal(entry.path().wstring())=="incomplete corrupt canonical";check(archived,"recovery preserves damaged canonical in an independently named archive");
     auto brokenPath=(folder/L"broken.json").wstring();writeOwned(brokenPath,"invalid owned test JSON");writeOwned(brokenPath+L".bak","invalid owned backup JSON");WindowsPersonalStore broken(brokenPath);invalid=false;try{broken.read();}catch(...){invalid=true;}check(invalid&&WindowsPersonalStore::readExternal(brokenPath)=="invalid owned test JSON","unrecoverable invalid file is reported and never replaced with empty data");
-    auto overPath=(folder/L"capacity.json").wstring();WindowsPersonalStore capacity(overPath);PersonalData capacityData;for(int i=0;i<2000;i++)capacityData.words.push_back({"capacity","word"+std::to_string(i)});capacity.merge(capacityData);auto capacityBefore=WindowsPersonalStore::readExternal(overPath);invalid=false;try{capacity.previewImport(one("extra"));}catch(...){invalid=true;}check(invalid&&WindowsPersonalStore::readExternal(overPath)==capacityBefore,"over-capacity preview refuses rather than offering destructive repair of valid data");check(!capacity.previewImport(capacityData).repair&&capacity.previewImport(capacityData).data.words.size()==2000,"capacity-sized duplicate import previews idempotent additive merge");
-    check(broken.previewImport(one("repair preview")).repair,"unreadable store offers explicitly labeled backup repair preview");
-    invalid=false;try{store.repairFromImport(one("must not replace valid data"));}catch(...){invalid=true;}check(invalid&&store.read().data.words.size()==2,"repair refuses to replace a concurrently readable store");
-    broken.repairFromImport(one("explicit repair"));check(broken.read().data.words.size()==1&&broken.read().data.words[0].text=="explicit repair","explicit confirmed import repairs an otherwise unreadable store");bool brokenArchived=false;for(const auto& entry:std::filesystem::directory_iterator(folder))if(entry.path().extension()==L".invalid")brokenArchived|=WindowsPersonalStore::readExternal(entry.path().wstring())=="invalid owned test JSON";check(brokenArchived,"explicit external-backup repair retains every unreadable canonical file");bool invalidBackupArchived=false;for(const auto& entry:std::filesystem::directory_iterator(folder))if(entry.path().extension()==L".invalid")invalidBackupArchived|=WindowsPersonalStore::readExternal(entry.path().wstring())=="invalid owned backup JSON";check(invalidBackupArchived,"explicit repair archives unreadable backup independently before later backup rotation");
+    auto overPath=(folder/L"capacity.json").wstring();WindowsPersonalStore capacity(overPath);PersonalData capacityData;for(int i=0;i<2000;i++)capacityData.words.push_back({"capacity","word"+std::to_string(i)});capacity.merge(capacityData);auto capacityBefore=WindowsPersonalStore::readExternal(overPath);invalid=false;try{capacity.previewImport(one("extra"));}catch(...){invalid=true;}check(invalid&&WindowsPersonalStore::readExternal(overPath)==capacityBefore,"over-capacity preview refuses rather than offering destructive repair of valid data");auto duplicate=capacity.previewImport(capacityData);check(!duplicate.repair()&&duplicate.data().words.size()==2000,"capacity-sized duplicate import previews idempotent additive merge");
+    auto importPath=(folder/L"import-confirm.json").wstring();
+    WindowsPersonalStore importStore(importPath),otherWindow(importPath);
+    importStore.merge(one("original"));
+    auto importBefore=WindowsPersonalStore::readExternal(importPath);
+    auto incoming=one("displayed");
+    auto importPlan=importStore.previewImport(incoming);
+    check(!importPlan.repair()&&importPlan.data().words.size()==2&&WindowsPersonalStore::readExternal(importPath)==importBefore,
+          "merge preview computes the exact result without writing the store");
+    otherWindow.merge(one("changed in other window"));
+    auto expectedAfterChange=WindowsPersonalStore::readExternal(importPath);
+    invalid=false;try{importStore.confirmImport(importPlan);}catch(...){invalid=true;}
+    check(invalid&&WindowsPersonalStore::readExternal(importPath)==expectedAfterChange,"changed data refuses stale merge instead of recomputing");
+    auto freshPlan=importStore.previewImport(incoming);
+    incoming.words.front().text="not displayed";
+    check(importStore.confirmImport(freshPlan).data.serialize()==freshPlan.data().serialize()&&
+          WindowsPersonalStore(importPath).read().data.words.back().text=="displayed",
+          "confirmation writes only the frozen result and persists across reopen");
+    auto replacePath=(folder/L"became-readable.json").wstring();
+    writeOwned(replacePath,"bad before repair");
+    WindowsPersonalStore replaceStore(replacePath);
+    auto oldRepair=replaceStore.previewImport(one("must not replace valid data"));
+    writeOwned(replacePath,one("now readable").serialize());
+    invalid=false;try{replaceStore.confirmImport(oldRepair);}catch(...){invalid=true;}
+    check(oldRepair.repair()&&invalid&&replaceStore.readFresh().data.words.front().text=="now readable",
+          "repair refuses to replace a concurrently readable store");
+    auto repairPlan=broken.previewImport(one("explicit repair"));
+    check(repairPlan.repair(),"unreadable store offers explicitly labeled backup repair preview");
+    writeOwned(brokenPath+L".bak","changed owned backup JSON");
+    invalid=false;try{broken.confirmImport(repairPlan);}catch(...){invalid=true;}
+    check(invalid&&WindowsPersonalStore::readExternal(brokenPath)=="invalid owned test JSON"&&
+          WindowsPersonalStore::readExternal(brokenPath+L".bak")=="changed owned backup JSON",
+          "changed damaged backup invalidates repair preview without replacing either file");
+    broken.confirmImport(broken.previewImport(one("explicit repair")));
+    check(broken.read().data.words.size()==1&&broken.read().data.words[0].text=="explicit repair","explicit confirmed import repairs an otherwise unreadable store");
+    bool brokenArchived=false;for(const auto& entry:std::filesystem::directory_iterator(folder))if(entry.path().extension()==L".invalid")brokenArchived|=WindowsPersonalStore::readExternal(entry.path().wstring())=="invalid owned test JSON";check(brokenArchived,"explicit external-backup repair retains every unreadable canonical file");
+    bool invalidBackupArchived=false;for(const auto& entry:std::filesystem::directory_iterator(folder))if(entry.path().extension()==L".invalid")invalidBackupArchived|=WindowsPersonalStore::readExternal(entry.path().wstring())=="changed owned backup JSON";check(invalidBackupArchived,"explicit repair archives unreadable backup independently before later backup rotation");
+    auto oversizedPath=(folder/L"oversized-damaged.json").wstring();
+    std::string oversized(1024*1024+1,'x');
+    writeOwned(oversizedPath,oversized);
+    WindowsPersonalStore oversizedStore(oversizedPath);
+    auto oversizedPlan=oversizedStore.previewImport(one("oversized recovery"));
+    oversized.back()='y';
+    writeOwned(oversizedPath,oversized);
+    invalid=false;try{oversizedStore.confirmImport(oversizedPlan);}catch(...){invalid=true;}
+    check(oversizedPlan.repair()&&invalid&&std::filesystem::file_size(oversizedPath)==oversized.size(),
+          "oversized damaged file stays repairable but a same-size change invalidates the preview");
+    oversizedStore.confirmImport(oversizedStore.previewImport(one("oversized recovery")));
+    bool oversizedArchived=false;
+    for(const auto& entry:std::filesystem::directory_iterator(folder))
+        if(entry.path().extension()==L".invalid"&&std::filesystem::file_size(entry.path())==oversized.size()){
+            std::ifstream evidence(entry.path(),std::ios::binary);
+            evidence.seekg(-1,std::ios::end);
+            oversizedArchived=evidence.get()=='y';
+        }
+    check(oversizedArchived&&oversizedStore.readFresh().data.words.front().text=="oversized recovery",
+          "explicit repair preserves the oversized original and publishes the validated candidate");
     std::vector<wchar_t> executable(32768);DWORD length=GetModuleFileNameW(nullptr,executable.data(),static_cast<DWORD>(executable.size()));if(!length||length>=executable.size())throw std::runtime_error("Test executable path unavailable");auto concurrentPath=(folder/L"two-process.json").wstring();PROCESS_INFORMATION processes[2]{};for(int i=0;i<2;i++){auto command=L"\""+std::wstring(executable.data(),length)+L"\" --append \""+concurrentPath+L"\" "+(i?L"childb":L"childa");STARTUPINFOW startup{};startup.cb=sizeof(startup);std::vector<wchar_t> mutableCommand(command.begin(),command.end());mutableCommand.push_back(0);if(!CreateProcessW(executable.data(),mutableCommand.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&startup,&processes[i]))throw std::runtime_error("Owned child test unavailable");}
     bool children=true;for(auto& process:processes){DWORD result=WaitForSingleObject(process.hProcess,30000),code=1;if(result==WAIT_OBJECT_0)GetExitCodeProcess(process.hProcess,&code);else TerminateProcess(process.hProcess,99);children&=result==WAIT_OBJECT_0&&code==0;CloseHandle(process.hThread);CloseHandle(process.hProcess);}check(children,"both owned PE writer processes finish normally within bounded wait");check(WindowsPersonalStore(concurrentPath).read().data.words.size()==20,"cross-process named lock prevents lost additive updates");
     if(argc>=3){auto android=WindowsPersonalStore::parseImport(WindowsPersonalStore::readExternal(argv[2]));check(android.words.size()>=2&&android.phrases.size()==1&&android.phrases[0].text=="First line\n数学 α + 👩‍🔬","actual Android AtomicFile synthetic fixture is consumed intact by Windows wrapper");}

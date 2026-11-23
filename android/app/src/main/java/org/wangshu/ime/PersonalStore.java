@@ -16,6 +16,9 @@ final class PersonalStore {
     private final AtomicFile file;
     private final File path,pendingMarker;
     static final class UnconfirmedSaveException extends IOException {UnconfirmedSaveException(){super("保存结果未确认，个人数据已暂停修改；请保留文件并检查");}UnconfirmedSaveException(Throwable cause){super("保存结果未确认，个人数据已暂停修改；请保留文件并检查",cause);}}
+    static final class StaleDataException extends IOException {
+        StaleDataException(){super("本机个人数据已更新，请重新打开或预览后再确认。");}
+    }
     private JSONObject data;
     private long revision;
     synchronized long revision(){return revision;}
@@ -148,8 +151,20 @@ final class PersonalStore {
             // both pass a stale check and then overwrite each other. A leftover marker fails closed.
             if(!pendingMarker.createNewFile())throw new UnconfirmedSaveException();reserved=true;
             try(FileOutputStream marker=new FileOutputStream(pendingMarker)){marker.write(1);marker.getFD().sync();}
-            JSONObject disk;if(path.exists()||new File(path+".bak").exists()){try(InputStream current=file.openRead()){disk=parse(read(current));}}else disk=empty();
-            if(!Arrays.equals(bytes(disk),bytes(data))){if(!pendingMarker.delete())throw new UnconfirmedSaveException();reserved=false;throw new IOException("个人数据已在其他位置改变，请重新打开后再修改");}
+            // Inspect the same effective data as AtomicFile without renaming its
+            // legacy backup or discarding a staged file during a stale check.
+            File backup=new File(path.getPath()+".bak");
+            File effective=backup.exists()?backup:path;
+            JSONObject disk;
+            if(effective.exists()){try(InputStream current=new FileInputStream(effective)){disk=parse(read(current));}}
+            else disk=empty();
+            if(!Arrays.equals(bytes(disk),bytes(data))){
+                if(!pendingMarker.delete())throw new UnconfirmedSaveException();
+                reserved=false;
+                data=disk;
+                revision++;
+                throw new StaleDataException();
+            }
             started=true;out=file.startWrite();out.write(payload);out.getFD().sync();finishInvoked=true;file.finishWrite(out);out=null;
             try(InputStream confirmed=file.openRead()){if(!Arrays.equals(payload,read(confirmed)))throw new IOException("个人词库保存结果未确认");}
             if(!pendingMarker.delete())throw new UnconfirmedSaveException();reserved=false;data=checked;revision++;
@@ -177,6 +192,28 @@ final class PersonalStore {
         }catch(JSONException e){throw new IOException("无法合并文件",e);}
     }
     synchronized void merge(JSONObject incoming)throws IOException {save(previewMerge(incoming));}
+    static final class ImportPreview {
+        private final PersonalStore owner;
+        private final long revision;
+        private final byte[] payload;
+        final int wordCount,phraseCount;
+
+        private ImportPreview(PersonalStore owner,long revision,JSONObject merged)throws JSONException,IOException {
+            this.owner=owner;
+            this.revision=revision;
+            payload=bytes(merged);
+            wordCount=merged.getJSONArray("words").length();
+            phraseCount=merged.getJSONArray("phrases").length();
+        }
+    }
+    synchronized ImportPreview prepareImport(JSONObject incoming)throws IOException {
+        try{return new ImportPreview(this,revision,previewMerge(incoming));}
+        catch(JSONException invalid){throw new IOException("导入预览未完成",invalid);}
+    }
+    synchronized void confirmImport(ImportPreview preview)throws IOException {
+        if(preview==null||preview.owner!=this||preview.revision!=revision)throw new StaleDataException();
+        save(parse(preview.payload));
+    }
     synchronized byte[] export()throws IOException {return bytes(snapshot());}
     synchronized String[] words(String input)throws IOException {
         if(pendingMarker.exists())throw new UnconfirmedSaveException();String k;try{k=key(input);}catch(IOException e){return new String[0];}

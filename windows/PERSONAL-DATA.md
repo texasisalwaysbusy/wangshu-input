@@ -4,6 +4,10 @@ Windows 源码包含本地个人词库/常用语存储与原生管理程序，�
 
 The Windows source contains local personal-word/phrase storage and a native management application connected to the TSF candidate path. These are development implementations, not acceptance of real-Windows GUI, host integration, accessibility or persistence recovery.
 
+词库导入确认使用预览中已计算的结果。若本机词库或备份文件在对话框打开期间变化，请重新预览。故障修复确认会保留损坏文件副本。
+
+Import confirmation applies the result computed for the preview. If the local dictionary or its backup changes while the dialog is open, preview again. Confirmed repair preserves copies of damaged files.
+
 Windows 与 Android 使用各自的平台存储实现。不要以 Android 的导入/导出、设置、隐私或生命周期结果推断 Windows 已完成。个人词条与常用语可能包含私人文字，JSON/TSV 不是加密格式；不要将真实备份附在公开 Issue 或开发包中。
 
 Windows and Android use separate platform storage implementations. Android import/export, settings, privacy or lifecycle results do not validate Windows. Personal entries can contain private text; JSON/TSV are not encrypted formats. Do not attach real backups to public issues or development packages.

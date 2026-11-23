@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <string_view>
+#include <wincrypt.h>
 #include "../third_party/nlohmann/json.hpp"
 
 namespace wangshu {
@@ -45,6 +46,39 @@ bool equalAsciiFold(std::string_view value,std::string_view lowercase) {
         return (actual>='A'&&actual<='Z'?actual+('a'-'A'):actual)==expected;
     });
 }
+std::string hashImportFile(const std::wstring& path){
+    // Oversized damaged files remain eligible for repair. Hash in chunks
+    // instead of storing unbounded contents in a preview.
+    Handle source(CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,
+                             FILE_FLAG_SEQUENTIAL_SCAN,nullptr));
+    if(source.value==INVALID_HANDLE_VALUE)throw std::runtime_error("无法核对故障文件");
+    struct Digest {
+        HCRYPTPROV provider=0;
+        HCRYPTHASH hash=0;
+        ~Digest(){if(hash)CryptDestroyHash(hash);if(provider)CryptReleaseContext(provider,0);}
+    } digest;
+    if(!CryptAcquireContextW(&digest.provider,nullptr,nullptr,PROV_RSA_AES,CRYPT_VERIFYCONTEXT)||
+            !CryptCreateHash(digest.provider,CALG_SHA_256,0,0,&digest.hash))
+        throw std::runtime_error("无法核对故障文件指纹");
+    BYTE buffer[16384];
+    DWORD read=0;
+    do{
+        if(!ReadFile(source.value,buffer,sizeof(buffer),&read,nullptr)||
+                (read&&!CryptHashData(digest.hash,buffer,read,0)))
+            throw std::runtime_error("无法读取完整的故障文件");
+    }while(read);
+    BYTE result[32];
+    DWORD length=sizeof(result);
+    if(!CryptGetHashParam(digest.hash,HP_HASHVAL,result,&length,0)||length!=sizeof(result))
+        throw std::runtime_error("无法确认故障文件指纹");
+    return std::string(reinterpret_cast<const char*>(result),length);
+}
+
+std::optional<PersonalData> decodeImportBase(const std::string& bytes){
+    try{return PersonalData::parse(bytes,normalizedWord);}
+    catch(const std::bad_alloc&){throw;}
+    catch(const std::exception&){return std::nullopt;}
+}
 }
 WindowsPersonalStore::WindowsPersonalStore(std::wstring path):file_(std::move(path)){if(file_.empty())throw std::runtime_error("Personal-data location unavailable");}
 std::wstring WindowsPersonalStore::defaultPath(){std::vector<wchar_t> value(32768);DWORD n=GetEnvironmentVariableW(L"LOCALAPPDATA",value.data(),static_cast<DWORD>(value.size()));if(!n||n>=value.size())throw std::runtime_error("LocalAppData is unavailable; built-in input remains available");return (std::filesystem::path(std::wstring(value.data(),n))/L"WangshuIme"/L"personal-v1.json").wstring();}
@@ -72,26 +106,51 @@ void WindowsPersonalStore::writeAtomic(const PersonalSnapshot& old,const Persona
 PersonalSnapshot WindowsPersonalStore::modify(const std::string& expected,const std::function<void(PersonalData&)>& action){WriteLock guard(file_);auto current=readUncached();if(current.revision!=expected)throw std::runtime_error("Data changed in another window; refresh before editing");auto next=current.data;action(next);writeAtomic(current,next);return read();}
 PersonalSnapshot WindowsPersonalStore::merge(const PersonalData& source){auto checked=normalizeWords(source);WriteLock guard(file_);auto current=readUncached();auto next=current.data.merged(checked);writeAtomic(current,next);return read();}
 PersonalSnapshot WindowsPersonalStore::restoreBackup(const std::string& expected){WriteLock guard(file_);auto current=readUncached();if(current.revision!=expected||!current.fromBackup)throw std::runtime_error("Recovery state changed; refresh first");writeAtomic(current,current.data);return read();}
+std::optional<PersonalImportPreview::FileState> WindowsPersonalStore::inspectImportFile(const std::wstring& path){
+    auto state=metadata(path);
+    if(!state.exists)return std::nullopt;
+    if(state.size>1024*1024)return PersonalImportPreview::FileState{hashImportFile(path),true};
+    return PersonalImportPreview::FileState{readBytes(path),false};
+}
 PersonalImportPreview WindowsPersonalStore::previewImport(const PersonalData& incoming){
     auto checked=normalizeWords(incoming);
-    PersonalSnapshot current;
-    try{current=read();}catch(const std::exception&){return {checked,true};}
-    // A capacity/validation error must not be misclassified as damaged-file repair.
-    return {current.data.merged(checked),false};
-}
-PersonalSnapshot WindowsPersonalStore::repairFromImport(const PersonalData& incoming){
-    auto checked=normalizeWords(incoming);
     WriteLock guard(file_);
-    bool readable=false;
-    try{readUncached();readable=true;}catch(const std::exception&){}
-    if(readable)throw std::runtime_error("Data is readable now; refresh and merge instead of replacing it");
-    // Preserve an unreadable backup independently too; a later normal save may
-    // rotate .bak, but must not discard the only copy of damaged source bytes.
+    PersonalImportPreview preview;
+    preview.path_=file_;
+    preview.main_=inspectImportFile(file_);
+    preview.backup_=inspectImportFile(file_+L".bak");
+    auto decode=[](const auto& file){
+        return file&&!file->hashed?decodeImportBase(file->content):std::nullopt;
+    };
+    auto current=decode(preview.main_);
+    if(!current){
+        current=decode(preview.backup_);
+        preview.fromBackup_=current.has_value();
+    }
+    preview.repair_=!current&&(preview.main_||preview.backup_);
+    if(preview.repair_)preview.data_=std::move(checked);
+    else if(current)preview.data_=current->merged(checked);
+    else preview.data_=std::move(checked);
+    return preview;
+}
+PersonalSnapshot WindowsPersonalStore::confirmImport(const PersonalImportPreview& preview){
+    if(preview.path_!=file_)throw std::runtime_error("导入预览已失效，请重新选择文件并预览");
+    WriteLock guard(file_);
     auto backup=file_+L".bak";
-    if(metadata(backup).exists){auto retained=backup+L"."+uniqueSuffix()+L".invalid";if(!CopyFileW(backup.c_str(),retained.c_str(),TRUE))throw std::runtime_error("Cannot preserve damaged backup; repair cancelled");}
-    PersonalSnapshot damaged;damaged.fromBackup=true;
-    writeAtomic(damaged,checked);
-    return read();
+    if(preview.main_!=inspectImportFile(file_)||preview.backup_!=inspectImportFile(backup))
+        throw std::runtime_error("预览后本机个人数据已更新，请重新选择文件并预览");
+    if(preview.repair_&&preview.backup_){
+        auto retained=backup+L"."+uniqueSuffix()+L".invalid";
+        if(!CopyFileW(backup.c_str(),retained.c_str(),TRUE))
+            throw std::runtime_error("无法保留损坏的备份，修复未写入");
+    }
+    PersonalSnapshot prior;
+    prior.fromBackup=preview.fromBackup_||preview.repair_;
+    writeAtomic(prior,preview.data_);
+    auto confirmed=readUncached();
+    if(confirmed.fromBackup||confirmed.revision!=preview.data_.serialize())
+        throw std::runtime_error("导入结果未确认，请重新打开词库核对");
+    return confirmed;
 }
 PersonalData WindowsPersonalStore::parseImport(const std::string& bytes){
     if(bytes.size()>1024*1024)throw std::runtime_error("Personal import exceeds 1MiB");

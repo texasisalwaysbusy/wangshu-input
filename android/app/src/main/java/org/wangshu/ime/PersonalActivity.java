@@ -55,19 +55,29 @@ public final class PersonalActivity extends Activity {
         try(InputStream in=getContentResolver().openInputStream(uri)){return PersonalStore.read(in);}
         catch(IOException e){if("文件超过 1 MiB 限制".equals(e.getMessage()))throw e;throw new IOException("无法读取所选文件，请检查文件权限后重新选择",e);}
     }
-    private void importPreview(PersonalStore.ImportData parsed,JSONObject merged)throws JSONException {
-        int words=merged.getJSONArray("words").length(),phrases=merged.getJSONArray("phrases").length();busy=false;status("已验证 "+parsed.format+" 文件，等待确认；尚未写入。");
-        AlertDialog preview=new AlertDialog.Builder(this).setTitle("合并导入预览").setMessage("已验证 "+parsed.format+" 格式。合并后将有 "+words+" 个词条、"+phrases+" 条常用语。已有顺序和同音的不同词条保留，相同记录去重。尚未写入；确认时会与最新本机数据再次合并。").setNegativeButton("取消",(d,w)->status("已取消导入，本机数据未修改。")).setPositiveButton("确认合并",(d,w)->confirmMerge(parsed.data)).create();
+    private void importPreview(String format,PersonalStore.ImportPreview plan){
+        busy=false;
+        status("已验证 "+format+" 文件，等待确认；尚未写入。");
+        AlertDialog preview=new AlertDialog.Builder(this).setTitle("合并导入预览")
+                .setMessage("已验证 "+format+" 格式。合并后将有 "+plan.wordCount+" 个词条、"+plan.phraseCount+
+                        " 条常用语。已有顺序和同音的不同词条保留，相同记录去重。本机个人数据变化后，请重新预览。")
+                .setNegativeButton("取消",(d,w)->status("已取消导入，本机数据未修改。"))
+                .setPositiveButton("确认合并",(d,w)->confirmMerge(plan)).create();
         preview.setOnCancelListener(d->status("已取消导入，本机数据未修改。"));preview.show();
     }
-    private void confirmMerge(JSONObject incoming){
+    private void confirmMerge(PersonalStore.ImportPreview plan){
         if(busy||isFinishing()||isDestroyed())return;busy=true;status("正在合并保存，请稍候…");
-        io.execute(()->{try{store.merge(incoming);runOnUiThread(()->{busy=false;if(isFinishing()||isDestroyed())return;status("合并已完成，词库与常用语已保存在本机。");show();});}
+        io.execute(()->{try{store.confirmImport(plan);runOnUiThread(()->{busy=false;if(isFinishing()||isDestroyed())return;status("合并已完成，词库与常用语已保存在本机。");show();});}
+            catch(PersonalStore.StaleDataException stale){runOnUiThread(()->{busy=false;if(isFinishing()||isDestroyed())return;status("本机个人数据已变化，本次导入未写入。请重新选择并预览文件。");show();});}
             catch(IOException e){runOnUiThread(()->{busy=false;status(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"合并未完成，请检查本机存储。");error(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"未能完成合并，请检查容量或本机存储空间。");});}});
     }
     @Override protected void onActivityResult(int request,int result,Intent intent){super.onActivityResult(request,result,intent);if(result!=RESULT_OK||intent==null||intent.getData()==null||busy)return;if(request!=21&&request!=22)return;android.net.Uri uri=intent.getData();busy=true;status(request==21?"正在验证导入文件，尚未写入…":"正在写入所选备份文件…");
         io.execute(()->{try{
-            if(request==21){PersonalStore.ImportData parsed=PersonalStore.importFile(importBytes(uri));JSONObject merged=store.previewMerge(parsed.data);runOnUiThread(()->{if(isFinishing()||isDestroyed()){busy=false;return;}try{importPreview(parsed,merged);}catch(JSONException e){busy=false;error("导入预览未完成，原数据保留。");}});}
+            if(request==21){
+                PersonalStore.ImportData parsed=PersonalStore.importFile(importBytes(uri));
+                PersonalStore.ImportPreview plan=store.prepareImport(parsed.data);
+                runOnUiThread(()->{if(isFinishing()||isDestroyed()){busy=false;return;}importPreview(parsed.format,plan);});
+            }
             else {byte[] bytes=store.export();try(OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException("无法打开目标文件");out.write(bytes);out.flush();}runOnUiThread(()->{busy=false;if(!isFinishing()&&!isDestroyed()){status("备份已写入所选文件。");Toast.makeText(this,"备份已写入所选文件",Toast.LENGTH_LONG).show();}});}
         }catch(Exception e){runOnUiThread(()->{busy=false;status("文件操作未完成，个人数据未替换。");error(request==21&&e instanceof IOException?"导入未写入。\n"+e.getMessage():"文件操作未完成，个人词库未替换。请检查所选文件权限或本机存储空间。");});}});
     }

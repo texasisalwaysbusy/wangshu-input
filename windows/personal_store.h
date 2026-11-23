@@ -19,7 +19,22 @@ struct PersonalSnapshot {
     std::string revision; // Exact canonical bytes, not a collision-prone revision hash.
     bool fromBackup=false;
 };
-struct PersonalImportPreview {PersonalData data;bool repair=false;};
+class PersonalImportPreview {
+    friend class WindowsPersonalStore;
+    struct FileState {
+        std::string content;
+        bool hashed=false;
+        bool operator==(const FileState& other)const{return hashed==other.hashed&&content==other.content;}
+        bool operator!=(const FileState& other)const{return !(*this==other);}
+    };
+    std::wstring path_;
+    std::optional<FileState> main_,backup_;
+    PersonalData data_;
+    bool repair_=false,fromBackup_=false;
+public:
+    const PersonalData& data()const{return data_;}
+    bool repair()const{return repair_;}
+};
 struct LearnedCandidate {std::string key,text;unsigned count=0;bool pinned=false;unsigned long long updated=0;};
 struct LearningData {
     static constexpr size_t MaxEntries=256,MaxBytes=128*1024;
@@ -68,6 +83,7 @@ class WindowsPersonalStore {
     PersonalSnapshot cache_;
     bool haveCache_=false;
     PersonalSnapshot readUncached()const;
+    static std::optional<PersonalImportPreview::FileState> inspectImportFile(const std::wstring& path);
     LearningSnapshot readLearningUncached()const;
     void writeLearningAtomic(const LearningSnapshot& old,const LearningData& next,const LearningWriteGate* gate=nullptr);
     void writeAtomic(const PersonalSnapshot& old,const PersonalData& next);
@@ -88,8 +104,8 @@ public:
     PersonalSnapshot merge(const PersonalData& incoming);
     PersonalImportPreview previewImport(const PersonalData& incoming);
     PersonalSnapshot restoreBackup(const std::string& expected);
-    // Explicitly confirmed repair only; all unreadable originals remain archived.
-    PersonalSnapshot repairFromImport(const PersonalData& incoming);
+    // Confirm exactly the displayed merge or repair while the original files match.
+    PersonalSnapshot confirmImport(const PersonalImportPreview& preview);
     static PersonalData normalizeWords(PersonalData data);
     static PersonalData parseImport(const std::string& bytes);
     static std::string readExternal(const std::wstring& path);

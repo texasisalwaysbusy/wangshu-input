@@ -359,7 +359,23 @@ struct App {
         loadLearningControl();
         SetWindowTextW(item(Status),L"共用设置已保存。语音格式从下次录音生效。");
     }
-    void importFile(){if(clipboardMode()){importClipboard();return;}if(ranking())return;auto path=choose(false);if(path.empty())return;auto incoming=wangshu::WindowsPersonalStore::parseImport(wangshu::WindowsPersonalStore::readExternal(path));auto preview=store->previewImport(incoming);auto& merged=preview.data;bool repair=preview.repair;auto message=L"完成后将有 "+std::to_wstring(merged.words.size())+L" 个词条、"+std::to_wstring(merged.phrases.size())+L" 条常用语。\n";message+=repair?L"当前文件无法读取，不能合并。将以所选备份修复，损坏原文件另存保留。\n\n确认修复？":L"保留已有内容，重复条目去重。尚未写入。\n\n确认合并？";if(MessageBoxW(window,message.c_str(),repair?L"备份修复预览":L"导入预览",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;snapshot=repair?store->repairFromImport(incoming):store->merge(incoming);reload();}
+    void importFile(){
+        if(clipboardMode()){importClipboard();return;}
+        if(ranking())return;
+        auto path=choose(false);
+        if(path.empty())return;
+        auto incoming=wangshu::WindowsPersonalStore::parseImport(wangshu::WindowsPersonalStore::readExternal(path));
+        auto preview=store->previewImport(incoming);
+        auto& merged=preview.data();
+        const bool repair=preview.repair();
+        auto message=L"完成后将有 "+std::to_wstring(merged.words.size())+L" 个词条、"+
+            std::to_wstring(merged.phrases.size())+L" 条常用语。\n";
+        message+=repair?L"将以所选备份修复，损坏文件另存保留。":L"保留已有内容，重复条目去重。";
+        message+=L"\n本机文件变化后，请重新预览。";
+        if(MessageBoxW(window,message.c_str(),repair?L"备份修复预览":L"导入预览",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
+        snapshot=store->confirmImport(preview);
+        reload();
+    }
     void exportFile(){if(clipboardMode()){exportClipboard();return;}if(ranking())return;auto path=choose(true);if(path.empty())return;auto current=store->read();wangshu::WindowsPersonalStore::exportNew(path,current.data);MessageBoxW(window,L"个人词库与常用语已保存。备份不包含剪贴板、录音或设置。",L"备份完成",MB_OK|MB_ICONINFORMATION);}
     void resize(){
         RECT area{};GetClientRect(window,&area);

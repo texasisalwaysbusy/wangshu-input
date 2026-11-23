@@ -18,9 +18,9 @@ TEST_OUTPUTS = {
     'association': 'phrase-association-tsf-test.exe',
     'dll': 'dll-smoke.exe',
 }
-CHECKS = {'store': 34, 'tsf-edit': 85, 'tsf': 102, 'association': 16, 'dll': 17}
+CHECKS = {'store': 40, 'tsf-edit': 85, 'tsf': 102, 'association': 16, 'dll': 17}
 TOTAL_PATTERNS = {
-    'store': [r'TOTAL 34 PASS(?:;[^\r\n]*)?'],
+    'store': [r'TOTAL 40 PASS(?:;[^\r\n]*)?'],
     'tsf-edit': [r'TOTAL 85 PASS(?:;[^\r\n]*)?'],
     'tsf': [r'TOTAL 85 PASS(?:;[^\r\n]*)?', r'TOTAL 17 additional PASS(?:;[^\r\n]*)?'],
     'association': [r'RESULT 16 passed, 0 failed; production Windows PE/mock TSF, no real device'],

@@ -52,6 +52,37 @@ final class PersonalStoreChecks {
         PersonalStore capacity=new PersonalStore(new File(folder,"capacity.json"));capacity.merge(full);byte[] maximum=capacity.export();JSONObject idempotent=capacity.previewMerge(full);check(idempotent.getJSONArray("words").length()==2000&&idempotent.getJSONArray("phrases").length()==1000&&Arrays.equals(maximum,capacity.export()),"full-capacity repeated preview deduplicates before final capacity checking");capacity.merge(full);check(Arrays.equals(maximum,capacity.export()),"full-capacity repeated commit remains byte stable");
         rejects(()->capacity.merge(PersonalStore.parseImport(utf8("extra\tnew distinct word"))),"combined unique entries over capacity are refused");check(Arrays.equals(maximum,new PersonalStore(new File(folder,"capacity.json")).export()),"over-capacity merge leaves prior complete file unchanged on disk");
     }
+    private static void confirmedImportChecks(File folder)throws Exception {
+        File path=new File(folder,"import-confirm.json");
+        PersonalStore store=new PersonalStore(path);
+        store.putWord(-1,"before","原词");
+        JSONObject incoming=PersonalStore.parseImport(utf8("pending\t预览词"));
+        byte[] before=store.export();
+        PersonalStore.ImportPreview inProcess=store.prepareImport(incoming);
+        check(inProcess.wordCount==2&&inProcess.phraseCount==0&&Arrays.equals(before,store.export()),
+                "personal import preview is additive and read-only");
+        store.putPhrase(-1,"其他窗口更新","later");
+        byte[] current=store.export();
+        rejects(()->store.confirmImport(inProcess),"in-process change invalidates earlier import preview");
+        check(Arrays.equals(current,new PersonalStore(path).export()),"stale in-process preview writes nothing");
+
+        PersonalStore.ImportPreview external=store.prepareImport(incoming);
+        PersonalStore other=new PersonalStore(path);
+        other.putWord(-1,"fromother","另一词");
+        current=other.export();
+        rejects(()->store.confirmImport(external),"different store instance invalidates earlier import preview on disk");
+        check(Arrays.equals(current,store.export())&&Arrays.equals(current,new PersonalStore(path).export()),
+                "stale import refreshes the cached view while retaining exact saved bytes");
+        PersonalStore.ImportPreview fresh=store.prepareImport(incoming);
+        check(fresh.wordCount==3&&fresh.phraseCount==1,"fresh preview accounts for the concurrent records");
+        incoming.getJSONArray("words").getJSONObject(0).put("text","改变了外部对象");
+        store.confirmImport(fresh);
+        PersonalStore reopened=new PersonalStore(path);
+        check(Arrays.equals(reopened.words("pending"),new String[]{"预览词"})&&reopened.words("later").length==1,
+                "confirmation writes the frozen preview and survives reopen");
+        rejects(()->store.confirmImport(fresh),"a previously committed Android preview cannot be replayed");
+        rejects(()->other.confirmImport(fresh),"Android preview is bound to its original store identity");
+    }
     static String run(Instrumentation test)throws Exception {
         count=0;log=new StringBuilder();Context context=test.getTargetContext();File folder=new File(context.getFilesDir(),"personal-store-checks-"+UUID.randomUUID());if(!folder.mkdir())throw new IOException("Test-owned folder unavailable");File path=new File(folder,"data.json");PersonalStore store=new PersonalStore(path);
         check(store.snapshot().getJSONArray("words").length()==0,"new isolated store starts empty without collecting input");
@@ -79,6 +110,7 @@ final class PersonalStoreChecks {
         check(Arrays.equals(new PersonalStore(path).export(),stable),"interrupted AtomicFile write restores last complete backup");
         File parentFile=new File(folder,"not-a-directory");try(FileOutputStream out=new FileOutputStream(parentFile)){out.write(1);}PersonalStore unwritable=new PersonalStore(new File(parentFile,"data.json"));rejects(()->unwritable.putWord(-1,"abc","未保存"),"write failure reported rather than claiming success");check(unwritable.words("abc").length==0,"failed write does not publish unsaved in-memory word");
         extended(folder);
+        confirmedImportChecks(folder);
         try(FileOutputStream out=new FileOutputStream(new File(folder,"result.txt"))){out.write(log.toString().getBytes(StandardCharsets.UTF_8));}
         return "PASS "+count+" isolated Android AtomicFile/JSON personal-data checks\n"+log+"No real user input or clipboard capture; test-owned files retained\n";
     }

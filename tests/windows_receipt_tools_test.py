@@ -56,13 +56,13 @@ if action=='mutate-runner':
  with Path(__file__).open('a') as f:f.write('# synthetic mutation\\n')
 if action=='mutate-data':
  with (Path.cwd()/'data/synthetic.tsv').open('a') as f:f.write('changed\\n')
-totals={'windows-personal-store-test.exe':'TOTAL 34 PASS; synthetic',
+totals={'windows-personal-store-test.exe':'TOTAL 40 PASS; synthetic',
 'tsf-edit-test.exe':'TOTAL 85 PASS; synthetic',
 'windows-personal-tsf-test.exe':'TOTAL 85 PASS; synthetic\\nTOTAL 17 additional PASS; synthetic',
 'phrase-association-tsf-test.exe':'RESULT 16 passed, 0 failed; production Windows PE/mock TSF, no real device',
 'dll-smoke.exe':'TOTAL 17 PASS; synthetic'}
 line=totals[name]
-if action=='wrong-total':line=line.replace('34','340')
+if action=='wrong-total':line=line.replace('40','400')
 if action!='no-total':print(line)
 if action=='duplicate-total':print(line)
 raise SystemExit(9 if action=='exit-nonzero' else 0)
