@@ -6,6 +6,7 @@ import android.util.AtomicFile;
 import org.json.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 
 final class PersonalStoreChecks {
@@ -83,6 +84,79 @@ final class PersonalStoreChecks {
         rejects(()->store.confirmImport(fresh),"a previously committed Android preview cannot be replayed");
         rejects(()->other.confirmImport(fresh),"Android preview is bound to its original store identity");
     }
+    private static void recoveryChecks(File folder)throws Exception {
+        File path=new File(folder,"recovery.json");
+        File marker=new File(path+".pending"),backup=new File(path+".bak"),staged=new File(path+".new");
+        PersonalStore store=new PersonalStore(path);
+        store.putWord(-1,"saved","合成词条");
+        store.putPhrase(-1,"合成常用语\nα","demo");
+        byte[] saved=store.export(), damaged=utf8("{partial"), previousMarker=utf8("interrupted"), stagedBytes=utf8("{unconfirmed");
+        long revision=store.revision();
+        rejects(()->PersonalRecoveryFiles.prepare(path,saved),"healthy data can only use additive import");
+        Files.write(path.toPath(),damaged);
+        Files.write(backup.toPath(),saved);
+        Files.write(staged.toPath(),stagedBytes);
+        Files.write(marker.toPath(),previousMarker);
+        rejects(()->new PersonalStore(path),"pending marker blocks automatic opening and AtomicFile cleanup");
+        rejects(store::snapshot,"an open instance stops serving data after the pending marker appears");
+        long initialFiles;
+        try(java.util.stream.Stream<java.nio.file.Path> entries=Files.list(folder.toPath())){initialFiles=entries.count();}
+        PersonalRecoveryFiles.Plan plan=PersonalRecoveryFiles.prepare(path,null);
+        check(plan.words==1&&plan.phrases==1,"local recovery previews validated original backup counts");
+        try(java.util.stream.Stream<java.nio.file.Path> entries=Files.list(folder.toPath())){
+            check(entries.count()==initialFiles&&Arrays.equals(damaged,Files.readAllBytes(path.toPath()))
+                    &&Arrays.equals(stagedBytes,Files.readAllBytes(staged.toPath())),
+                    "preview without confirmation retains the original files byte for byte and creates no output");
+        }
+        Files.write(staged.toPath(),utf8("changed"));
+        rejects(()->store.restore(plan),"change to a staged sidecar invalidates the recovery preview");
+        check(Arrays.equals(damaged,Files.readAllBytes(path.toPath()))&&marker.exists(),
+                "stale confirmation preserves the live original and blocked marker");
+        Files.write(staged.toPath(),stagedBytes);
+        PersonalRecoveryFiles.Plan current=PersonalRecoveryFiles.prepare(path,null);
+        try(PersonalRecoveryFiles.Lock ignored=PersonalRecoveryFiles.lock(path)){
+            rejects(()->store.restore(current),"recovery cannot run while the store writer holds the lock");
+            File competing=new File(folder,"competing.json");
+            PersonalStore writer=new PersonalStore(competing);
+            try(PersonalRecoveryFiles.Lock other=PersonalRecoveryFiles.lock(competing)){
+                rejects(()->writer.putWord(-1,"blocked","不得写入"),"normal store mutations use the same exclusive lock");
+            }
+            check(!competing.exists()&&!new File(competing+".pending").exists(),"writer lock refusal writes no live data or marker");
+        }
+        File evidence=store.restore(current);
+        check(Arrays.equals(damaged,Files.readAllBytes(new File(evidence,path.getName()).toPath()))
+                &&Arrays.equals(saved,Files.readAllBytes(new File(evidence,backup.getName()).toPath()))
+                &&Arrays.equals(stagedBytes,Files.readAllBytes(new File(evidence,staged.getName()).toPath()))
+                &&Arrays.equals(previousMarker,Files.readAllBytes(new File(evidence,marker.getName()).toPath())),
+                "confirmed recovery preserves exact primary, backup, staged and pending originals");
+        check(!marker.exists()&&!backup.exists()&&!staged.exists()&&Arrays.equals(saved,new PersonalStore(path).export()),
+                "confirmed recovery consumes only live fault sidecars and survives a fresh open");
+        check(store.revision()==revision+1&&Arrays.equals(saved,store.export()),"successful recovery refreshes the live cached data revision");
+        rejects(()->store.restore(current),"a confirmed recovery cannot be replayed");
+
+        File external=new File(folder,"external-recovery.json");
+        Files.write(external.toPath(),damaged);
+        rejects(()->new PersonalStore(external),"malformed base is reported without resetting it");
+        rejects(()->PersonalRecoveryFiles.prepare(external,null),"damaged base with no usable local backup requires an external backup");
+        rejects(()->PersonalRecoveryFiles.prepare(external,utf8("only\t一个词")),"TSV is refused as a recovery replacement");
+        rejects(()->PersonalRecoveryFiles.prepare(external,utf8("{\"kind\":\"wangshu-personal\",\"version\":1}")),
+                "partial external JSON is refused");
+        PersonalRecoveryFiles.Plan externalPlan=PersonalRecoveryFiles.prepare(external,saved);
+        rejects(()->PersonalRecoveryFiles.restore(path,externalPlan),"recovery confirmation is bound to the original target");
+        File externalEvidence=PersonalRecoveryFiles.restore(external,externalPlan);
+        check(Arrays.equals(saved,new PersonalStore(external).export())
+                &&Arrays.equals(damaged,Files.readAllBytes(new File(externalEvidence,external.getName()).toPath())),
+                "external JSON restores a damaged base while preserving the damaged bytes");
+
+        File stageOnly=new File(folder,"stage-only.json");
+        Files.write(new File(stageOnly+".new").toPath(),saved);
+        rejects(()->new PersonalStore(stageOnly),"a lone stage is treated as an unconfirmed write");
+        rejects(()->PersonalRecoveryFiles.prepare(stageOnly,null),"a lone stage is never offered as a saved local copy");
+        File huge=new File(folder,"huge-evidence.json");
+        try(RandomAccessFile sparse=new RandomAccessFile(huge,"rw")){sparse.setLength(16L*PersonalStore.MAX_BYTES+1);}
+        rejects(()->PersonalRecoveryFiles.prepare(huge,saved),"over-budget evidence blocks replacement");
+        check(huge.length()==16L*PersonalStore.MAX_BYTES+1,"evidence budget refusal leaves the original file untouched");
+    }
     static String run(Instrumentation test)throws Exception {
         count=0;log=new StringBuilder();Context context=test.getTargetContext();File folder=new File(context.getFilesDir(),"personal-store-checks-"+UUID.randomUUID());if(!folder.mkdir())throw new IOException("Test-owned folder unavailable");File path=new File(folder,"data.json");PersonalStore store=new PersonalStore(path);
         check(store.snapshot().getJSONArray("words").length()==0,"new isolated store starts empty without collecting input");
@@ -111,6 +185,7 @@ final class PersonalStoreChecks {
         File parentFile=new File(folder,"not-a-directory");try(FileOutputStream out=new FileOutputStream(parentFile)){out.write(1);}PersonalStore unwritable=new PersonalStore(new File(parentFile,"data.json"));rejects(()->unwritable.putWord(-1,"abc","未保存"),"write failure reported rather than claiming success");check(unwritable.words("abc").length==0,"failed write does not publish unsaved in-memory word");
         extended(folder);
         confirmedImportChecks(folder);
+        recoveryChecks(folder);
         try(FileOutputStream out=new FileOutputStream(new File(folder,"result.txt"))){out.write(log.toString().getBytes(StandardCharsets.UTF_8));}
         return "PASS "+count+" isolated Android AtomicFile/JSON personal-data checks\n"+log+"No real user input or clipboard capture; test-owned files retained\n";
     }

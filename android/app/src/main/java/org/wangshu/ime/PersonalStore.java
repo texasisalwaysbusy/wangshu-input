@@ -21,16 +21,55 @@ final class PersonalStore {
     }
     private JSONObject data;
     private long revision;
-    synchronized long revision(){return revision;}
+    private boolean recovering;
+    private boolean blocked(){return recovering||pendingMarker.exists();}
+    private void ensureReadable()throws IOException {if(blocked())throw new UnconfirmedSaveException();}
+    synchronized long revision(){return blocked()?-1:revision;}
+    private static File target(Context context){return new File(context.getFilesDir(),"personal-v1.json");}
     static synchronized PersonalStore get(Context context)throws IOException {
-        if(instance==null)instance=new PersonalStore(new File(context.getFilesDir(),"personal-v1.json"));
+        if(instance==null)instance=new PersonalStore(target(context));
         return instance;
+    }
+    static PersonalRecoveryFiles.Plan prepareRecovery(Context context,byte[] external)throws IOException {
+        return PersonalRecoveryFiles.prepare(target(context),external);
+    }
+    static File recover(Context context,PersonalRecoveryFiles.Plan plan)throws IOException {
+        PersonalStore loaded;
+        synchronized(PersonalStore.class){loaded=instance;}
+        return loaded==null?PersonalRecoveryFiles.restore(target(context),plan):loaded.restore(plan);
+    }
+    File restore(PersonalRecoveryFiles.Plan plan)throws IOException {
+        if(plan==null)throw new StaleDataException();
+        JSONObject replacement=plan.data();
+        synchronized(this){
+            if(recovering)throw new UnconfirmedSaveException();
+            recovering=true;
+        }
+        try{
+            // Fault copies and directory sync can take time. Candidate reads fail fast meanwhile.
+            File archive=PersonalRecoveryFiles.restore(path,plan);
+            synchronized(this){data=replacement;revision++;}
+            return archive;
+        }finally{
+            synchronized(this){recovering=false;}
+        }
     }
     PersonalStore(File path)throws IOException {
         this.path=path;pendingMarker=new File(path.getPath()+".pending");file=new AtomicFile(path);
-        if(pendingMarker.exists())throw new UnconfirmedSaveException();
-        if(path.exists()||new File(path+".bak").exists())try(InputStream in=file.openRead()){data=parse(read(in));}
-        else data=empty();
+        File backup=new File(path+".bak"),staged=new File(path+".new");
+        if(!path.exists()&&!backup.exists()&&!pendingMarker.exists()&&!staged.exists()){
+            data=empty();
+            return;
+        }
+        try(PersonalRecoveryFiles.Lock ignored=PersonalRecoveryFiles.lock(path)){
+            if(pendingMarker.exists())throw new UnconfirmedSaveException();
+            File effective=backup.exists()?backup:path;
+            if(effective.exists()){
+                // Opening a blocked store must preserve AtomicFile's backup and staging evidence.
+                try(InputStream in=new FileInputStream(effective)){data=parse(read(in));}
+            }else if(staged.exists())throw new UnconfirmedSaveException();
+            else data=empty();
+        }
     }
     static JSONObject empty(){try{return new JSONObject().put("kind","wangshu-personal").put("version",1).put("words",new JSONArray()).put("phrases",new JSONArray());}catch(JSONException e){throw new AssertionError(e);}}
     static byte[] read(InputStream stream)throws IOException {
@@ -136,19 +175,24 @@ final class PersonalStore {
             return parse(bytes(result));
         }catch(JSONException e){throw new IOException("第 "+lineNumber+" 行：词条格式不正确",e);}
     }
-    synchronized JSONObject snapshot()throws IOException {if(pendingMarker.exists())throw new UnconfirmedSaveException();return parse(bytes(data));}
-    synchronized long phraseRevision()throws IOException {if(pendingMarker.exists())throw new UnconfirmedSaveException();return revision;}
+    synchronized JSONObject snapshot()throws IOException {ensureReadable();return parse(bytes(data));}
+    synchronized long phraseRevision()throws IOException {ensureReadable();return revision;}
     synchronized PersonalPhraseAssociation.PhraseData associationPhrases()throws IOException {
-        if(pendingMarker.exists())throw new UnconfirmedSaveException();
+        ensureReadable();
         try{JSONArray rows=data.getJSONArray("phrases");ArrayList<String> out=new ArrayList<>();for(int i=0;i<rows.length();i++)out.add(rows.getJSONObject(i).getString("text"));return new PersonalPhraseAssociation.PhraseData(revision,out);}
         catch(JSONException invalid){throw new IOException("个人短语暂不可读，原数据保留",invalid);}
     }
-    private static byte[] bytes(JSONObject value)throws IOException {try{java.nio.ByteBuffer encoded=StandardCharsets.UTF_8.newEncoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).encode(java.nio.CharBuffer.wrap(value.toString()));byte[] bytes=new byte[encoded.remaining()];encoded.get(bytes);return bytes;}catch(java.nio.charset.CharacterCodingException e){throw new IOException("个人数据包含不完整的 Unicode 字符",e);}}
+    static byte[] bytes(JSONObject value)throws IOException {try{java.nio.ByteBuffer encoded=StandardCharsets.UTF_8.newEncoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).encode(java.nio.CharBuffer.wrap(value.toString()));byte[] bytes=new byte[encoded.remaining()];encoded.get(bytes);return bytes;}catch(java.nio.charset.CharacterCodingException e){throw new IOException("个人数据包含不完整的 Unicode 字符",e);}}
     private void save(JSONObject next)throws IOException {
+        ensureReadable();
+        try(PersonalRecoveryFiles.Lock ignored=PersonalRecoveryFiles.lock(path)){
+            saveLocked(next);
+        }
+    }
+    private void saveLocked(JSONObject next)throws IOException {
         JSONObject checked=parse(bytes(next));byte[] payload=bytes(checked);FileOutputStream out=null;boolean reserved=false,started=false,finishInvoked=false;
         try{
-            // Exclusive marker precedes the consistency check: separate instances/processes cannot
-            // both pass a stale check and then overwrite each other. A leftover marker fails closed.
+            // The durable marker fails closed if the write stops before confirmation.
             if(!pendingMarker.createNewFile())throw new UnconfirmedSaveException();reserved=true;
             try(FileOutputStream marker=new FileOutputStream(pendingMarker)){marker.write(1);marker.getFD().sync();}
             // Inspect the same effective data as AtomicFile without renaming its
@@ -157,6 +201,7 @@ final class PersonalStore {
             File effective=backup.exists()?backup:path;
             JSONObject disk;
             if(effective.exists()){try(InputStream current=new FileInputStream(effective)){disk=parse(read(current));}}
+            else if(new File(path+".new").exists())throw new UnconfirmedSaveException();
             else disk=empty();
             if(!Arrays.equals(bytes(disk),bytes(data))){
                 if(!pendingMarker.delete())throw new UnconfirmedSaveException();
@@ -216,7 +261,7 @@ final class PersonalStore {
     }
     synchronized byte[] export()throws IOException {return bytes(snapshot());}
     synchronized String[] words(String input)throws IOException {
-        if(pendingMarker.exists())throw new UnconfirmedSaveException();String k;try{k=key(input);}catch(IOException e){return new String[0];}
+        ensureReadable();String k;try{k=key(input);}catch(IOException e){return new String[0];}
         LinkedHashSet<String> out=new LinkedHashSet<>();try{JSONArray list=data.getJSONArray("words");for(int i=0;i<list.length();i++){JSONObject w=list.getJSONObject(i);if(k.equals(w.getString("pinyin")))out.add(w.getString("text"));}list=data.getJSONArray("phrases");for(int i=0;i<list.length();i++){JSONObject p=list.getJSONObject(i);if(k.equals(p.optString("shortcut","").toLowerCase(Locale.ROOT)))out.add(p.getString("text"));}}catch(JSONException e){throw new IOException("无法读取个人词库",e);}return out.toArray(new String[0]);
     }
 }

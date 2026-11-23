@@ -8,8 +8,9 @@ import android.widget.*;
 import org.json.*;
 import java.io.*;
 
-/** Local authored dictionary and phrases, with validated additive import preview. */
+/** Local authored dictionary and phrases, including backup and blocked-store recovery. */
 public final class PersonalActivity extends Activity {
+    private static final int IMPORT = 21, EXPORT = 22, RECOVER = 23;
     @Override public android.content.SharedPreferences getSharedPreferences(String name,int mode){return AppPreferences.managed(name)?AppPreferences.open(this,name):super.getSharedPreferences(name,mode);}
 
     private String tab="words";
@@ -19,23 +20,97 @@ public final class PersonalActivity extends Activity {
     private boolean busy;
     private TextView operationStatus;
     private String operationMessage="导入只在预览确认后写入；备份不包含剪贴板或录音。";
-    @Override public void onCreate(Bundle saved){super.onCreate(saved);tab=saved!=null?saved.getString("tab","words"):getIntent().getBooleanExtra("phrases",false)?"phrases":"words";try{store=PersonalStore.get(this);show();}catch(IOException e){new AlertDialog.Builder(this).setTitle("个人数据暂不可读").setMessage(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"原文件保留，未重置。请先保留备份再排查存储问题。").setPositiveButton("返回",(d,w)->finish()).setOnCancelListener(d->finish()).show();}}
+    @Override public void onCreate(Bundle saved){super.onCreate(saved);tab=saved!=null?saved.getString("tab","words"):getIntent().getBooleanExtra("phrases",false)?"phrases":"words";openStore();}
     private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
     private TextView label(String text,int size){TextView v=new TextView(this);v.setText(text);v.setTextSize(size);v.setTextColor(getColor(R.color.ink));v.setPadding(0,dp(8),0,dp(8));return v;}
     private void button(LinearLayout target,String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);b.setMinHeight(dp(48));KeyboardSkin.key(this,b,false);b.setOnClickListener(v->action.run());target.addView(b,new LinearLayout.LayoutParams(-1,-2));}
-    private void show(){
+    private void openStore(){
+        try{store=PersonalStore.get(this);show();}
+        catch(IOException unavailable){showRecovery();}
+    }
+    private void createPanel(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);if(android.os.Build.VERSION.SDK_INT>=30)scroll.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());android.graphics.Insets ime=insets.getInsets(WindowInsets.Type.ime());v.setPadding(bars.left,bars.top,bars.right,Math.max(bars.bottom,ime.bottom));return insets;});panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setFocusableInTouchMode(true);panel.setPadding(dp(18),dp(16),dp(18),dp(24));panel.setBackgroundColor(getColor(R.color.paper));scroll.addView(panel);setContentView(scroll);panel.requestFocus();
+        operationStatus=null;
+        ThemeBars.navigation(this,getWindow());
+    }
+    private void show(){
+        final JSONArray entries;
+        try{entries=store.snapshot().getJSONArray(tab);}
+        catch(IOException|JSONException unreadable){showRecovery();return;}
+        createPanel();
         panel.addView(label("你的词语，留在本机",24));panel.addView(label("只保存你主动添加或导入的词条。不记录输入历史、剪贴板或录音。",14));
         LinearLayout tabs=new LinearLayout(this);panel.addView(tabs);for(String type:new String[]{"words","phrases"}){Button b=new Button(this);b.setText(type.equals("words")?"个人词库":"常用语");KeyboardSkin.key(this,b,tab.equals(type));b.setOnClickListener(v->{tab=type;show();});tabs.addView(b,new LinearLayout.LayoutParams(0,dp(48),1));}
         operationStatus=label(operationMessage,12);panel.addView(operationStatus);
         button(panel,tab.equals("words")?"添加词条":"添加常用语",()->edit(-1,null));
         LinearLayout list=new LinearLayout(this);list.setOrientation(LinearLayout.VERTICAL);panel.addView(list);
-        try{JSONArray entries=store.snapshot().getJSONArray(tab);panel.addView(label("本地文件 · "+entries.length()+" 条 · JSON v1",12));if(entries.length()==0)list.addView(label(tab.equals("words")?"为专业术语添加全拼，之后可直接从候选栏选择。":"保存多行文字；点击键盘工具栏“剪贴板”，切换到“常用语”即可调用。",15));
+        try{panel.addView(label("本地文件 · "+entries.length()+" 条 · JSON v1",12));if(entries.length()==0)list.addView(label(tab.equals("words")?"为专业术语添加全拼，之后可直接从候选栏选择。":"保存多行文字；点击键盘工具栏“剪贴板”，切换到“常用语”即可调用。",15));
             for(int i=0;i<entries.length();i++){final int index=i;JSONObject item=entries.getJSONObject(i);String text=item.getString("text"),prefix=tab.equals("words")?item.getString("pinyin"):item.optString("shortcut","");Button b=new Button(this);b.setAllCaps(false);b.setText(prefix.isEmpty()?text:getString(R.string.personal_entry_label,prefix,text));b.setMaxLines(3);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);b.setPadding(dp(12),dp(10),dp(12),dp(10));b.setMinHeight(dp(56));b.setContentDescription("编辑个人条目 "+(i+1));KeyboardSkin.key(this,b,false);b.setOnClickListener(v->edit(index,item));list.addView(b,new LinearLayout.LayoutParams(-1,-2));}
         }catch(Exception e){error(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"读取失败，文件保留");}
-        button(panel,"从 JSON / TSV 文件合并导入",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/json","text/tab-separated-values","text/plain","application/octet-stream"}),21);});
-        button(panel,"备份词库与常用语",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"wangshu-personal-v1.json"),22);});
-        panel.addView(label("导入只合并，不替换已有数据。JSON v1 支持词库和常用语；TSV 仅支持拼音、词条两列（制表符分隔），可带表头，不支持权重或来源列。词条按 NFC 去重，不折叠数学字符；同拼音不同词条保留。上限：1 MiB、2000 词条、1000 常用语。本文件只含词库与常用语；设置请在“本地设置备份与还原”另行备份。",12));button(panel,"返回",this::finish);ThemeBars.navigation(this,getWindow());
+        button(panel,"从 JSON / TSV 文件合并导入",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/json","text/tab-separated-values","text/plain","application/octet-stream"}),IMPORT);});
+        button(panel,"备份词库与常用语",()->{if(!busy)startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json").putExtra(Intent.EXTRA_TITLE,"wangshu-personal-v1.json"),EXPORT);});
+        panel.addView(label("导入只合并，不替换已有数据。JSON v1 支持词库和常用语；TSV 仅支持拼音、词条两列（制表符分隔），可带表头，不支持权重或来源列。词条按 NFC 去重，不折叠数学字符；同拼音不同词条保留。上限：1 MiB、2000 词条、1000 常用语。本文件只含词库与常用语；设置请在“本地设置备份与还原”另行备份。",12));button(panel,"返回",this::finish);
+    }
+    private void showRecovery(){
+        createPanel();
+        panel.addView(label("个人数据暂不可读",24));
+        panel.addView(label("你可以预览本机留存的副本，或选择以前导出的词库与常用语 JSON 备份。确认恢复后，故障原件会单独保存在本机。",14));
+        operationStatus=label("",12);panel.addView(operationStatus);
+        button(panel,"预览本机副本",()->prepareRecovery(null));
+        button(panel,"选择 JSON 备份",()->{
+            if(!busy)startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                    .putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"application/json","text/plain","application/octet-stream"}),RECOVER);
+        });
+        button(panel,"重新读取",()->{if(!busy)openStore();});
+        button(panel,"返回",this::finish);
+    }
+    private void prepareRecovery(android.net.Uri uri){
+        if(busy||isFinishing()||isDestroyed())return;
+        busy=true;status("正在核对可恢复的副本…");
+        io.execute(()->{
+            try{
+                PersonalRecoveryFiles.Plan plan=PersonalStore.prepareRecovery(this,uri==null?null:importBytes(uri));
+                runOnUiThread(()->showRecoveryPreview(plan));
+            }catch(IOException|SecurityException failure){
+                runOnUiThread(()->{
+                    busy=false;status("预览未完成，原文件未修改。");
+                    error(failure instanceof IOException?failure.getMessage():"无法读取所选备份，请检查文件权限。");
+                });
+            }
+        });
+    }
+    private void showRecoveryPreview(PersonalRecoveryFiles.Plan plan){
+        busy=false;
+        if(isFinishing()||isDestroyed())return;
+        status("等待确认，原文件未修改。");
+        AlertDialog preview=new AlertDialog.Builder(this).setTitle("故障恢复预览")
+                .setMessage(plan.source+"含 "+plan.words+" 个词条、"+plan.phrases+
+                        " 条常用语。确认后以这份副本恢复使用，故障原件另存于应用的私有目录。")
+                .setNegativeButton("取消",(d,w)->status("已取消恢复，原文件未修改。"))
+                .setPositiveButton("确认恢复",(d,w)->confirmRecovery(plan)).create();
+        preview.setOnCancelListener(d->status("已取消恢复，原文件未修改。"));
+        preview.show();
+    }
+    private void confirmRecovery(PersonalRecoveryFiles.Plan plan){
+        if(busy||isFinishing()||isDestroyed())return;
+        busy=true;status("正在保留故障文件并恢复…");
+        io.execute(()->{
+            try{
+                File archive=PersonalStore.recover(this,plan);
+                runOnUiThread(()->{
+                    busy=false;
+                    if(isFinishing()||isDestroyed())return;
+                    status("恢复已完成。故障原件保存在 "+archive.getName()+"。");
+                    openStore();
+                });
+            }catch(IOException|SecurityException failure){
+                runOnUiThread(()->{
+                    busy=false;status("恢复未确认，请重新预览或读取。");
+                    error(failure instanceof PersonalStore.StaleDataException?failure.getMessage():
+                            "未能确认恢复。请检查本机存储，再重新预览；已保留的故障文件仍在本机。");
+                });
+            }
+        });
     }
     private void edit(int index,JSONObject item){
         if(busy){Toast.makeText(this,"文件操作进行中，请稍候",Toast.LENGTH_SHORT).show();return;}
@@ -71,15 +146,15 @@ public final class PersonalActivity extends Activity {
             catch(PersonalStore.StaleDataException stale){runOnUiThread(()->{busy=false;if(isFinishing()||isDestroyed())return;status("本机个人数据已变化，本次导入未写入。请重新选择并预览文件。");show();});}
             catch(IOException e){runOnUiThread(()->{busy=false;status(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"合并未完成，请检查本机存储。");error(e instanceof PersonalStore.UnconfirmedSaveException?e.getMessage():"未能完成合并，请检查容量或本机存储空间。");});}});
     }
-    @Override protected void onActivityResult(int request,int result,Intent intent){super.onActivityResult(request,result,intent);if(result!=RESULT_OK||intent==null||intent.getData()==null||busy)return;if(request!=21&&request!=22)return;android.net.Uri uri=intent.getData();busy=true;status(request==21?"正在验证导入文件，尚未写入…":"正在写入所选备份文件…");
+    @Override protected void onActivityResult(int request,int result,Intent intent){super.onActivityResult(request,result,intent);if(result!=RESULT_OK||intent==null||intent.getData()==null||busy)return;android.net.Uri uri=intent.getData();if(request==RECOVER){prepareRecovery(uri);return;}if(request!=IMPORT&&request!=EXPORT)return;busy=true;status(request==IMPORT?"正在验证导入文件，尚未写入…":"正在写入所选备份文件…");
         io.execute(()->{try{
-            if(request==21){
+            if(request==IMPORT){
                 PersonalStore.ImportData parsed=PersonalStore.importFile(importBytes(uri));
                 PersonalStore.ImportPreview plan=store.prepareImport(parsed.data);
                 runOnUiThread(()->{if(isFinishing()||isDestroyed()){busy=false;return;}importPreview(parsed.format,plan);});
             }
             else {byte[] bytes=store.export();try(OutputStream out=getContentResolver().openOutputStream(uri,"w")){if(out==null)throw new IOException("无法打开目标文件");out.write(bytes);out.flush();}runOnUiThread(()->{busy=false;if(!isFinishing()&&!isDestroyed()){status("备份已写入所选文件。");Toast.makeText(this,"备份已写入所选文件",Toast.LENGTH_LONG).show();}});}
-        }catch(Exception e){runOnUiThread(()->{busy=false;status("文件操作未完成，个人数据未替换。");error(request==21&&e instanceof IOException?"导入未写入。\n"+e.getMessage():"文件操作未完成，个人词库未替换。请检查所选文件权限或本机存储空间。");});}});
+        }catch(Exception e){runOnUiThread(()->{busy=false;status("文件操作未完成，个人数据未替换。");error(request==IMPORT&&e instanceof IOException?"导入未写入。\n"+e.getMessage():"文件操作未完成，个人词库未替换。请检查所选文件权限或本机存储空间。");});}});
     }
     @Override protected void onDestroy(){io.shutdown();super.onDestroy();}
 }
