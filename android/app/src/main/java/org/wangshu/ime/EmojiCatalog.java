@@ -7,7 +7,8 @@ public final class EmojiCatalog {
     public enum Kind { EMOJI, KAOMOJI }
     public static final class Item {
         public final Kind kind;public final String category,text,description;
-        private Item(Kind k,String c,String t,String d){kind=k;category=c;text=t;description=d;}
+        final String pinyin;
+        private Item(Kind k,String c,String t,String d){kind=k;category=c;text=t;description=d;pinyin=EmojiPinyin.alias(d);}
     }
     private static final LinkedHashMap<String,List<Item>> CATEGORIES=new LinkedHashMap<>();
     static {
@@ -47,5 +48,28 @@ public final class EmojiCatalog {
     public static List<Item> category(String name){List<Item> items=CATEGORIES.get(name);return items==null?Collections.emptyList():items;}
     /** Search only authored descriptions or exact glyphs, never editor context or history. */
     public static List<Item> search(String query,Kind kind){if(query==null||kind==null||query.length()>40)return Collections.emptyList();String needle=query.trim().toLowerCase(Locale.ROOT);if(needle.isEmpty())return Collections.emptyList();ArrayList<Item> out=new ArrayList<>();for(List<Item> group:CATEGORIES.values())for(Item item:group)if(item.kind==kind&&(item.description.toLowerCase(Locale.ROOT).contains(needle)||item.text.contains(needle))){out.add(item);if(out.size()==48)return Collections.unmodifiableList(out);}return Collections.unmodifiableList(out);}
+    static final int PINYIN_LIMIT = 40;
+
+    static List<Item> searchPinyin(String query, Kind kind) {
+        if (query == null || query.isEmpty() || query.length() > PINYIN_LIMIT || kind == null)
+            return Collections.emptyList();
+        String needle = query.toLowerCase(Locale.ROOT);
+        for (int i = 0; i < needle.length(); i++)
+            if (needle.charAt(i) < 'a' || needle.charAt(i) > 'z') return Collections.emptyList();
+        List<Item> exact = new ArrayList<>(), prefix = new ArrayList<>(), inside = new ArrayList<>();
+        for (List<Item> group : CATEGORIES.values()) {
+            for (Item item : group) {
+                if (item.kind != kind) continue;
+                int position = item.pinyin.indexOf(needle);
+                if (position < 0) continue;
+                if (item.pinyin.equals(needle)) exact.add(item);
+                else if (position == 0) prefix.add(item);
+                else inside.add(item);
+            }
+        }
+        exact.addAll(prefix);
+        exact.addAll(inside);
+        return Collections.unmodifiableList(exact.subList(0, Math.min(48, exact.size())));
+    }
     private EmojiCatalog(){}
 }

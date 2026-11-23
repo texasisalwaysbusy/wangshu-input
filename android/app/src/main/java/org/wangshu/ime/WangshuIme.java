@@ -94,6 +94,8 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private boolean voiceCommitInFlight;
     private long voiceReviewRevision;
     private String symbolCategory=SymbolPanelCatalog.DEFAULT_CATEGORY, emojiCategory="笑脸";
+    private EmojiCatalog.Kind emojiSearchKind;
+    private EmojiPanel.Search emojiSearchView;
     private long emojiViewGeneration=0, emojiSelectionRevision=0;
     private final EmojiScrollMemory emojiScrollMemory=new EmojiScrollMemory();
     private HorizontalScrollView emojiOuterScroll,emojiTabsScroll;private ScrollView emojiItemsScroll;private EmojiScrollMemory.Offsets emojiPendingOffsets;
@@ -123,12 +125,23 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(landscapeViewport==null&&Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.navigationBars());v.setPadding(dp(4)+bars.left,dp(3),dp(4)+bars.right,dp(3)+bars.bottom);return insets;});
         rebuild();inputSurface.requestApplyInsets();return inputSurface;
     }
-    @Override public void onStartInput(EditorInfo info,boolean restarting){inputSession++;discardPreedit();preeditSelection.reset(info.initialSelStart,info.initialSelEnd);stopClipboard();super.onStartInput(info,restarting);if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();emojiScrollMemory.reset(inputSession);editing=false;phrasesOpen=false;if(personalPanel!=null)personalPanel.resetSplit();editorActions.reset();cancelVoice();int type=info.inputType&InputType.TYPE_MASK_CLASS,variation=info.inputType&InputType.TYPE_MASK_VARIATION;password=(type==InputType.TYPE_CLASS_TEXT&&(variation==InputType.TYPE_TEXT_VARIATION_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD))||(type==InputType.TYPE_CLASS_NUMBER&&variation==InputType.TYPE_NUMBER_VARIATION_PASSWORD);numbers=type==InputType.TYPE_CLASS_NUMBER||type==InputType.TYPE_CLASS_PHONE;math=false;if(voiceHold!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null)backspaceGesture.bind(inputSession);if(beforeCaret!=null)beforeCaret.invalidate();if(privateInput())suppressClipboardUntilChange=true;rebuild();syncClipboard();}
-    @Override public void onFinishInput(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();emojiScrollMemory.reset(inputSession);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();keyHandler.removeCallbacksAndMessages(null);cancelVoice();current=new String[0];super.onFinishInput();}
-    @Override public void onWindowShown(){super.onWindowShown();loadVoiceHoldSettings();clearCandidatePages();if(voiceHold!=null&&getCurrentInputConnection()!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null&&getCurrentInputConnection()!=null)backspaceGesture.bind(inputSession);refresh();keyHandler.post(()->{showLearningNotice();syncClipboard();captureClipboard(false);if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();});if(getWindow()!=null)ThemeBars.navigation(this,getWindow().getWindow());}
-    @Override public void onWindowHidden(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();cancelVoice();super.onWindowHidden();}
+    @Override public void onStartInput(EditorInfo info,boolean restarting){inputSession++;clearEmojiSearch();discardPreedit();preeditSelection.reset(info.initialSelStart,info.initialSelEnd);stopClipboard();super.onStartInput(info,restarting);if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();emojiScrollMemory.reset(inputSession);editing=false;phrasesOpen=false;if(personalPanel!=null)personalPanel.resetSplit();editorActions.reset();cancelVoice();int type=info.inputType&InputType.TYPE_MASK_CLASS,variation=info.inputType&InputType.TYPE_MASK_VARIATION;password=(type==InputType.TYPE_CLASS_TEXT&&(variation==InputType.TYPE_TEXT_VARIATION_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD||variation==InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD))||(type==InputType.TYPE_CLASS_NUMBER&&variation==InputType.TYPE_NUMBER_VARIATION_PASSWORD);numbers=type==InputType.TYPE_CLASS_NUMBER||type==InputType.TYPE_CLASS_PHONE;math=false;if(voiceHold!=null)voiceHold.bindInputSession(inputSession);if(backspaceGesture!=null)backspaceGesture.bind(inputSession);if(beforeCaret!=null)beforeCaret.invalidate();if(privateInput())suppressClipboardUntilChange=true;rebuild();syncClipboard();}
+    @Override public void onFinishInput(){inputSession++;clearEmojiSearch();discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();emojiScrollMemory.reset(inputSession);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();keyHandler.removeCallbacksAndMessages(null);cancelVoice();current=new String[0];super.onFinishInput();}
+    @Override public void onWindowShown(){
+        super.onWindowShown();
+        loadVoiceHoldSettings();
+        clearCandidatePages();
+        if(voiceHold!=null&&getCurrentInputConnection()!=null)voiceHold.bindInputSession(inputSession);
+        if(backspaceGesture!=null&&getCurrentInputConnection()!=null)backspaceGesture.bind(inputSession);
+        // Hiding expires the old picker even if Android reuses the input view.
+        if(emojiPanelActive())rebuild();
+        else refresh();
+        keyHandler.post(()->{showLearningNotice();syncClipboard();captureClipboard(false);if(mathAssociation!=null)mathAssociation.request();if(phraseAssociation!=null)phraseAssociation.request();});
+        if(getWindow()!=null)ThemeBars.navigation(this,getWindow().getWindow());
+    }
+    @Override public void onWindowHidden(){inputSession++;clearEmojiSearch();discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.clear();LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.clear();stopClipboard();if(personalPanel!=null)personalPanel.resetSplit();if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();cancelVoice();super.onWindowHidden();}
     @Override public void onTrimMemory(int level){super.onTrimMemory(level);if(level>=android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)OfflineVoice.trimMemory();}
-    @Override public void onDestroy(){inputSession++;discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.close();learningOwnerDestroyed=true;LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.close();stopClipboard();getSharedPreferences("clipboard",0).unregisterOnSharedPreferenceChangeListener(clipboardPreferences);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();OfflineVoice.trimMemory();keyHandler.removeCallbacksAndMessages(null);cancelVoice();super.onDestroy();}
+    @Override public void onDestroy(){inputSession++;clearEmojiSearch();discardPreedit();preeditSelection.reset(-1,-1);editorActions.reset();if(phraseAssociation!=null)phraseAssociation.close();learningOwnerDestroyed=true;LearningStore.cancelPendingAutomatic();if(mathAssociation!=null)mathAssociation.close();stopClipboard();getSharedPreferences("clipboard",0).unregisterOnSharedPreferenceChangeListener(clipboardPreferences);if(voiceHold!=null)voiceHold.clearInputSession();if(backspaceGesture!=null)backspaceGesture.unbind();if(beforeCaret!=null)beforeCaret.invalidate();OfflineVoice.trimMemory();keyHandler.removeCallbacksAndMessages(null);cancelVoice();super.onDestroy();}
     private LinearLayout column(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setGravity(Gravity.CENTER);return l;}
     private boolean mathAssociationsEnabled(){try{return getSharedPreferences("associations",0).getBoolean("math",true);}catch(ClassCastException invalid){return false;}}
@@ -241,6 +254,8 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private Button candidateButton(String text,int index){Button b=button("",displayedCandidate(index));b.setText(text);return b;}
     private void add(LinearLayout r,String label,float weight,Runnable action){r.addView(button(label,action),new LinearLayout.LayoutParams(0,dp(keyHeight()),weight));}
     private void rebuild(){
+        resetEmojiSearchView();
+        if(!emojiPanelActive())emojiSearchKind=null;
         if(root==null)return;rememberEmojiScroll();emojiViewGeneration++;if(voiceHold!=null&&voiceHold.state().showVoiceLayer()){showVoiceHold(voiceHold.state());return;}voiceOverlay=null;if(landscapeViewport!=null)landscapeViewport.setVoiceLayer(null);if(inputSurface!=null){inputSurface.spaceKey(null);inputSurface.backspaceKey(null);}deleteKey=null;root.removeAllViews();root.addView(buildToolbar());
         composition=new TextView(this);composition.setTextSize(compact()?12:14);composition.setSingleLine(true);composition.setEllipsize(android.text.TextUtils.TruncateAt.START);composition.setTextColor(getColor(R.color.ink));composition.setPadding(dp(8),0,dp(8),0);
         candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page==CandidatePages.ALTERNATIVES||page>0)moveCandidatePage(-1);});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;if(!expandedCandidates&&page==CandidatePages.ALTERNATIVES)page=0;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
@@ -386,10 +401,18 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         emojiOuterScroll=null;emojiTabsScroll=null;emojiItemsScroll=null;emojiPendingOffsets=null;
     }
     private boolean emojiPanelActive(){return math&&(symbolCategory.equals("表情")||symbolCategory.equals("颜文字"))&&!phrasesOpen&&!editing&&(!expandedCandidates||buffer.length()==0);}
+    private void resetEmojiSearchView() {
+        if(emojiSearchView!=null)emojiSearchView.reset();
+        emojiSearchView=null;
+    }
+    private void clearEmojiSearch() {
+        resetEmojiSearchView();
+        emojiSearchKind=null;
+    }
     private void mathKeys(){
         final long viewGeneration=emojiViewGeneration;final int viewSession=inputSession;
         HorizontalScrollView tabs=new HorizontalScrollView(this);tabs.setContentDescription("符号分类，可左右滚动");LinearLayout categories=row();Button selectedTab=null;
-        for(String category:SymbolPanelCatalog.categories()){Button b=button(SymbolPanelCatalog.label(category),()->{if(viewGeneration!=emojiViewGeneration||viewSession!=inputSession)return;if((category.equals("表情")||category.equals("颜文字"))&&!finishRaw())return;symbolCategory=category;rebuild();});boolean selected=category.equals(symbolCategory);b.setSelected(selected);b.setContentDescription(SymbolPanelCatalog.label(category)+(selected?"，已选中":"，符号分类"));KeyboardSkin.function(this,b,selected);if(selected)selectedTab=b;categories.addView(b,new LinearLayout.LayoutParams(dp(72),dp(compact()?28:36)));}tabs.addView(categories);keys.addView(tabs);
+        for(String category:SymbolPanelCatalog.categories()){Button b=button(SymbolPanelCatalog.label(category),()->{if(viewGeneration!=emojiViewGeneration||viewSession!=inputSession)return;if((category.equals("表情")||category.equals("颜文字"))&&!finishRaw())return;clearEmojiSearch();symbolCategory=category;rebuild();});boolean selected=category.equals(symbolCategory);b.setSelected(selected);b.setContentDescription(SymbolPanelCatalog.label(category)+(selected?"，已选中":"，符号分类"));KeyboardSkin.function(this,b,selected);if(selected)selectedTab=b;categories.addView(b,new LinearLayout.LayoutParams(dp(72),dp(compact()?28:36)));}tabs.addView(categories);keys.addView(tabs);
         if(!emojiPanelActive())revealSymbolTab(tabs,selectedTab,viewSession,viewGeneration);
         emojiOuterScroll=tabs;emojiScrollSession=inputSession;emojiScrollSymbol=symbolCategory;emojiScrollCategory=symbolCategory.equals("颜文字")?"颜文字":emojiCategory;
         if(emojiPanelActive()){
@@ -399,11 +422,30 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
                 public boolean send(Object expected,String text){cancelBackspace();if(beforeCaret!=null)beforeCaret.invalidate();cancelHoldForOtherInput();if(hasVoiceWork())cancelVoice();if(session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision||editor==null||expected!=editor||editor!=getCurrentInputConnection()||!emojiPanelActive()||!isInputViewShown()||session!=inputSession||generation!=emojiViewGeneration||selection!=emojiSelectionRevision)return false;return editor.commitText(text,1);}
             };
             EmojiSelection.Token token=EmojiSelection.capture(guard);EmojiCatalog.Kind kind=symbolCategory.equals("颜文字")?EmojiCatalog.Kind.KAOMOJI:EmojiCatalog.Kind.EMOJI;String selected=kind==EmojiCatalog.Kind.KAOMOJI?"颜文字":emojiCategory;
-            keys.addView(EmojiPanel.build(this,kind,selected,compact(),new EmojiPanel.Host(){
+            final boolean searching=emojiSearchKind==kind;
+            EmojiPanel.Host host=new EmojiPanel.Host(){
                 public void bind(ScrollView items,HorizontalScrollView innerTabs){emojiItemsScroll=items;emojiTabsScroll=innerTabs;}
                 public void category(String name){if(!EmojiSelection.current(guard,token)){toast("输入位置已变化，请重新选择");return;}emojiCategory=name;rebuild();}
-                public void choose(EmojiCatalog.Item item){if(item.kind!=kind||!EmojiCatalog.category(selected).contains(item))return;EmojiSelection.Outcome result=EmojiSelection.select(guard,token,item.text);if(result==EmojiSelection.Outcome.STALE)toast("输入位置已变化，请重新选择");else if(result==EmojiSelection.Outcome.UNCERTAIN)toast("插入结果未确认，请检查；不会自动重试");}
-            }));
+                public void openSearch(){
+                    if(!EmojiSelection.current(guard,token)||!isInputViewShown())return;
+                    emojiSearchKind=kind;
+                    rebuild();
+                }
+                public void closeSearch(){
+                    if(!EmojiSelection.current(guard,token)||!isInputViewShown())return;
+                    clearEmojiSearch();
+                    rebuild();
+                }
+                public void choose(EmojiCatalog.Item item){if(item.kind!=kind||(!searching&&!EmojiCatalog.category(selected).contains(item)))return;EmojiSelection.Outcome result=EmojiSelection.select(guard,token,item.text);if(result==EmojiSelection.Outcome.STALE)toast("输入位置已变化，请重新选择");else if(result==EmojiSelection.Outcome.UNCERTAIN)toast("插入结果未确认，请检查；不会自动重试");}
+            };
+            if(searching){
+                tabs.setVisibility(View.GONE);
+                emojiOuterScroll=null;
+                emojiSearchView=new EmojiPanel.Search(this,kind,compact(),host);
+                keys.addView(emojiSearchView.view);
+                return;
+            }
+            keys.addView(EmojiPanel.build(this,kind,selected,compact(),host));
             final ScrollView items=emojiItemsScroll;final HorizontalScrollView innerTabs=emojiTabsScroll;final String viewSymbol=symbolCategory,viewCategory=selected;
             EmojiScrollMemory.Offsets offsets=emojiScrollMemory.get(inputSession,viewSymbol,viewCategory);
             emojiPendingOffsets=offsets;
@@ -1043,6 +1085,18 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(isHardwareEnter(keyCode)&&event.getRepeatCount()>0&&!event.isCtrlPressed()&&!event.isAltPressed())return true;
         if(event.isCtrlPressed()||event.isAltPressed()){if(isHardwareEnter(keyCode)&&event.getRepeatCount()==0)hardwareEnterSequences.abandon(event.getDeviceId(),keyCode);return super.onKeyDown(keyCode,event);}
         if(getCurrentInputConnection()==null)return super.onKeyDown(keyCode,event);
+        EmojiPanel.Search search=emojiSearchView;
+        if(search!=null&&emojiPanelActive()&&isInputViewShown()){
+            if(keyCode==KeyEvent.KEYCODE_ESCAPE){search.close();return true;}
+            if(keyCode==KeyEvent.KEYCODE_DEL){search.backspace();return true;}
+            if(isHardwareEnter(keyCode)){
+                hardwareEnterSequences.own(event.getDeviceId(),keyCode,event.getDownTime());
+                search.chooseFirst();
+                return true;
+            }
+            int queryLetter=event.getUnicodeChar();
+            if(queryLetter>=32&&queryLetter<127){search.append(queryLetter);return true;}
+        }
         if(keyCode==KeyEvent.KEYCODE_ESCAPE&&buffer.length()>0){if(commitPending(""))refresh();return true;}
         if((keyCode==KeyEvent.KEYCODE_PAGE_UP||keyCode==KeyEvent.KEYCODE_PAGE_DOWN)&&buffer.length()>0){moveCandidatePage(keyCode==KeyEvent.KEYCODE_PAGE_UP?-1:1);return true;}
         if(keyCode==KeyEvent.KEYCODE_DEL){backspace();return true;}

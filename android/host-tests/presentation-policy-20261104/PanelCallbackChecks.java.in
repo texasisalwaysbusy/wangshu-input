@@ -1,5 +1,6 @@
 package org.wangshu.ime;
 import java.util.*;
+import java.util.function.BooleanSupplier;
 
 /** Actual source methods; synthetic framework scheduling and editor identity. */
 public final class PanelCallbackChecks {
@@ -17,7 +18,17 @@ public final class PanelCallbackChecks {
         int width=320,scroll,calls;int getWidth(){return width;}int getScrollX(){return scroll;}
         void scrollTo(int x,int y){scroll=x;calls++;}
     }
-    static class InputConnection {}
+    static class InputConnection {
+        boolean deleteSurroundingText(int before,int after){throw new AssertionError("symbol must not delete");}
+    }
+    static class SplitSelection {static class Snapshot {int start;}}
+    static class TextWrite {
+        final InputConnection owner;
+        final int session;
+        final String raw="";
+        TextWrite(PanelCallbackChecks host){owner=host.getCurrentInputConnection();session=host.inputSession;}
+    }
+    static class PhraseAssociation {void textEdited(){}}
     static class Button {
         interface Click {void run(Button button);} Click click;String description;
         void setOnClickListener(Click value){click=value;}void setContentDescription(String value){description=value;}void press(){click.run(this);}
@@ -32,12 +43,22 @@ public final class PanelCallbackChecks {
     final Preferences preferences=new Preferences();
     Preferences getSharedPreferences(String name,int mode){return preferences;}
     int inputSession=1,commits;long emojiViewGeneration=1;
+    long emojiSelectionRevision;
+    boolean pendingCommitInFlight,candidateChoiceInFlight,inputEntryInFlight;
+    PhraseAssociation phraseAssociation;
     boolean math=true,editing,phrasesOpen,emoji,shown=true;
     String committed;InputConnection editor=new InputConnection();HorizontalScrollView emojiOuterScroll;
     InputConnection getCurrentInputConnection(){return editor;}boolean isInputViewShown(){return shown;}
-    boolean emojiPanelActive(){return emoji;}void commit(String text){commits++;committed=text;}
+    boolean emojiPanelActive(){return emoji;}
+    boolean textWriteCurrent(TextWrite bound,String raw){return bound.owner==editor&&bound.session==inputSession&&raw.isEmpty();}
+    boolean prepareTextWrite(TextWrite bound,boolean invalidate){if(invalidate)beforeCaret.invalidate();return textWriteCurrent(bound,bound.raw);}
+    boolean insertEditorText(InputConnection owner,String value){if(owner!=editor)return false;commits++;committed=value;return true;}
+    SplitSelection.Snapshot connectionSnapshot(InputConnection owner,boolean text){throw new AssertionError("symbol must not read a snapshot");}
+    boolean sameVoiceSnapshot(SplitSelection.Snapshot first,SplitSelection.Snapshot second){return first==second;}
+    void toast(String text){}
     /* REVEAL */
     /* CHOOSE */
+    /* WRITE */
     /* SYMBOL_BUTTON */
     /* CAPTURE */
     /* FORMAT */

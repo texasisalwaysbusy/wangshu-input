@@ -22,7 +22,7 @@ def extract(signature):
         depth+=(ime[end]=='{')-(ime[end]=='}');end+=1
     return ime[start:end]
 template=(here/'PanelCallbackChecks.java.in').read_text()
-for marker,signature in [('/* REVEAL */','private void revealSymbolTab('),('/* CHOOSE */','private void chooseSymbol('),('/* SYMBOL_BUTTON */','private Button symbolButton('),('/* CAPTURE */','private VoiceResultPolicy captureVoiceResultPolicy('),('/* FORMAT */','private String formatVoiceResult(')]:
+for marker,signature in [('/* REVEAL */','private void revealSymbolTab('),('/* CHOOSE */','private void chooseSymbol('),('/* WRITE */','private boolean writeDisplayedAction('),('/* SYMBOL_BUTTON */','private Button symbolButton('),('/* CAPTURE */','private VoiceResultPolicy captureVoiceResultPolicy('),('/* FORMAT */','private String formatVoiceResult(')]:
     assert template.count(marker)==1;template=template.replace(marker,extract(signature))
 generated=out/'PanelCallbackChecks.java';generated.write_text(template)
 if run('callback-compile',['java','-m','jdk.compiler/com.sun.tools.javac.Main','-proc:none','-cp',classes,'-d',classes,generated]):run('callbacks',['java','-cp',classes,'org.wangshu.ime.PanelCallbackChecks'])

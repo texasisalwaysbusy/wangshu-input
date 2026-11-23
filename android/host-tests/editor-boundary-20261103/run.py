@@ -28,7 +28,8 @@ files=[]
 stubs['org/wangshu/ime/WangshuIme.java']=stubs['org/wangshu/ime/WangshuIme.java'].replace('ACCESSOR',accessor)
 for name,value in stubs.items():
  target=out/'stubs'/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_text(value,encoding='utf-8');files.append(target)
-files += [editor_copy,*[src/name for name in ('BeforeCaretEditor.java','EmojiSelection.java','EmojiCatalog.java')]]
+files += [editor_copy,*[src/name for name in ('BeforeCaretEditor.java','EmojiSelection.java',
+                                            'EmojiCatalog.java','EmojiPinyin.java','EmojiSearchQuery.java')]]
 files += [here/'EditorBoundaryChecks.java',here/'BeforeCaretBoundaryChecks.java',here/'SymbolBoundaryChecks.java']
 receipt={'scope':'Production classes with synthetic InputConnection, service/session, Looper and Java regex \\X boundary adapter. NOT Android ICU/editor, APK, phone or Windows acceptance. No user data.','Android':'NOT_RUN','editor_source':str(editor_source),'editor_source_sha256':hashlib.sha256(editor_source.read_bytes()).hexdigest(),'ime_source_sha256':hashlib.sha256((src/'WangshuIme.java').read_bytes()).hexdigest(),'extracted_accessor':accessor,'boundary_adapter':'Java regex \\X; not Android ICU','sources':{str(x):hashlib.sha256(x.read_bytes()).hexdigest() for x in files},'commands':[],'success':False}
 def run(name,cmd):
