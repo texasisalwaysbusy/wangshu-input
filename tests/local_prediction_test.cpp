@@ -44,6 +44,29 @@ int main(int argc,char**argv){try{wangshu::Engine e;check(argc==2&&e.load(argv[1
  check(e.predict("https://host/Thank you ","",true).empty(),"URL context not truncated into prose");
  check(e.predict("foo.Thank you ","",true).empty(),"member access domain suppressed");
  check(e.predict("email@Thank you ","",true).empty(),"email suppressed");
+ const auto sameSuggestions=[](const std::vector<wangshu::Candidate>& a,const std::vector<wangshu::Candidate>& b){
+     return !a.empty()&&a.size()==b.size()&&std::equal(a.begin(),a.end(),b.begin(),[](const auto& left,const auto& right){
+         return left.text==right.text&&left.annotation==right.annotation&&left.score==right.score;
+     });
+ };
+ check(sameSuggestions(e.predict("I would ","",true),e.predict("The note ended. I would ","",true)),
+       "begin a fresh English next-word context after a prose period");
+ check(sameSuggestions(e.predict("The weath","",true),e.predict("The note ended.\t The weath","",true)),
+       "complete an English word after sentence whitespace");
+ check(sameSuggestions(e.predict("换上太阳能电","",false),e.predict("前一句写完了. 换上太阳能电","",false)),
+       "complete a Chinese word after an ASCII sentence period");
+ check(sameSuggestions(e.predict("The weath","",true),e.predict("The weath",". Thanks.",true))&&
+       sameSuggestions(e.predict("The weath","",true),e.predict("The weath",".",true)),
+       "allow a proper period at the insertion boundary");
+ check(e.predict("The weath",".com",true).empty()&&e.predict("The weath","... Thanks",true).empty(),
+       "do not treat a domain or an ellipsis as a right-side sentence boundary");
+ check(e.predict("https://example.com. I would ","",true).empty()&&
+       e.predict("mail@example.com. I would ","",true).empty()&&
+       e.predict("The value is 3.14. I would ","",true).empty()&&
+       e.predict("obj.member. I would ","",true).empty(),
+       "reject unsafe material before a later prose period");
+ check(e.predict("I would. ","",true).empty()&&e.predict("I would ",". like",true).empty(),
+       "do not continue across an empty sentence or duplicate a following word");
  check(e.predict("I would ","like",true).empty(),"word-internal insertion suppressed");
  check(e.predict("I would "," like",true).empty(),"duplicate following word suppressed");
  check(!e.predict("I would ",", later",true).empty(),"clear middle boundary append allowed");

@@ -19,13 +19,39 @@ inline bool equalFold(std::u16string_view a,std::u16string_view b){if(a.size()!=
 inline bool separator(char16_t c){return c==u' '||c==u'\t'||c==u'\n'||c==u'\r'||std::u16string_view(u",!?;，。！？；、…").find(c)!=std::u16string_view::npos;}
 inline bool valid(std::u16string_view text){for(size_t i=0;i<text.size();++i){auto c=text[i];if(c>=0xd800&&c<=0xdbff){if(++i>=text.size()||text[i]<0xdc00||text[i]>0xdfff)return false;}else if(c>=0xdc00&&c<=0xdfff)return false;}return true;}
 inline bool boundary(std::u16string_view text,size_t at){return at==0||separator(text[at-1])||han(text[at-1]);}
-inline bool safeLine(std::u16string_view text){for(char16_t c:text)if(!letter(c)&&!han(c)&&!separator(c)&&c!=u'\''&&c!=u'’')return false;return true;}
-inline bool duplicate(std::u16string_view suffix,std::u16string_view after){size_t start=0;while(start<after.size()&&separator(after[start]))++start;if(start==after.size())return false;size_t n=std::min(suffix.size(),after.size()-start);return n&&equalFold(suffix.substr(0,n),after.substr(start,n));}
+inline bool sentencePeriod(std::u16string_view text,size_t at){
+ if(text[at]!=u'.')return false;
+ if(at+1==text.size())return true;
+ const auto next=text[at+1];
+ return next==u' '||next==u'\t'||next==u'\r'||next==u'\n';
+}
+inline bool safeLine(std::u16string_view text){
+ for(size_t at=0;at<text.size();++at){
+  const auto c=text[at];
+  if(letter(c)||han(c)||separator(c)||c==u'\''||c==u'’')continue;
+  if(at&&sentencePeriod(text,at)&&(letter(text[at-1])||han(text[at-1])))continue;
+  return false;
+ }
+ return true;
+}
+inline bool duplicate(std::u16string_view suffix,std::u16string_view after){
+ size_t start=0;
+ while(start<after.size()&&(separator(after[start])||sentencePeriod(after,start)))++start;
+ if(start==after.size())return false;
+ const auto count=std::min(suffix.size(),after.size()-start);
+ return count&&equalFold(suffix.substr(0,count),after.substr(start,count));
+}
 inline std::u16string_view eligibleLine(std::u16string_view before,std::u16string_view after,size_t limit){
  if(before.empty()||before.size()>32768||after.size()>32768||!limit||limit>8||!valid(before)||!valid(after))return {};
  auto lineStart=before.find_last_of(u"\r\n");auto line=before.substr(lineStart==std::u16string_view::npos?0:lineStart+1);
  // Never truncate an unsafe code/URL prefix into apparently safe prose.
- if(line.size()>256||!safeLine(line)||(!after.empty()&&!separator(after.front())))return {};
+ if(line.size()>256||!safeLine(line)||
+    (!after.empty()&&!separator(after.front())&&!sentencePeriod(after,0)))return {};
+ const auto period=line.find_last_of(u'.');
+ if(period!=std::u16string_view::npos){
+  line.remove_prefix(period+1);
+  while(!line.empty()&&(line.front()==u' '||line.front()==u'\t'))line.remove_prefix(1);
+ }
  return line;
 }
 inline std::vector<Result> suggest(std::u16string_view before,std::u16string_view after,bool english,size_t limit=4,bool* matched=nullptr){

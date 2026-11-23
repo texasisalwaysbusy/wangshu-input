@@ -30,6 +30,11 @@ public final class LocalPredictionJniTest {
         check(NativeBridge.predict("换上太阳能电","，池",false).length==0,"dictionary completion preserves an existing following suffix");
         check(contains(NativeBridge.predict("I would ","",true),"like"),"English next unit crosses actual native bridge");
         check(contains(NativeBridge.predict("THE WEATH","",true),"ER"),"corpus completion preserves uppercase across JNI");
+        check(Arrays.equals(NativeBridge.predict("THE WEATH","",true),
+                            NativeBridge.predict("The note ended. THE WEATH",". Thanks.",true)),
+              "sentence and right punctuation reach the same ranked uppercase suggestions through JNI");
+        check(NativeBridge.predict("https://example.com. I would ","",true).length==0,
+              "unsafe text stays rejected before a later sentence period through JNI");
         check(contains(NativeBridge.predict("你想不想","",false),"一起"),"Chinese corpus next word crosses JNI");
         check(contains(NativeBridge.predictInNumbers("日期：2026","，备注",false),"年"),"numeric JNI appends a date suffix at a separated caret");
         check(contains(NativeBridge.predictInNumbers("Time: 08","",true),":"),"English time separator crosses numeric JNI");

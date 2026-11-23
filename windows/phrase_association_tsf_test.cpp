@@ -119,6 +119,13 @@ static int builtinSuite(){
      expect(SUCCEEDED(committed));
      expect(f.c->doc.value==L"你想不想一起，之后再说");
  });
+ test("English completion after a sentence period preserves the following sentence",[]{
+     Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);
+     const std::wstring prefix=L"The note ended. THE WEATH";
+     f.text(prefix+L". Thanks.");f.c->doc.cursor=static_cast<LONG>(prefix.size());
+     f.release();f.waitPrediction();expect(f.first()==L"ER");
+     expect(SUCCEEDED(f.choose())&&f.c->doc.value==prefix+L"ER. Thanks.");
+ });
  test("native timer dispatch publishes without taking focus",[]{
      Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);f.text(L"THE WEATH");
      auto focus=GetFocus();f.release();

@@ -65,7 +65,7 @@ int main(int argc,char** argv){try{
  check(lp::suggest(u"今天",std::u16string(32769,u' '),false).empty(),"following context bound");
  print(engine,"nihao");print(engine,"ni``hao");print(engine,"`a``b`");
  std::cout<<"PROBE non-Han U+4DC0 han classification="<<lp::han(0x4dc0)<<" prediction count="<<engine.predict("䷀今天", "").size()<<"\n";
- std::cout<<"PROBE after an English full stop result count="<<engine.predict("Thank you. I would ","",true).size()<<" (conservative design limitation)\n";
+ std::cout<<"PROBE after an English sentence period result count="<<engine.predict("Thank you. I would ","",true).size()<<"\n";
  std::cout<<"PASS "<<assertions<<" focused assertions over "<<contexts<<" editorial prefix/mode contexts; structural and safety checks only, not language accuracy or device evidence\n";
  return 0;
  }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<"\n";return 1;}}
