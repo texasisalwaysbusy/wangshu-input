@@ -33,6 +33,10 @@ struct Fixture {
      auto old=store->readLearningFresh();
      store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.builtinPredictions=value;});
  }
+ void numeric(bool value=true){
+     auto old=store->readLearningFresh();
+     store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.numericPredictions=value;});
+ }
  void cursorPredictions(bool value){
      auto old=store->readLearningFresh();
      store->modifyLearning(old.revision,[&](wangshu::LearningData& x){x.cursorPredictions=value;});
@@ -59,8 +63,8 @@ static int builtinSuite(){
      f.builtin();
      wangshu::WindowsPersonalStore reopened(f.store->path());
      auto saved=reopened.readLearningFresh();
-     expect(saved.data.phraseAssociations&&saved.data.builtinPredictions&&saved.data.pinned("nihao","你好"));
-     expect(saved.revision.find("\"version\":3")!=std::string::npos);
+     expect(saved.data.phraseAssociations&&saved.data.builtinPredictions&&!saved.data.numericPredictions&&saved.data.pinned("nihao","你好"));
+     expect(saved.revision.find("\"version\":7")!=std::string::npos);
      f.builtin(false);
      auto restored=reopened.readLearningFresh();
      expect(restored.data.phraseAssociations&&!restored.data.builtinPredictions&&restored.data.pinned("nihao","你好"));
@@ -71,7 +75,7 @@ static int builtinSuite(){
      f.release();f.waitPrediction();expect(!read&&!f.m->element);
  });
  test("disabled caret preference persists and legacy defaults preserve navigation behavior",[]{
-     Fixture f;f.enabled();f.builtin();auto previous=f.store->readLearningFresh();
+     Fixture f;f.enabled();f.builtin();f.numeric();auto previous=f.store->readLearningFresh();
      expect(previous.data.cursorPredictions&&previous.revision.find("\"version\":3")!=std::string::npos);
      f.cursorPredictions(false);
      wangshu::WindowsPersonalStore reopened(f.store->path());auto changed=reopened.readLearningFresh();
@@ -144,29 +148,39 @@ static int builtinSuite(){
      Fixture f;f.enabled();f.builtin();f.release();expect(f.first()==L"llo"&&!WindowsPersonalTestAccess::pending(f.s));
  });
  test("exact arithmetic takes precedence over built-in predictions",[]{
-     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"2+2=");
+     Fixture f;WindowsPersonalTestAccess::math(f.s);f.text(L"2+2=");
      f.release();expect(f.first()==L"4"&&!WindowsPersonalTestAccess::pending(f.s));
  });
  test("numeric mode appends a date unit without modifying digits or right-side text",[]{
-     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026，备注");
+     Fixture f;f.numeric();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026，备注");
      f.c->doc.cursor=7;f.release();f.waitPrediction();
      expect(f.first()==L"年"&&f.c->doc.value==L"日期：2026，备注");
      expect(SUCCEEDED(f.choose())&&f.c->doc.value==L"日期：2026年，备注");
  });
- test("numeric suffix requires math mode and enabled built-in predictions",[]{
+ test("ordinary and numeric predictions have independent opt-in and scope",[]{
      Fixture f;f.builtin();f.text(L"Time: 09");f.release();f.waitPrediction();expect(!f.m->element);
-     WindowsPersonalTestAccess::math(f.s);f.builtin(false);f.release();f.waitPrediction();expect(!f.m->element);
-     f.builtin();f.release();f.waitPrediction();expect(f.first()==L":");
+     WindowsPersonalTestAccess::math(f.s);f.release();f.waitPrediction();expect(!f.m->element);
+     f.numeric();f.builtin(false);f.release();f.waitPrediction();expect(f.first()==L":");
+     WindowsPersonalTestAccess::math(f.s,false);WindowsPersonalTestAccess::english(f.s);
+     f.text(L"THE WEATH");f.release();f.waitPrediction();expect(!f.m->element);
+     f.builtin();f.release();f.waitPrediction();expect(f.first()==L"ER");
  });
  test("restricted number field has no date suggestion",[]{
-     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.c->scope=IS_DIGITS;
+     Fixture f;f.numeric();WindowsPersonalTestAccess::math(f.s);f.c->scope=IS_DIGITS;
      f.text(L"日期：2026");f.release();f.waitPrediction();expect(!f.m->element);
  });
  test("mode change after numeric selection rejects a queued suffix",[]{
-     Fixture f;f.builtin();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026");
+     Fixture f;f.numeric();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026");
      f.release();f.waitPrediction();expect(f.first()==L"年");
      f.c->deferred=true;expect(SUCCEEDED(f.choose()));WindowsPersonalTestAccess::math(f.s,false);
      auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"日期：2026");
+ });
+ test("disabling numeric predictions rejects a queued date suffix",[]{
+     Fixture f;f.builtin();f.numeric();WindowsPersonalTestAccess::math(f.s);f.text(L"日期：2026");
+     f.release();f.waitPrediction();expect(f.first()==L"年");
+     f.c->deferred=true;expect(SUCCEEDED(f.choose()));f.numeric(false);
+     auto outcome=f.c->flush();expect(outcome.size()==1&&FAILED(outcome[0])&&f.c->doc.value==L"日期：2026");
+     f.c->deferred=false;f.text(L"1/3+1/6=");f.release();expect(f.first()==L"1/2");
  });
  test("restricted scopes refuse before requesting editor text",[]{
      for(auto scope:{IS_PASSWORD,IS_PRIVATE,IS_URL,IS_EMAIL_SMTPEMAILADDRESS,IS_DIGITS}){

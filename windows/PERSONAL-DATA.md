@@ -16,6 +16,10 @@ In the local personal-data manager, open Favorites and select an authored emoji 
 
 JSON v1 保留词库与常用语。含收藏时完整备份写为 JSON v2，`favorites` 为至多 64 个内置字形，去重后保留原顺序。Android 和 Windows 都可读取两种格式。准备回退到只读 v1 的旧版本时，先保留完整备份，再在新版选择旧版兼容导出。按旧版对应的恢复方案使用 v1 文件，收藏仍可从完整备份在支持 v2 的版本恢复。
 
+「数学模式的补全和数字续写」与普通补全分别保存，修改后在下一次联想查询中生效。旧本机排序文件沿用以往的普通联想选择。两个开关不同才需要本机排序 v7，相同则保持可表达该状态的旧格式。旧版恢复需要升级前留存的原本机排序文件。
+
+共用设置 TSV v2 增加数字面板联想，v1 仍可导入并保留接收端的这项设置。在两端用预览确认后保存。回退前留存原版导出的共用设置 v1、完整个人数据和本机排序，保留新版备份供新版恢复。
+
 JSON v1 contains words and phrases. Complete backups with favorites use JSON v2 and add an ordered list of up to 64 catalog glyphs. Both platforms read both versions. Before a downgrade to a v1-only build, keep a complete backup and create a separate legacy export in the newer version. Use the v1 file with the older build's recovery procedure. Keep the complete backup for restoring favorites in a v2-capable build.
 
 Windows 与 Android 使用各自的平台存储实现。不要以 Android 的导入/导出、设置、隐私或生命周期结果推断 Windows 已完成。个人词条与常用语可能包含私人文字，JSON/TSV 不是加密格式；不要将真实备份附在公开 Issue 或开发包中。

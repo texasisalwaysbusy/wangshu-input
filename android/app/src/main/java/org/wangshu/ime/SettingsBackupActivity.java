@@ -108,10 +108,10 @@ public final class SettingsBackupActivity extends Activity {
                     .append(" → ").append(describe(key,item.getValue())).append("\n\n");
             }
         }
-        if(portable&&changes==0){status.setText("三个共用设置与本机一致，未写入。");return;}
+        if(portable&&changes==0){status.setText("文件中的共用设置与本机一致，未写入。");return;}
         status.setText("已验证，等待确认；设置尚未修改。");
         TextView text=new TextView(this);text.setTextIsSelectable(true);text.setTextColor(getColor(R.color.ink));text.setPadding(dp(20),dp(12),dp(20),dp(12));
-        String note=portable?"已验证三个共用设置，其中 "+changes+" 项不同。其余 Android 设置保留。\n\n":
+        String note=portable?"已验证文件中的共用设置，有 "+changes+" 项不同。其余 Android 设置保留。\n\n":
             recovery==null?"已验证 "+incoming.size()+" 项设置，"+changes+" 项不同。整组一次保存，下次重开键盘生效。\n\n":
             "本地设置暂停，无法可靠比较旧值。以下 "+incoming.size()+" 项将整组写入。先保存当前仍存在的 XML、备份、迁移及修复凭据的故障副本，任何证据保存失败均停止；不从旧配置重新导入。\n\n";
         String privacy=recovery==null?"自动学习和剪贴板记录开关不改变。":"本次修复强制关闭自动学习及剪贴板记录；旧历史与词频文件不删除、不导入。当前进程继续暂停，需自行重启应用及输入法后核对，再到对应页面分别确认开启。失败或结果不明不会自动重试，故障副本保留。";

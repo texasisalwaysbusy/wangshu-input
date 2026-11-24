@@ -3,3 +3,5 @@ windows/*.cmd -text
 windows/emoji_catalog.inc text eol=lf
 core/long_english_data.inc text eol=lf
 android/app/src/main/java/org/wangshu/ime/EmojiPinyin.java text eol=lf
+# The rebuilt ASR receipt binds the exact bytes of this dependency lock.
+docs/speech-dependencies.json text eol=lf

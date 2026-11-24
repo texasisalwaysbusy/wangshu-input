@@ -25,7 +25,7 @@
 #include "clipboard_source.h"
 
 namespace {
-enum Control {Tab=101,List,Key,Text,New,Save,Delete,Import,Export,Refresh,Recover,Status,KeyLabel,TextLabel,LearnEnabled,AssociationsEnabled,PredictionsEnabled,ClipboardEnabled,ClipboardRetention,ClipboardClearAll,CursorPredictions,SpeechFormat,PortableExport,PortableImport,FuzzySettings};
+enum Control {Tab=101,List,Key,Text,New,Save,Delete,Import,Export,Refresh,Recover,Status,KeyLabel,TextLabel,LearnEnabled,AssociationsEnabled,PredictionsEnabled,ClipboardEnabled,ClipboardRetention,ClipboardClearAll,CursorPredictions,SpeechFormat,PortableExport,PortableImport,FuzzySettings,NumericPredictions};
 enum class FileKind { Personal, Clipboard, Settings };
 constexpr unsigned RetentionDays[]={1,7,30};
 std::wstring wide(const std::string& s){auto value=wangshu::utf16(s);return {value.begin(),value.end()};}
@@ -52,7 +52,7 @@ struct App {
     void configureMode(){
         for(int id:{ClipboardEnabled,ClipboardRetention,ClipboardClearAll})
             ShowWindow(item(id),clipboardMode()?SW_SHOW:SW_HIDE);
-        for(int id:{LearnEnabled,AssociationsEnabled,PredictionsEnabled,CursorPredictions,SpeechFormat,PortableExport,PortableImport,FuzzySettings})
+        for(int id:{LearnEnabled,AssociationsEnabled,PredictionsEnabled,CursorPredictions,NumericPredictions,SpeechFormat,PortableExport,PortableImport,FuzzySettings})
             ShowWindow(item(id),clipboardMode()||favoritesMode()?SW_HIDE:SW_SHOW);
         for(int id:{New,Delete})ShowWindow(item(id),favoritesMode()?SW_HIDE:SW_SHOW);
         ShowWindow(item(Import),ranking()?SW_HIDE:SW_SHOW);ShowWindow(item(Export),ranking()?SW_HIDE:SW_SHOW);
@@ -235,8 +235,10 @@ struct App {
     }
     void toggleAssociations(int id){
         auto control=item(id);
-        auto setting=id==CursorPredictions?&wangshu::LearningData::cursorPredictions:
-            id==PredictionsEnabled?&wangshu::LearningData::builtinPredictions:&wangshu::LearningData::phraseAssociations;
+        bool wangshu::LearningData::* setting=&wangshu::LearningData::phraseAssociations;
+        if(id==CursorPredictions)setting=&wangshu::LearningData::cursorPredictions;
+        else if(id==PredictionsEnabled)setting=&wangshu::LearningData::builtinPredictions;
+        else if(id==NumericPredictions)setting=&wangshu::LearningData::numericPredictions;
         bool wanted=SendMessageW(control,BM_GETCHECK,0,0)==BST_CHECKED;
         try{
             learningSnapshot=store->modifyLearning(learningSnapshot.revision,
@@ -245,6 +247,8 @@ struct App {
                 ? (wanted?L"方向键移动后更新本地联想":L"已关闭方向键移动联想，正常输入继续更新")
                 : id==PredictionsEnabled
                 ? (wanted?L"本地补全已开启：停止按键后显示，点击追加，不记录上下文":L"本地补全已关闭")
+                : id==NumericPredictions
+                ? (wanted?L"数学模式的补全和数字续写已开启":L"数学模式联想已关闭，精确算术仍可用")
                 : (wanted?L"本地常用语联想已开启：仅框末，点击候选插入，不记录上下文":L"本地常用语联想已关闭"));
         }catch(...){
             SendMessageW(control,BM_SETCHECK,learningSnapshot.data.*setting?BST_CHECKED:BST_UNCHECKED,0);
@@ -263,6 +267,7 @@ struct App {
             control(AssociationsEnabled,learningSnapshot.data.phraseAssociations,editable);
             control(PredictionsEnabled,learningSnapshot.data.builtinPredictions,editable);
             control(CursorPredictions,learningSnapshot.data.cursorPredictions,editable);
+            control(NumericPredictions,learningSnapshot.data.numericPredictions,editable);
             SendMessageW(item(SpeechFormat),CB_SETCURSEL,static_cast<unsigned>(learningSnapshot.data.speechFormat),0);
             EnableWindow(item(SpeechFormat),editable);
             EnableWindow(item(PortableExport),editable);
@@ -271,7 +276,7 @@ struct App {
             SetWindowTextW(item(FuzzySettings),learningSnapshot.data.fuzzyMask?L"模糊拼音 · 已开启…":L"模糊拼音 · 全部关闭…");
         }catch(...){
             learningReadError=true;
-            for(int id:{LearnEnabled,AssociationsEnabled,PredictionsEnabled,CursorPredictions})control(id,false,false);
+            for(int id:{LearnEnabled,AssociationsEnabled,PredictionsEnabled,CursorPredictions,NumericPredictions})control(id,false,false);
             EnableWindow(item(SpeechFormat),FALSE);
             EnableWindow(item(PortableExport),FALSE);
             EnableWindow(item(PortableImport),FALSE);
@@ -399,6 +404,8 @@ struct App {
         diff(L"语音格式",formats[static_cast<unsigned>(before.speechFormat)],formats[static_cast<unsigned>(incoming.speechFormat)]);
         diff(L"补全与下一词",toggle(before.builtinPredictions),toggle(incoming.builtinPredictions));
         diff(L"光标联想",toggle(before.cursorPredictions),toggle(incoming.cursorPredictions));
+        if(incoming.numericPredictions)
+            diff(L"数字面板联想",toggle(current.data.numericPredictions),toggle(*incoming.numericPredictions));
         if(incoming.windowsPhraseAssociations)
             diff(L"Windows 常用语联想",toggle(current.data.phraseAssociations),toggle(*incoming.windowsPhraseAssociations));
         if(changes.empty()){
@@ -450,7 +457,7 @@ struct App {
         int available=std::max(px(180),width-2*pad-gap);
         int leftWidth=pad+available*43/100,right=leftWidth+gap,fieldWidth=std::max(1,width-right-pad);
         bool narrow=width<px(620);int mainRows=fieldWidth<px(280)?3:1,footerRows=ranking()?1:narrow?2:1;
-        const int listTop=favoritesMode()?72:clipboardMode()?216:438;
+        const int listTop=favoritesMode()?72:clipboardMode()?216:492;
         int minimum=px(listTop+28+120+16+mainRows*48+12+footerRows*44+40);
         virtualHeight=std::max(height,minimum);scrollY=std::max(0,std::min(scrollY,virtualHeight-height));
         SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_RANGE|SIF_PAGE|SIF_POS;info.nMin=0;info.nMax=virtualHeight-1;info.nPage=height;info.nPos=scrollY;SetScrollInfo(window,SB_VERT,&info,TRUE);
@@ -458,10 +465,11 @@ struct App {
         int footerTop=virtualHeight-px(40+footerRows*44),mainTop=footerTop-px(12+mainRows*48);
         move(Tab,pad,top,leftWidth-pad,px(300));move(LearnEnabled,pad,top+px(44),leftWidth-pad,px(48));move(AssociationsEnabled,pad,top+px(96),leftWidth-pad,px(52));move(PredictionsEnabled,pad,top+px(152),leftWidth-pad,px(52));
         move(CursorPredictions,pad,top+px(208),leftWidth-pad,px(48));
-        move(SpeechFormat,pad,top+px(258),leftWidth-pad,px(175));
-        move(PortableExport,pad,top+px(298),leftWidth-pad,px(40));
-        move(PortableImport,pad,top+px(344),leftWidth-pad,px(40));
-        move(FuzzySettings,pad,top+px(390),leftWidth-pad,px(40));
+        move(NumericPredictions,pad,top+px(258),leftWidth-pad,px(50));
+        move(SpeechFormat,pad,top+px(312),leftWidth-pad,px(175));
+        move(PortableExport,pad,top+px(352),leftWidth-pad,px(40));
+        move(PortableImport,pad,top+px(398),leftWidth-pad,px(40));
+        move(FuzzySettings,pad,top+px(444),leftWidth-pad,px(40));
         move(ClipboardEnabled,pad,top+px(44),leftWidth-pad,px(48));
         move(ClipboardRetention,pad,top+px(98),leftWidth-pad,px(175));
         move(ClipboardClearAll,pad,top+px(152),leftWidth-pad,px(46));
@@ -480,6 +488,7 @@ struct App {
     void initialize(){store=std::make_unique<wangshu::WindowsPersonalStore>();create(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,Tab);SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"个人词库"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"常用语"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"个人排序"));SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"剪贴板"));SendMessageW(item(Tab),CB_SETCURSEL,0,0);create(L"LISTBOX",L"",LBS_NOTIFY|LBS_NOINTEGRALHEIGHT|WS_VSCROLL|WS_BORDER,List);create(L"STATIC",L"",0,KeyLabel);create(L"EDIT",L"",ES_AUTOHSCROLL,Key);create(L"STATIC",L"",0,TextLabel);create(L"EDIT",L"",ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|WS_VSCROLL,Text);for(const auto& entry:std::vector<std::pair<int,const wchar_t*>>{{New,L"新增"},{Save,L"保存"},{Delete,L"删除"},{Import,L"导入合并…"},{Export,L"备份到新文件…"},{Refresh,L"刷新"},{Recover,L"恢复有效备份"}})create(L"BUTTON",entry.second,BS_PUSHBUTTON|BS_NOTIFY,entry.first);create(L"BUTTON",L"自动学习已确认选词（默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,LearnEnabled);create(L"BUTTON",L"本地常用语中英联想（框末，默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,AssociationsEnabled);create(L"BUTTON",L"本地补全与下一词（默认关闭）",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,PredictionsEnabled);create(L"BUTTON",L"允许保存剪贴板文本",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,ClipboardEnabled);
         SendMessageW(item(Tab),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"收藏表情"));
         create(L"BUTTON",L"方向键移动后更新本地联想",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,CursorPredictions);
+        create(L"BUTTON",L"数学模式的补全和数字续写",BS_AUTOCHECKBOX|BS_MULTILINE|BS_NOTIFY,NumericPredictions);
         create(L"COMBOBOX",L"",CBS_DROPDOWNLIST|WS_VSCROLL,SpeechFormat);
         for(const auto* label:{L"语音格式 · 原文",L"语音格式 · 数学术语",L"语音格式 · 数字与日期"})
             SendMessageW(item(SpeechFormat),CB_ADDSTRING,0,reinterpret_cast<LPARAM>(label));
@@ -493,6 +502,6 @@ struct App {
         create(L"STATIC",L"",SS_LEFT|SS_ENDELLIPSIS,Status);applyFont();loadSafely();resize();}
     ~App(){if(font)DeleteObject(font);}
 };
-LRESULT CALLBACK windowProc(HWND window,UINT message,WPARAM wp,LPARAM lp){auto app=reinterpret_cast<App*>(GetWindowLongPtrW(window,GWLP_USERDATA));if(message==WM_NCCREATE){app=static_cast<App*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);app->window=window;SetWindowLongPtrW(window,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(app));}if(!app)return DefWindowProcW(window,message,wp,lp);try{switch(message){case WM_CREATE:app->initialize();return 0;case WM_SIZE:app->resize();return 0;case WM_DPICHANGED:{auto rect=reinterpret_cast<RECT*>(lp);SetWindowPos(window,nullptr,rect->left,rect->top,rect->right-rect->left,rect->bottom-rect->top,SWP_NOZORDER|SWP_NOACTIVATE);app->applyFont();app->resize();return 0;}case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(lp);MONITORINFO monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);int width=monitor.rcWork.right-monitor.rcWork.left,height=monitor.rcWork.bottom-monitor.rcWork.top;info->ptMinTrackSize={std::min(app->px(640),width),std::min(app->px(300),height)};return 0;}case WM_VSCROLL:{SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(window,SB_VERT,&info);int position=app->scrollY;switch(LOWORD(wp)){case SB_LINEUP:position-=app->px(32);break;case SB_LINEDOWN:position+=app->px(32);break;case SB_PAGEUP:position-=static_cast<int>(info.nPage);break;case SB_PAGEDOWN:position+=static_cast<int>(info.nPage);break;case SB_THUMBTRACK:case SB_THUMBPOSITION:position=info.nTrackPos;break;case SB_TOP:position=0;break;case SB_BOTTOM:position=info.nMax;break;}app->scroll(position);return 0;}case WM_MOUSEWHEEL:app->scroll(app->scrollY-static_cast<short>(HIWORD(wp))*app->px(60)/WHEEL_DELTA);return 0;case WM_COMMAND:{int id=LOWORD(wp),notification=HIWORD(wp);if(((id>=New&&id<=Recover)||id==LearnEnabled||id==AssociationsEnabled||id==PredictionsEnabled||id==CursorPredictions||id==ClipboardEnabled||id==ClipboardClearAll||id==PortableExport||id==PortableImport||id==FuzzySettings)&&notification==BN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if((id==Key||id==Text)&&notification==EN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if(id==List&&notification==LBN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if((id==Tab||id==ClipboardRetention||id==SpeechFormat)&&notification==CBN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if(id==Tab&&notification==CBN_SELCHANGE){app->loadSafely();app->resize();}else if(id==SpeechFormat&&notification==CBN_SELCHANGE)app->changeSpeechFormat();else if(id==ClipboardRetention&&notification==CBN_SELCHANGE)app->configureClipboard(false);else if(id==List&&notification==LBN_SELCHANGE)app->select();else if(notification==BN_CLICKED){switch(id){case New:app->newEntry();break;case Save:app->save();break;case Delete:app->remove();break;case Import:app->importFile();break;case Export:app->exportFile();break;case Refresh:app->loadSafely();break;case Recover:app->recover();break;case LearnEnabled:app->toggleLearning();break;case AssociationsEnabled:case PredictionsEnabled:case CursorPredictions:app->toggleAssociations(id);break;case ClipboardEnabled:app->configureClipboard(true);break;case ClipboardClearAll:app->clearClipboard(true);break;case PortableExport:app->exportPortableSettings();break;case PortableImport:app->importPortableSettings();break;case FuzzySettings:app->changeFuzzyRules();break;}}return 0;}case WM_CLOSE:DestroyWindow(window);return 0;case WM_DESTROY:PostQuitMessage(0);return 0;}}catch(const std::exception& e){app->error(e);if(message==WM_CREATE)return -1;return 0;}return DefWindowProcW(window,message,wp,lp);}
+LRESULT CALLBACK windowProc(HWND window,UINT message,WPARAM wp,LPARAM lp){auto app=reinterpret_cast<App*>(GetWindowLongPtrW(window,GWLP_USERDATA));if(message==WM_NCCREATE){app=static_cast<App*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);app->window=window;SetWindowLongPtrW(window,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(app));}if(!app)return DefWindowProcW(window,message,wp,lp);try{switch(message){case WM_CREATE:app->initialize();return 0;case WM_SIZE:app->resize();return 0;case WM_DPICHANGED:{auto rect=reinterpret_cast<RECT*>(lp);SetWindowPos(window,nullptr,rect->left,rect->top,rect->right-rect->left,rect->bottom-rect->top,SWP_NOZORDER|SWP_NOACTIVATE);app->applyFont();app->resize();return 0;}case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(lp);MONITORINFO monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor);int width=monitor.rcWork.right-monitor.rcWork.left,height=monitor.rcWork.bottom-monitor.rcWork.top;info->ptMinTrackSize={std::min(app->px(640),width),std::min(app->px(300),height)};return 0;}case WM_VSCROLL:{SCROLLINFO info{};info.cbSize=sizeof(info);info.fMask=SIF_ALL;GetScrollInfo(window,SB_VERT,&info);int position=app->scrollY;switch(LOWORD(wp)){case SB_LINEUP:position-=app->px(32);break;case SB_LINEDOWN:position+=app->px(32);break;case SB_PAGEUP:position-=static_cast<int>(info.nPage);break;case SB_PAGEDOWN:position+=static_cast<int>(info.nPage);break;case SB_THUMBTRACK:case SB_THUMBPOSITION:position=info.nTrackPos;break;case SB_TOP:position=0;break;case SB_BOTTOM:position=info.nMax;break;}app->scroll(position);return 0;}case WM_MOUSEWHEEL:app->scroll(app->scrollY-static_cast<short>(HIWORD(wp))*app->px(60)/WHEEL_DELTA);return 0;case WM_COMMAND:{int id=LOWORD(wp),notification=HIWORD(wp);if(((id>=New&&id<=Recover)||id==LearnEnabled||id==AssociationsEnabled||id==PredictionsEnabled||id==CursorPredictions||id==NumericPredictions||id==ClipboardEnabled||id==ClipboardClearAll||id==PortableExport||id==PortableImport||id==FuzzySettings)&&notification==BN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if((id==Key||id==Text)&&notification==EN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if(id==List&&notification==LBN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if((id==Tab||id==ClipboardRetention||id==SpeechFormat)&&notification==CBN_SETFOCUS)app->showFocused(reinterpret_cast<HWND>(lp));if(id==Tab&&notification==CBN_SELCHANGE){app->loadSafely();app->resize();}else if(id==SpeechFormat&&notification==CBN_SELCHANGE)app->changeSpeechFormat();else if(id==ClipboardRetention&&notification==CBN_SELCHANGE)app->configureClipboard(false);else if(id==List&&notification==LBN_SELCHANGE)app->select();else if(notification==BN_CLICKED){switch(id){case New:app->newEntry();break;case Save:app->save();break;case Delete:app->remove();break;case Import:app->importFile();break;case Export:app->exportFile();break;case Refresh:app->loadSafely();break;case Recover:app->recover();break;case LearnEnabled:app->toggleLearning();break;case AssociationsEnabled:case PredictionsEnabled:case CursorPredictions:case NumericPredictions:app->toggleAssociations(id);break;case ClipboardEnabled:app->configureClipboard(true);break;case ClipboardClearAll:app->clearClipboard(true);break;case PortableExport:app->exportPortableSettings();break;case PortableImport:app->importPortableSettings();break;case FuzzySettings:app->changeFuzzyRules();break;}}return 0;}case WM_CLOSE:DestroyWindow(window);return 0;case WM_DESTROY:PostQuitMessage(0);return 0;}}catch(const std::exception& e){app->error(e);if(message==WM_CREATE)return -1;return 0;}return DefWindowProcW(window,message,wp,lp);}
 }
 int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,LPWSTR,int show){SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);WNDCLASSEXW type{};type.cbSize=sizeof(type);type.hInstance=instance;type.lpfnWndProc=windowProc;type.lpszClassName=L"WangshuPersonalManager";type.hCursor=LoadCursorW(nullptr,IDC_ARROW);type.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);if(!RegisterClassExW(&type))return 1;App app;RECT work{0,0,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN)};SystemParametersInfoW(SPI_GETWORKAREA,0,&work,0);UINT systemDpi=GetDpiForSystem();if(!systemDpi)systemDpi=96;int initialWidth=std::max(1,std::min(MulDiv(960,systemDpi,96),static_cast<int>(work.right-work.left)-32)),initialHeight=std::max(1,std::min(MulDiv(720,systemDpi,96),static_cast<int>(work.bottom-work.top)-32));HWND window=CreateWindowExW(0,type.lpszClassName,L"望舒 · 本地个人数据",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN|WS_VSCROLL,CW_USEDEFAULT,CW_USEDEFAULT,initialWidth,initialHeight,nullptr,nullptr,instance,&app);if(!window){std::fprintf(stderr,"Native management window creation failed: %lu; no configuration action dispatched.\n",GetLastError());return 2;}ShowWindow(window,show);MSG message;while(GetMessageW(&message,nullptr,0,0)>0){if(!IsDialogMessageW(window,&message)){TranslateMessage(&message);DispatchMessageW(&message);}}return static_cast<int>(message.wParam);}

@@ -514,7 +514,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
             if(!personalStore)return false;
             auto now=personalStore->readLearningFresh();
             if(proof.association&&(now.fromBackup||!now.data.phraseAssociations))return false;
-            if(proof.builtin&&(now.fromBackup||!now.data.builtinPredictions))return false;
+            if(proof.builtin&&(now.fromBackup||!now.data.predictionsEnabled(math)))return false;
             if(!proof.rankingReadable||now.revision!=proof.learningRevision)return false;
         }catch(...){if(proof.rankingReadable)return false;}}
         return true;
@@ -961,7 +961,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     bool predictionSettingsCurrent(const PredictionRequest& request){
         if(!personalStore)return false;
         auto settings=personalStore->readLearningFresh();
-        return !settings.fromBackup&&settings.data.builtinPredictions&&settings.revision==request.settings;
+        return !settings.fromBackup&&settings.data.predictionsEnabled(request.numericPanel)&&settings.revision==request.settings;
     }
     void requestPrediction(ITfContext* context,std::string settings,unsigned long long generation,
                            unsigned long long requestRevision){
@@ -1047,7 +1047,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
             auto settings=personalStore->readLearningFresh();
             if(!settings.fromBackup&&(!cursorMovement||settings.data.cursorPredictions)){
                 associationsEnabled=settings.data.phraseAssociations;
-                if(settings.data.builtinPredictions)builtinSettings=std::move(settings.revision);
+                if(settings.data.predictionsEnabled(math))builtinSettings=std::move(settings.revision);
             }
         }catch(...){}}
         if(!math&&!associationsEnabled){

@@ -245,8 +245,9 @@ bool LearningData::pinned(const std::string& input,const std::string& text)const
 LearningData LearningData::parse(const std::string& bytes){
     if(bytes.empty()||bytes.size()>MaxBytes)throw std::runtime_error("Learning file size is invalid");LearningJson root;
     try{root=LearningJson::parse(bytes,[](int depth,LearningJson::parse_event_t,LearningJson&){if(depth>8)throw std::runtime_error("Learning JSON depth exceeds schema");return true;});}catch(const LearningJson::exception&){throw std::runtime_error("Malformed learning JSON");}
-    auto version=root.contains("version")?learningNumber(root["version"],6):0;
-    if(version==6)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat","fuzzyMask"});
+    auto version=root.contains("version")?learningNumber(root["version"],7):0;
+    if(version==7)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat","fuzzyMask","numericPredictions"});
+    else if(version==6)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat","fuzzyMask"});
     else if(version==5)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions","speechFormat"});
     else if(version==4)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions","cursorPredictions"});
     else if(version==3)learningFields(root,{"kind","version","enabled","entries","phraseAssociations","builtinPredictions"});
@@ -268,7 +269,13 @@ LearningData LearningData::parse(const std::string& bytes){
         out.cursorPredictions=root["cursorPredictions"].get<bool>();
     }
     if(version>=5)out.speechFormat=static_cast<voice_format::Mode>(learningNumber(root["speechFormat"],2));
-    if(version==6)out.fuzzyMask=static_cast<unsigned>(learningNumber(root["fuzzyMask"],fuzzy_pinyin::AllRules));
+    if(version>=6)out.fuzzyMask=static_cast<unsigned>(learningNumber(root["fuzzyMask"],fuzzy_pinyin::AllRules));
+    // Older Windows profiles applied the ordinary opt-in in math mode too.
+    out.numericPredictions=out.builtinPredictions;
+    if(version==7){
+        if(!root["numericPredictions"].is_boolean())throw std::runtime_error("Invalid numeric prediction setting");
+        out.numericPredictions=root["numericPredictions"].get<bool>();
+    }
     std::set<std::pair<std::string,std::string>> seen;
     for(const auto& item:root["entries"]){learningFields(item,{"key","text","count","pinned","updated"});auto key=learningString(item["key"]),text=learningString(item["text"]);if(key!=candidateKey(key)||text!=candidateText(text)||!item["pinned"].is_boolean()||!seen.emplace(key,text).second)throw std::runtime_error("Noncanonical or duplicate learning entry");auto count=static_cast<unsigned>(learningNumber(item["count"],MaxCount));bool pin=item["pinned"].get<bool>();if(!count&&!pin)throw std::runtime_error("Learning entry has neither weight nor pin");out.entries.push_back({key,text,count,pin,learningNumber(item["updated"],static_cast<unsigned long long>(std::numeric_limits<long long>::max()))});}
     return out;
@@ -287,16 +294,21 @@ std::string LearningData::serialize()const{
         root["builtinPredictions"]=builtinPredictions;
         root["cursorPredictions"]=false;
     }
-    if(speechFormat!=voice_format::Mode::Raw||fuzzyMask){
+    const bool separateNumeric=numericPredictions!=builtinPredictions;
+    if(speechFormat!=voice_format::Mode::Raw||fuzzyMask||separateNumeric){
         root["version"]=5;
         root["phraseAssociations"]=phraseAssociations;
         root["builtinPredictions"]=builtinPredictions;
         root["cursorPredictions"]=cursorPredictions;
         root["speechFormat"]=static_cast<unsigned>(speechFormat);
     }
-    if(fuzzyMask){
+    if(fuzzyMask||separateNumeric){
         root["version"]=6;
         root["fuzzyMask"]=fuzzyMask;
+    }
+    if(separateNumeric){
+        root["version"]=7;
+        root["numericPredictions"]=numericPredictions;
     }
     std::string bytes;try{bytes=root.dump();}catch(const LearningJson::exception&){throw std::runtime_error("Invalid learning Unicode");}parse(bytes);return bytes;
 }
@@ -332,10 +344,12 @@ LearningSnapshot WindowsPersonalStore::modifyLearning(const std::string& expecte
 LearningSnapshot WindowsPersonalStore::restoreLearningBackup(const std::string& expected){WriteLock guard(learningPath());auto current=readLearningUncached();if(current.revision!=expected||!current.fromBackup)throw std::runtime_error("Learning recovery state changed; refresh first");writeLearningAtomic(current,current.data);return readLearningUncached();}
 
 namespace {
-constexpr char PortableHeader[]="WANGSHU-PORTABLE-SETTINGS\t1";
+constexpr char PortableV1[]="WANGSHU-PORTABLE-SETTINGS\t1";
+constexpr char PortableV2[]="WANGSHU-PORTABLE-SETTINGS\t2";
 constexpr char VoiceSetting[]="keyboard\tvoiceOutputMode\ti\t";
 constexpr char BuiltinSetting[]="associations\tbuiltinPredictions\tb\t";
 constexpr char CursorSetting[]="associations\tcursorPredictions\tb\t";
+constexpr char NumericSetting[]="associations\tnumericPredictions\tb\t";
 constexpr char PhraseSetting[]="windows\tphraseAssociations\tb\t";
 
 bool portableBoolean(std::string_view value){
@@ -357,9 +371,11 @@ PortableSettings PortableSettings::parse(const std::string& bytes){
         text.remove_prefix(pos==std::string_view::npos?text.size():pos+1);
         return line;
     };
-    if(nextLine()!=PortableHeader)throw std::runtime_error("Unsupported portable settings version");
+    const auto header=nextLine();
+    const bool hasNumeric=header==PortableV2;
+    if(!hasNumeric&&header!=PortableV1)throw std::runtime_error("Unsupported portable settings version");
     std::optional<voice_format::Mode> speech;
-    std::optional<bool> builtin,cursor,phrase;
+    std::optional<bool> builtin,cursor,phrase,numeric;
     while(!text.empty()){
         const auto line=nextLine();
         const auto value=[&](std::string_view id){return line.substr(id.size());};
@@ -370,21 +386,23 @@ PortableSettings PortableSettings::parse(const std::string& bytes){
             speech=static_cast<voice_format::Mode>(digit.front()-'0');
         }else if(setting(BuiltinSetting)&&!builtin)builtin=portableBoolean(value(BuiltinSetting));
         else if(setting(CursorSetting)&&!cursor)cursor=portableBoolean(value(CursorSetting));
+        else if(setting(NumericSetting)&&hasNumeric&&!numeric)numeric=portableBoolean(value(NumericSetting));
         else if(setting(PhraseSetting)&&!phrase)phrase=portableBoolean(value(PhraseSetting));
         else throw std::runtime_error("Unknown or duplicate portable setting");
     }
-    if(!speech||!builtin||!cursor)throw std::runtime_error("Incomplete portable settings backup");
-    return {*speech,*builtin,*cursor,phrase};
+    if(!speech||!builtin||!cursor||(hasNumeric&&!numeric))throw std::runtime_error("Incomplete portable settings backup");
+    return {*speech,*builtin,*cursor,phrase,numeric};
 }
 
 PortableSettings PortableSettings::from(const LearningData& data){
-    return {data.speechFormat,data.builtinPredictions,data.cursorPredictions,data.phraseAssociations};
+    return {data.speechFormat,data.builtinPredictions,data.cursorPredictions,data.phraseAssociations,data.numericPredictions};
 }
 
 std::string PortableSettings::serialize()const{
     const auto boolean=[](bool value){return value?"true":"false";};
-    std::string result=std::string(PortableHeader)+"\n"+VoiceSetting+std::to_string(static_cast<unsigned>(speechFormat))+"\n"+
+    std::string result=std::string(numericPredictions?PortableV2:PortableV1)+"\n"+VoiceSetting+std::to_string(static_cast<unsigned>(speechFormat))+"\n"+
         BuiltinSetting+boolean(builtinPredictions)+"\n"+CursorSetting+boolean(cursorPredictions)+"\n";
+    if(numericPredictions)result+=std::string(NumericSetting)+boolean(*numericPredictions)+"\n";
     if(windowsPhraseAssociations)result+=std::string(PhraseSetting)+boolean(*windowsPhraseAssociations)+"\n";
     parse(result);
     return result;
@@ -394,6 +412,7 @@ void PortableSettings::apply(LearningData& data)const{
     data.speechFormat=speechFormat;
     data.builtinPredictions=builtinPredictions;
     data.cursorPredictions=cursorPredictions;
+    if(numericPredictions)data.numericPredictions=*numericPredictions;
     if(windowsPhraseAssociations)data.phraseAssociations=*windowsPhraseAssociations;
 }
 

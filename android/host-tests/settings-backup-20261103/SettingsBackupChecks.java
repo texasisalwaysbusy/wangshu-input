@@ -78,6 +78,16 @@ public final class SettingsBackupChecks {
   reject(()->SettingsBackup.mergePortable(file(text(portable)+"windows\tphraseAssociations\tb\tTRUE\n"),defaults),"invalid Windows extension");
   reject(()->SettingsBackup.mergePortable(file(text(portable).replace("voiceOutputMode\ti\t2","voiceOutputMode\ti\t02")),defaults),"invalid portable voice type");
   reject(()->SettingsBackup.mergePortable(file(text(portable).replace("associations\tcursorPredictions\tb\ttrue\n","")),defaults),"incomplete portable");
+  String currentPortable=text(portable);
+  String oldPortable=currentPortable.replace("WANGSHU-PORTABLE-SETTINGS\t2","WANGSHU-PORTABLE-SETTINGS\t1").replace(numeric,"");
+  require(text(SettingsBackup.encode(SettingsBackup.mergePortable(file(oldPortable),optedIn)::get))
+          .contains(numeric.replace("false","true")),"v1 preserves existing numeric setting");
+  require(text(SettingsBackup.encode(SettingsBackup.mergePortable(portable,optedIn)::get)).contains(numeric),
+          "v2 transfers an explicit numeric opt-out");
+  reject(()->SettingsBackup.mergePortable(file(currentPortable.replace(numeric,"")),defaults),"v2 missing numeric");
+  reject(()->SettingsBackup.mergePortable(file(currentPortable+numeric),defaults),"v2 duplicate numeric");
+  reject(()->SettingsBackup.mergePortable(file(oldPortable+numeric),defaults),"v1 unexpected numeric");
+  reject(()->SettingsBackup.mergePortable(file(currentPortable.replace(numeric,numeric.replace("false","maybe"))),defaults),"v2 non-boolean numeric");
   if(args.length==2){
    byte[] fromWindows=java.nio.file.Files.readAllBytes(java.nio.file.Path.of(args[0]));
    var imported=SettingsBackup.mergePortable(fromWindows,unicode);
@@ -87,6 +97,7 @@ public final class SettingsBackupChecks {
     if(key.equals("voiceOutputMode")){require(value.equals(2),"Windows voice mode applied");map.put(entry.getKey(),1);}
     if(key.equals("builtinPredictions"))require(value.equals(true),"Windows next-word toggle applied");
     if(key.equals("cursorPredictions"))require(value.equals(false),"Windows cursor toggle applied");
+    if(key.equals("numericPredictions")){require(value.equals(true),"Windows numeric opt-in applied");map.put(entry.getKey(),false);}
    }
    java.nio.file.Files.write(java.nio.file.Path.of(args[1]),SettingsBackup.encodePortable(SettingsBackup.encode(map::get)),java.nio.file.StandardOpenOption.CREATE_NEW);
   }

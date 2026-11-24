@@ -54,13 +54,14 @@ public final class AppPreferencesChecks {
   AppPreferences.open(portableOwner,"candidate-learning").edit().putBoolean("enabled",true).commit();
   byte[] portableBefore=AppPreferences.snapshot(portableOwner);
   byte[] portableFile=SettingsBackup.encodePortable(SettingsBackup.encode(k->
-      k.name.equals("voiceOutputMode")?2:k.name.equals("builtinPredictions")?true:k.fallback));
+      k.name.equals("voiceOutputMode")?2:k.name.endsWith("Predictions")?true:k.fallback));
   var portableMerged=SettingsBackup.mergePortable(portableFile,portableBefore);
   require(Arrays.equals(portableBefore,AppPreferences.snapshot(portableOwner)),"portable preview is read-only");
   AppPreferences.restore(portableOwner,portableBefore,portableMerged);
   Owner portableReopened=new Owner(portableOwner.disk);
   require(AppPreferences.open(portableReopened,"keyboard").getInt("voiceOutputMode",0)==2&&
-      AppPreferences.open(portableReopened,"associations").getBoolean("builtinPredictions",false),"portable values survive reopening synthetic store");
+      AppPreferences.open(portableReopened,"associations").getBoolean("builtinPredictions",false)&&
+      AppPreferences.open(portableReopened,"associations").getBoolean("numericPredictions",false),"portable values survive reopening synthetic store");
   require(AppPreferences.open(portableReopened,"keyboard").getInt("cursorStepDp",0)==24&&
       AppPreferences.open(portableReopened,"clipboard").getBoolean("enabled",false)&&
       AppPreferences.open(portableReopened,"clipboard").getInt("days",0)==30&&

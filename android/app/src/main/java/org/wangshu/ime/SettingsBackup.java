@@ -11,7 +11,8 @@ final class SettingsBackup {
     private static final String FORMAT="WANGSHU-SETTINGS\t";
     private static final String HEADER=FORMAT+"5";
     private static final String PORTABLE_FORMAT="WANGSHU-PORTABLE-SETTINGS\t";
-    private static final String PORTABLE_HEADER=PORTABLE_FORMAT+"1";
+    private static final String PORTABLE_V1=PORTABLE_FORMAT+"1";
+    private static final String PORTABLE_V2=PORTABLE_FORMAT+"2";
     private static final String WINDOWS_PHRASES="windows\tphraseAssociations";
     private static final Key VOICE_OUTPUT=new Key("keyboard","voiceOutputMode",0,0,2);
     private static final Key BUILTIN_PREDICTIONS=new Key("associations","builtinPredictions",false,0,0);
@@ -63,8 +64,8 @@ final class SettingsBackup {
 
     static byte[] encodePortable(byte[] current)throws IOException {
         Map<Key,Object> snapshot=decode(current);
-        StringBuilder text=new StringBuilder(PORTABLE_HEADER).append('\n');
-        for(Key key:new Key[]{VOICE_OUTPUT,BUILTIN_PREDICTIONS,CURSOR_PREDICTIONS}) {
+        StringBuilder text=new StringBuilder(PORTABLE_V2).append('\n');
+        for(Key key:new Key[]{VOICE_OUTPUT,BUILTIN_PREDICTIONS,CURSOR_PREDICTIONS,NUMERIC_PREDICTIONS}) {
             text.append(key.id()).append('\t').append(key.type()).append('\t')
                     .append(snapshot.get(key)).append('\n');
         }
@@ -76,9 +77,11 @@ final class SettingsBackup {
         String text=decodeUtf8(bytes);
         if(text.startsWith("\uFEFF"))text=text.substring(1);
         String[] lines=text.split("\\r?\\n",-1);
-        if(!lines[0].equals(PORTABLE_HEADER))throw new IOException("不支持的跨平台设置版本");
+        boolean hasNumeric=lines[0].equals(PORTABLE_V2);
+        if(!hasNumeric&&!lines[0].equals(PORTABLE_V1))throw new IOException("不支持的跨平台设置版本");
         Map<String,Key> allowed=new HashMap<>();
         for(Key key:new Key[]{VOICE_OUTPUT,BUILTIN_PREDICTIONS,CURSOR_PREDICTIONS})allowed.put(key.id(),key);
+        if(hasNumeric)allowed.put(NUMERIC_PREDICTIONS.id(),NUMERIC_PREDICTIONS);
         Map<Key,Object> selected=new HashMap<>();
         boolean windowsPhrasesSeen=false;
         for(int i=1;i<lines.length;i++) {

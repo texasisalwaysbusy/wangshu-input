@@ -43,7 +43,9 @@ struct LearningData {
     bool enabled=false;
     bool phraseAssociations=false; // Explicit opt-in; v1 migration defaults off.
     bool builtinPredictions=false;
+    bool numericPredictions=false;
     bool cursorPredictions=true;
+    bool predictionsEnabled(bool numericPanel)const{return numericPanel?numericPredictions:builtinPredictions;}
     voice_format::Mode speechFormat=voice_format::Mode::Raw;
     unsigned fuzzyMask=0;
     std::vector<LearnedCandidate> entries;
@@ -70,6 +72,7 @@ struct PortableSettings {
     bool builtinPredictions=false;
     bool cursorPredictions=true;
     std::optional<bool> windowsPhraseAssociations;
+    std::optional<bool> numericPredictions;
     static PortableSettings parse(const std::string& bytes);
     static PortableSettings from(const LearningData& data);
     std::string serialize()const;

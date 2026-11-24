@@ -41,6 +41,7 @@ int wmain(int argc,wchar_t** argv){if(argc!=2&&argc!=3)return 2;auto directory=s
         auto current=store.readLearningFresh();
         auto configured=store.modifyLearning(current.revision,[](LearningData& data){
             data.speechFormat=voice_format::Mode::Numbers;data.builtinPredictions=true;data.cursorPredictions=false;
+            data.numericPredictions=true;
             data.phraseAssociations=true;data.enabled=true;data.pin("test","synthetic private rank",true,Now);
         });
         auto file=path(L"portable-windows-export.tsv");
@@ -48,7 +49,7 @@ int wmain(int argc,wchar_t** argv){if(argc!=2&&argc!=3)return 2;auto directory=s
         const auto bytes=WindowsPersonalStore::readExternal(file);
         const auto settings=PortableSettings::parse(bytes);
         expect(settings.serialize()==bytes&&settings.speechFormat==voice_format::Mode::Numbers&&settings.builtinPredictions&&
-               !settings.cursorPredictions&&settings.windowsPhraseAssociations==true,"wrong selected settings");
+               !settings.cursorPredictions&&settings.windowsPhraseAssociations==true&&settings.numericPredictions==true,"wrong selected settings");
         expect(bytes.find("private")==std::string::npos&&bytes.find("enabled")==std::string::npos,"exported personal data");
         expect(rejects([&]{store.exportPortableSettingsNew(file);})&&WindowsPersonalStore::readExternal(file)==bytes&&
                store.readLearningFresh().revision==configured.revision,"export overwrote state");
@@ -101,17 +102,53 @@ int wmain(int argc,wchar_t** argv){if(argc!=2&&argc!=3)return 2;auto directory=s
         expect(restored.revision.find("\"version\":1")!=std::string::npos&&restored.data.pinned("test","local"),
                "default schema or ranking lost");
     });
+    test("legacy Windows numeric opt-in survives, v7 stores independence and invalid v7 fails",[&]{
+        const std::string legacy=R"({"kind":"wangshu-windows-learning","version":3,"enabled":false,"entries":[],"phraseAssociations":false,"builtinPredictions":true})";
+        const auto data=LearningData::parse(legacy);
+        expect(data.builtinPredictions&&data.numericPredictions,"Legacy math opt-in was lost");
+        WindowsPersonalStore store(path(L"numeric.json"));
+        ownedWrite(store.learningPath(),legacy);
+        auto old=store.readLearningFresh();
+        auto disabled=store.modifyLearning(old.revision,[](LearningData& model){model.numericPredictions=false;});
+        auto reopened=WindowsPersonalStore(store.path()).readLearningFresh();
+        expect(reopened.revision==disabled.revision&&reopened.revision.find("\"version\":7")!=std::string::npos&&
+               reopened.data.builtinPredictions&&!reopened.data.numericPredictions,"Independent v7 override was lost");
+        const auto bad=std::string(R"({"kind":"wangshu-windows-learning","version":7,"enabled":false,"entries":[],"phraseAssociations":false,"builtinPredictions":true,"cursorPredictions":true,"speechFormat":0,"fuzzyMask":0})");
+        expect(rejects([&]{LearningData::parse(bad);}),"Missing v7 numeric setting accepted");
+        store.modifyLearning(reopened.revision,[](LearningData& model){model.numericPredictions=true;});
+        expect(store.readLearningFresh().revision==old.revision,"Equal settings failed to use legacy encoding");
+    });
+    test("portable v1 retains the numeric setting, v2 preserves false and rejects malformed fields",[]{
+        LearningData data;
+        data.numericPredictions=true;
+        auto first=PortableSettings{}.serialize();
+        const auto legacy=PortableSettings::parse(first);
+        legacy.apply(data);
+        expect(!legacy.numericPredictions&&data.numericPredictions,"Portable v1 replaced numeric opt-in");
+        auto current=PortableSettings::from(data);
+        current.numericPredictions=false;
+        auto second=current.serialize();
+        auto parsed=PortableSettings::parse(second);
+        parsed.apply(data);
+        expect(parsed.numericPredictions==false&&!data.numericPredictions,"Portable v2 lost disabled setting");
+        const auto numeric=second.find("associations\tnumericPredictions");
+        const auto tail=second.substr(numeric,second.find('\n',numeric)-numeric+1);
+        auto missing=second;missing.erase(numeric,tail.size());
+        auto invalid=second;invalid.replace(invalid.find("\tb\tfalse",numeric),8,"\tb\tmaybe");
+        for(const auto& bytes:{missing,second+tail,invalid,first+tail})
+            expect(rejects([&]{PortableSettings::parse(bytes);}),"Malformed portable numeric setting accepted");
+    });
     if(argc==3)test("Android file round trip retains Windows-only setting and weights",[&]{
         const auto incoming=PortableSettings::parse(WindowsPersonalStore::readExternal(argv[2]));
         expect(!incoming.windowsPhraseAssociations&&incoming.speechFormat==voice_format::Mode::Math&&
-               incoming.builtinPredictions&&!incoming.cursorPredictions,"Android return did not match shared values");
+               incoming.builtinPredictions&&!incoming.cursorPredictions&&incoming.numericPredictions==false,"Android return did not match shared values");
         WindowsPersonalStore store(path(L"exchange.json"));
         auto local=store.readLearningFresh();
-        local=store.modifyLearning(local.revision,[](LearningData& data){data.phraseAssociations=true;data.pin("test","local",true,Now);});
+        local=store.modifyLearning(local.revision,[](LearningData& data){data.phraseAssociations=true;data.numericPredictions=true;data.pin("test","local",true,Now);});
         store.modifyLearning(local.revision,[&](LearningData& data){incoming.apply(data);});
         const auto saved=WindowsPersonalStore(store.path()).readLearningFresh();
         expect(saved.data.speechFormat==voice_format::Mode::Math&&saved.data.builtinPredictions&&
-               !saved.data.cursorPredictions&&saved.data.phraseAssociations&&saved.data.pinned("test","local"),"roundtrip lost data");
+               !saved.data.cursorPredictions&&!saved.data.numericPredictions&&saved.data.phraseAssociations&&saved.data.pinned("test","local"),"roundtrip lost data");
     });
     std::cout<<"RESULT passed="<<passed<<" failed="<<failed<<" total="<<(passed+failed)<<"; native Win32 storage/model with synthetic files, real Windows GUI NOT_RUN"<<std::endl;return failed?1:0;
 }
