@@ -21,6 +21,8 @@ else:
  old=method(settings,'add(panel,"按住语音右侧动作",()->')
  dialog='private void showVoiceRightActionSettings()'+old[old.index('{'):]
 cancel=method(ime,'private void cancelVoice()')
+if 'private boolean releaseDeviceRecognizer(' in ime:
+ cancel=method(ime,'private boolean releaseDeviceRecognizer(')+'\n'+cancel
 if 'private void refreshCompositionStatus()' in ime:
  status=method(ime,'private void refreshCompositionStatus()')
  assert 'refreshCompositionStatus();' in method(ime,'private void refresh()')

@@ -69,6 +69,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
     private void snapshotCandidateDisplay(){shownGeneration++;shownInput=buffer.toString();shownPage=page;shownSession=inputSession;shownModes=candidateModes();shownFuzzy=currentPageFuzzy;shownLearningRevision=candidatePages==null?learningRevision():candidateLearningRevision;shownRevision=candidateRevision;shownRules=candidateRules!=null?candidateRules:FuzzySettingsActivity.enabledPairs(this);}
     private Runnable displayedCandidate(int index){long generation=shownGeneration;return ()->chooseBound(index,generation);}
     private SpeechRecognizer recognizer;
+    private ToolbarVoice toolbarVoice;
     private OfflineVoice.Task offlineTask;
     private String voiceReview=null,voiceState="";
     private ImageButton voiceButton,hideButton;
@@ -261,8 +262,8 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         composition=new TextView(this);composition.setTextSize(compact()?12:14);composition.setSingleLine(true);composition.setEllipsize(android.text.TextUtils.TruncateAt.START);composition.setTextColor(getColor(R.color.ink));composition.setPadding(dp(8),0,dp(8),0);
         candidateLine=row();add(candidateLine,"‹",.7f,()->{if(page==CandidatePages.ALTERNATIVES||page>0)moveCandidatePage(-1);});candidateScroll=new HorizontalScrollView(this);candidateScroll.setHorizontalScrollBarEnabled(false);candidates=row();candidateScroll.addView(candidates);candidateLine.addView(candidateScroll,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));expandedSummary=new TextView(this);expandedSummary.setGravity(Gravity.CENTER);expandedSummary.setTextSize(compact()?12:14);expandedSummary.setTextColor(getColor(R.color.muted));candidateLine.addView(expandedSummary,new LinearLayout.LayoutParams(0,dp(keyHeight()),7));candidateToggle=button("⌄",()->{expandedCandidates=!expandedCandidates;if(!expandedCandidates&&page==CandidatePages.ALTERNATIVES)page=0;rebuild();});candidateLine.addView(candidateToggle,new LinearLayout.LayoutParams(0,dp(keyHeight()),.9f));attachCandidateRegion(root,composition,candidateLine,PinyinDisplayPosition.below(PinyinDisplayPosition.read(()->getSharedPreferences("keyboard",0).getInt("pinyinDisplayPosition",PinyinDisplayPosition.ABOVE))));mathSuggestionBar=row();mathSuggestionBar.setVisibility(View.GONE);root.addView(mathSuggestionBar,new LinearLayout.LayoutParams(-1,-2));phraseSuggestionBar=row();phraseSuggestionBar.setVisibility(View.GONE);root.addView(phraseSuggestionBar,new LinearLayout.LayoutParams(-1,-2));
         voiceReviewPanel=null;
-        if(voiceReview!=null){
-            long revision=voiceReviewRevision;
+        long revision=voiceReviewRevision;
+        if(voiceReview!=null&&voiceResultCurrent(reviewConnection,reviewSession,revision,voiceEditEpoch)){
             voiceReviewPanel=column();
             root.addView(voiceReviewPanel);
             TextView transcript=new TextView(this);
@@ -277,7 +278,7 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
             Button insert=button("插入语音结果",()->insertVoiceReview(revision));
             insert.setEnabled(reviewCanInsert);
             review.addView(insert,new LinearLayout.LayoutParams(0,dp(keyHeight()),1.6f));
-            add(review,"复制结果",1.2f,()->{if(revision==voiceReviewRevision)copyVoiceReview();});
+            add(review,"复制结果",1.2f,()->copyVoiceReview(revision));
             add(review,"取消",.8f,()->{if(revision==voiceReviewRevision){cancelVoice();rebuild();}});
             voiceReviewPanel.addView(review);
         }
@@ -1394,32 +1395,226 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(text==null||!reviewCanInsert)return;
         dispatchVoiceCommit(text,editor,null,session,revision,true);
     }
-    private void copyVoiceReview(){if(voiceReview==null||password||clipboardManager==null)return;try{ClipData clip=ClipData.newPlainText("语音识别结果",voiceReview);PersistableBundle flags=new PersistableBundle();flags.putBoolean("android.content.extra.IS_SENSITIVE",true);clip.getDescription().setExtras(flags);clipboardManager.setPrimaryClip(clip);toast("已复制本次结果，未自动写入编辑器");}catch(RuntimeException unavailable){toast("系统剪贴板暂不可用，本次结果仍保留");}}
+    private void copyVoiceReview(long revision){
+        if(revision!=voiceReviewRevision||voiceReview==null||clipboardManager==null)return;
+        InputConnection editor=reviewConnection;
+        int session=reviewSession;
+        long epoch=voiceEditEpoch;
+        String text=voiceReview;
+        try{
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            ClipData clip=ClipData.newPlainText("语音识别结果",text);
+            PersistableBundle flags=new PersistableBundle();
+            flags.putBoolean("android.content.extra.IS_SENSITIVE",true);
+            clip.getDescription().setExtras(flags);
+            if(!voiceResultCurrent(editor,session,revision,epoch))return;
+            clipboardManager.setPrimaryClip(clip);
+            toast("已复制本次结果，未自动写入编辑器");
+        }catch(RuntimeException unavailable){toast("系统剪贴板暂不可用，本次结果仍保留");}
+    }
     /** Freeze the explicit voice-output setting for this recording, independent of keyboard panels. */
     private VoiceResultPolicy captureVoiceResultPolicy(){
         try{return VoiceResultPolicy.fromSetting(getSharedPreferences("keyboard",0).getInt("voiceOutputMode",0));}
         catch(ClassCastException invalid){return VoiceResultPolicy.RAW;}
     }
     private String formatVoiceResult(VoiceResultPolicy policy,String raw){return policy.apply(raw,DataFiles.ready,text->NativeBridge.voiceMath(text));}
+    private static final class ToolbarVoice {
+        final InputConnection connection;
+        final int session;
+        final VoiceResultPolicy policy;
+
+        ToolbarVoice(InputConnection connection,int session,VoiceResultPolicy policy){
+            this.connection=connection;
+            this.session=session;
+            this.policy=policy;
+        }
+    }
+
+    private boolean toolbarVoiceCurrent(ToolbarVoice capture){
+        return capture!=null&&toolbarVoice==capture&&voiceScope(capture.session,capture.connection)
+                &&toolbarVoice==capture;
+    }
+    private boolean acceptToolbarVoice(ToolbarVoice capture){
+        if(toolbarVoiceCurrent(capture))return true;
+        if(capture!=null&&toolbarVoice==capture)cancelVoice();
+        return false;
+    }
+
     private void startVoice(){
         if(BuildConfig.BASIC_TYPING_PREVIEW){toast(PreviewFeatures.VOICE_UNAVAILABLE);return;}
+        if(!isInputViewShown()||password)return;
         cancelHoldForOtherInput();
-        if(recognizer!=null){cancelVoice();toast("已停止本地语音");return;}
-        if(offlineTask!=null){offlineTask.finish();voiceToolState("识别中…",ToolbarIcon.Kind.BUSY);return;}
-        if(VoiceModels.available(this)){
-            if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){toast("请在设置中允许本地语音权限");startActivity(new Intent(this,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return;}
-            if(!finishRaw())return;final VoiceResultPolicy resultPolicy=captureVoiceResultPolicy();int session=inputSession;voiceState="正在准备本地语音…";
-            final OfflineVoice.Task[] owner=new OfflineVoice.Task[1];OfflineVoice.Task created=new OfflineVoice.Task(this,new OfflineVoice.Listener(){
-                public void state(String text){if(session!=inputSession||offlineTask!=owner[0])return;voiceState=text;refresh();}
-                public void result(String text){if(session!=inputSession||offlineTask!=owner[0])return;offlineTask=null;if(text.isEmpty()){toast("没有识别到文字");rebuild();return;}showVoiceReview(formatVoiceResult(resultPolicy,text),"请核对识别文字后插入",getCurrentInputConnection(),session,true);}
-                public void failure(String text){if(session!=inputSession||offlineTask!=owner[0])return;offlineTask=null;toast(text);rebuild();}
-            });owner[0]=created;offlineTask=created;created.start();rebuild();return;
+        if(recognizer!=null){cancelVoice();return;}
+        if(offlineTask!=null){
+            ToolbarVoice capture=toolbarVoice;
+            if(!acceptToolbarVoice(capture))return;
+            try{offlineTask.finish();}
+            catch(RuntimeException unavailable){failToolbarVoice(capture,"无法确认本地录音结束，请核对麦克风指示");return;}
+            if(toolbarVoice==capture)voiceToolState("识别中…",ToolbarIcon.Kind.BUSY);
+            return;
         }
-        if(Build.VERSION.SDK_INT<31||!SpeechRecognizer.isOnDeviceRecognitionAvailable(this)){toast("请先在设置导入离线中文语音包；当前不录音、不转云");startActivity(new Intent(this,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return;}
-        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){toast("请在望舒输入法设置中允许本地语音权限");startActivity(new Intent(this,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));return;}
-        if(!finishRaw())return;final VoiceResultPolicy resultPolicy=captureVoiceResultPolicy();int session=inputSession;SpeechRecognizer created=SpeechRecognizer.createOnDeviceSpeechRecognizer(this);recognizer=created;recognizer.setRecognitionListener(new RecognitionListener(){public void onReadyForSpeech(Bundle b){if(recognizer!=created)return;voiceToolState("停止",ToolbarIcon.Kind.STOP);toast(resultPolicy==VoiceResultPolicy.MATH_SYMBOLS?"本地数学语音：正在聆听":"本地语音：正在聆听");}public void onBeginningOfSpeech(){}public void onRmsChanged(float f){}public void onBufferReceived(byte[] b){}public void onEndOfSpeech(){}public void onError(int e){if(recognizer!=created)return;toast("设备端识别未完成（"+e+"），未转云");cancelVoice();}public void onResults(Bundle b){if(recognizer!=created)return;ArrayList<String> values=b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);if(session==inputSession&&!password&&values!=null&&!values.isEmpty()){String text=formatVoiceResult(resultPolicy,values.get(0));cancelVoice();showVoiceReview(text,"请核对识别文字后插入",getCurrentInputConnection(),session,true);}else cancelVoice();}public void onPartialResults(Bundle b){}public void onEvent(int t,Bundle b){}});
-        Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);i.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"zh-CN");i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);i.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);try{recognizer.startListening(i);}catch(RuntimeException e){cancelVoice();toast("设备端语音不可用，键盘输入仍可用");}
+        if(toolbarVoice!=null){cancelVoice();return;}
+
+        int session=inputSession;
+        long epoch=voiceEditEpoch;
+        InputConnection editor=getCurrentInputConnection();
+        if(!voiceWriteCurrent(epoch,session,editor))return;
+        boolean bundled=VoiceModels.available(this);
+        if(!bundled&&(Build.VERSION.SDK_INT<31||!SpeechRecognizer.isOnDeviceRecognitionAvailable(this))){
+            if(!voiceWriteCurrent(epoch,session,editor))return;
+            toast("请先在设置导入离线中文语音包；当前不录音、不转云");
+            startActivity(new Intent(this,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        }
+        if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+            if(!voiceWriteCurrent(epoch,session,editor))return;
+            toast("请在望舒输入法设置中允许本地语音权限");
+            startActivity(new Intent(this,SettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return;
+        }
+        // Finishing local pinyin can itself cause a selection or input lifecycle callback.
+        if(!voiceWriteCurrent(epoch,session,editor)||!finishRaw())return;
+        epoch=voiceEditEpoch;
+        VoiceResultPolicy policy=captureVoiceResultPolicy();
+        if(toolbarVoice!=null||!voiceWriteCurrent(epoch,session,editor)||toolbarVoice!=null)return;
+
+        ToolbarVoice capture=new ToolbarVoice(editor,session,policy);
+        toolbarVoice=capture;
+        if(bundled)startBundledVoice(capture);
+        else startDeviceVoice(capture);
     }
-    private void cancelVoice(){voiceReviewRevision++;cancelHoldForOtherInput();HeldVoice held=heldVoice;heldVoice=null;if(held!=null)held.task.cancel();OfflineVoice.Task task=offlineTask;offlineTask=null;if(task!=null)task.cancel();voiceReview=null;voiceReviewReason="";reviewConnection=null;reviewSession=-1;reviewCanInsert=true;voiceState="";if(voiceReviewPanel!=null)voiceReviewPanel.setVisibility(View.GONE);SpeechRecognizer old=recognizer;recognizer=null;if(old!=null){old.cancel();old.destroy();}voiceToolState("语音",ToolbarIcon.Kind.MICROPHONE);refreshCompositionStatus();}
+
+    private void startBundledVoice(ToolbarVoice capture){
+        voiceState="正在准备本地语音…";
+        try{
+            OfflineVoice.Task created=new OfflineVoice.Task(this,new OfflineVoice.Listener(){
+                public void state(String text){
+                    if(!acceptToolbarVoice(capture))return;
+                    voiceState=text;
+                    refresh();
+                }
+                public void result(String text){completeToolbarVoice(capture,text);}
+                public void failure(String text){failToolbarVoice(capture,text);}
+            });
+            if(!acceptToolbarVoice(capture))return;
+            offlineTask=created;
+            created.start();
+        }catch(RuntimeException unavailable){
+            failToolbarVoice(capture,"本地语音无法启动，键盘输入仍可用");
+            return;
+        }
+        if(toolbarVoice==capture)rebuild();
+    }
+
+    @android.annotation.TargetApi(31)
+    private void startDeviceVoice(ToolbarVoice capture){
+        try{
+            SpeechRecognizer created=SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+            if(!acceptToolbarVoice(capture)){
+                if(!releaseDeviceRecognizer(created,false))toast("设备端识别器释放未确认，请核对麦克风指示");
+                return;
+            }
+            recognizer=created;
+            created.setRecognitionListener(new RecognitionListener(){
+                public void onReadyForSpeech(Bundle b){
+                    if(!acceptToolbarVoice(capture))return;
+                    voiceToolState("停止",ToolbarIcon.Kind.STOP);
+                    toast(capture.policy==VoiceResultPolicy.MATH_SYMBOLS?"本地数学语音：正在聆听":"本地语音：正在聆听");
+                }
+                public void onBeginningOfSpeech(){}
+                public void onRmsChanged(float f){}
+                public void onBufferReceived(byte[] b){}
+                public void onEndOfSpeech(){}
+                public void onError(int error){failToolbarVoice(capture,"设备端识别未完成（"+error+"），未转云");}
+                public void onResults(Bundle b){
+                    if(!acceptToolbarVoice(capture))return;
+                    ArrayList<String> values=b==null?null:b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    completeToolbarVoice(capture,values==null||values.isEmpty()?"":values.get(0));
+                }
+                public void onPartialResults(Bundle b){}
+                public void onEvent(int type,Bundle b){}
+            });
+            Intent request=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"zh-CN");
+            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            request.putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE,true);
+            if(acceptToolbarVoice(capture))created.startListening(request);
+        }catch(RuntimeException unavailable){
+            failToolbarVoice(capture,"设备端语音不可用，键盘输入仍可用");
+        }
+    }
+
+    private void failToolbarVoice(ToolbarVoice capture,String message){
+        if(!acceptToolbarVoice(capture))return;
+        cancelVoice();
+        if(toolbarVoice==null&&voiceReview==null)toast(message);
+    }
+
+    private void completeToolbarVoice(ToolbarVoice capture,String raw){
+        if(!acceptToolbarVoice(capture))return;
+        String text;
+        try{text=raw==null||raw.isEmpty()?"":formatVoiceResult(capture.policy,raw);}
+        catch(RuntimeException|LinkageError unavailable){failToolbarVoice(capture,"无法生成本次语音结果");return;}
+        if(!acceptToolbarVoice(capture))return;
+
+        long revision=voiceReviewRevision,epoch=voiceEditEpoch;
+        toolbarVoice=null;
+        offlineTask=null;
+        voiceState="";
+        SpeechRecognizer device=recognizer;
+        recognizer=null;
+        boolean released=releaseDeviceRecognizer(device,false);
+        boolean current=voiceResultCurrent(capture.connection,capture.session,revision,epoch);
+        if(toolbarVoice!=null||revision!=voiceReviewRevision||epoch!=voiceEditEpoch)return;
+
+        if(!released)toast("设备端识别器释放未确认，请核对麦克风指示");
+        else if(current&&!text.isEmpty()){
+            showVoiceReview(text,"请核对识别文字后插入",capture.connection,capture.session,true);
+            return;
+        }else if(current)toast("没有识别到文字");
+        rebuild();
+    }
+
+    private boolean releaseDeviceRecognizer(SpeechRecognizer device,boolean cancel){
+        if(device==null)return true;
+        boolean confirmed=true;
+        if(cancel){
+            try{device.cancel();}
+            catch(RuntimeException unavailable){confirmed=false;}
+        }
+        try{device.destroy();}
+        catch(RuntimeException unavailable){confirmed=false;}
+        return confirmed;
+    }
+
+    private void cancelVoice(){
+        long revision=++voiceReviewRevision;
+        toolbarVoice=null;
+        HeldVoice held=heldVoice;
+        OfflineVoice.Task task=offlineTask;
+        SpeechRecognizer device=recognizer;
+        heldVoice=null;
+        offlineTask=null;
+        recognizer=null;
+        voiceReview=null;
+        voiceReviewReason="";
+        reviewConnection=null;
+        reviewSession=-1;
+        reviewCanInsert=true;
+        voiceState="";
+        if(voiceReviewPanel!=null)voiceReviewPanel.setVisibility(View.GONE);
+        // Retire all handles before cancellation can deliver a synchronous callback.
+        cancelHoldForOtherInput();
+        boolean confirmed=true;
+        try{if(held!=null)held.task.cancel();}
+        catch(RuntimeException unavailable){confirmed=false;}
+        try{if(task!=null)task.cancel();}
+        catch(RuntimeException unavailable){confirmed=false;}
+        confirmed=releaseDeviceRecognizer(device,true)&&confirmed;
+        if(revision!=voiceReviewRevision||toolbarVoice!=null)return;
+        voiceToolState("语音",ToolbarIcon.Kind.MICROPHONE);
+        refreshCompositionStatus();
+        if(!confirmed)toast("录音停止或资源释放未确认，请核对麦克风指示");
+    }
     private void toast(String value){Toast.makeText(this,value,Toast.LENGTH_LONG).show();}
 }

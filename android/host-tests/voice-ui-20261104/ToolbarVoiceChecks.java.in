@@ -1,0 +1,258 @@
+package org.wangshu.ime;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/** Production methods of the IME with in-memory stand-ins for Android and the recognizers. */
+public final class ToolbarVoiceChecks {
+    private static final Runnable NONE = () -> {};
+    private static boolean bundled;
+    private static int cases, failures;
+    private static Runnable onCreateRecognizer = NONE;
+    private final InputConnection a = new InputConnection(), b = new InputConnection();
+    private InputConnection active = a, reviewConnection;
+    private int inputSession = 42, reviewSession = -1;
+    private boolean password, reviewCanInsert, shown = true;
+    private long voiceReviewRevision, voiceEditEpoch;
+    private String voiceReview, voiceReviewReason = "", voiceState = "", notice = "";
+    private final View voiceReviewPanel = new View();
+    private final ClipboardManager clipboardManager = new ClipboardManager();
+    private OfflineVoice.Task offlineTask;
+    private SpeechRecognizer recognizer;
+    private HeldVoice heldVoice;
+    private Runnable onFormat = NONE;
+    /* FIELDS */
+
+    static final class InputConnection {}
+    private InputConnection getCurrentInputConnection() { return active; }
+    private boolean isInputViewShown() { return shown; }
+    private void rebuild() {}
+    private void refresh() {}
+    private void refreshCompositionStatus() {}
+    private void cancelHoldForOtherInput() { voiceEditEpoch++; }
+    private boolean finishRaw() { return true; }
+    private void toast(String message) { notice = message; }
+    private VoiceResultPolicy captureVoiceResultPolicy() { return VoiceResultPolicy.RAW; }
+    private String formatVoiceResult(VoiceResultPolicy policy, String raw) { onFormat.run(); return raw; }
+    private void pressCopy(long revision) { /* COPY */ }
+    private void startActivity(Intent intent) {}
+    private int checkSelfPermission(String requested) { return PackageManager.PERMISSION_GRANTED; }
+
+    static final class BuildConfig { static final boolean BASIC_TYPING_PREVIEW = false; }
+    static final class PreviewFeatures { static final String VOICE_UNAVAILABLE = ""; }
+    static final class Build { static final class VERSION { static final int SDK_INT = 36; } }
+    static final class Manifest { static final class permission { static final String RECORD_AUDIO = ""; } }
+    static final class PackageManager { static final int PERMISSION_GRANTED = 0; }
+    static final class SettingsActivity {}
+    static final class VoiceModels { static boolean available(ToolbarVoiceChecks owner) { return bundled; } }
+    static final class View { static final int GONE = 8; void setVisibility(int v) {} }
+    static final class ToolbarIcon { enum Kind { STOP, BUSY, MICROPHONE } }
+    private void voiceToolState(String name, ToolbarIcon.Kind icon) {}
+    enum VoiceResultPolicy { RAW, MATH_SYMBOLS }
+
+    static final class HeldVoice { OfflineVoice.Task task; }
+    static final class OfflineVoice {
+        interface Listener {
+            void state(String text);
+            default void partial(String text) {}
+            void result(String text);
+            void failure(String text);
+        }
+        static final class Task {
+            static Task last;
+            final Listener listener;
+            int starts, finishes, cancels;
+            Task(ToolbarVoiceChecks owner, Listener listener) { this.listener = listener; last = this; }
+            void start() { starts++; }
+            void finish() { finishes++; }
+            void cancel() { cancels++; }
+        }
+    }
+
+    interface RecognitionListener {
+        void onReadyForSpeech(Bundle b);
+        void onBeginningOfSpeech();
+        void onRmsChanged(float f);
+        void onBufferReceived(byte[] b);
+        void onEndOfSpeech();
+        void onError(int e);
+        void onResults(Bundle b);
+        void onPartialResults(Bundle b);
+        void onEvent(int t, Bundle b);
+    }
+    static final class SpeechRecognizer {
+        static final String RESULTS_RECOGNITION = "";
+        static SpeechRecognizer last;
+        RecognitionListener listener;
+        Runnable duringCleanup = NONE;
+        int starts, cancels, destroys;
+        boolean rejectCancel;
+        static boolean isOnDeviceRecognitionAvailable(ToolbarVoiceChecks owner) { return true; }
+        static SpeechRecognizer createOnDeviceSpeechRecognizer(ToolbarVoiceChecks owner) {
+            SpeechRecognizer created = new SpeechRecognizer();
+            last = created;
+            onCreateRecognizer.run();
+            return created;
+        }
+        void setRecognitionListener(RecognitionListener newListener) { listener = newListener; }
+        void startListening(Intent intent) { starts++; }
+        void cancel() {
+            cancels++;
+            cleanUp();
+            if (rejectCancel) throw new IllegalStateException("synthetic refused cancel");
+        }
+        void destroy() { destroys++; cleanUp(); }
+        void cleanUp() {
+            Runnable callback = duringCleanup;
+            duringCleanup = NONE;
+            callback.run();
+        }
+        void result(String text) { listener.onResults(new Bundle(text)); }
+    }
+    static final class Bundle {
+        final ArrayList<String> results;
+        Bundle(String text) { results = new ArrayList<>(List.of(text)); }
+        ArrayList<String> getStringArrayList(String key) { return results; }
+    }
+    static final class Intent {
+        static final int FLAG_ACTIVITY_NEW_TASK = 1;
+        Intent(String action) {}
+        Intent(ToolbarVoiceChecks owner, Class<?> activity) {}
+        Intent addFlags(int flags) { return this; }
+        void putExtra(String key, String value) {}
+        void putExtra(String key, boolean value) {}
+    }
+    static final class RecognizerIntent {
+        static final String ACTION_RECOGNIZE_SPEECH = "", EXTRA_LANGUAGE = "", EXTRA_LANGUAGE_MODEL = "",
+            LANGUAGE_MODEL_FREE_FORM = "", EXTRA_PREFER_OFFLINE = "";
+    }
+    final class ClipboardManager {
+        ClipData clip;
+        void setPrimaryClip(ClipData value) { clip = value; }
+    }
+    static final class ClipData {
+        final String text;
+        private PersistableBundle flags;
+        private ClipData(String text) { this.text = text; }
+        static ClipData newPlainText(String label, String text) { return new ClipData(text); }
+        ClipData getDescription() { return this; }
+        void setExtras(PersistableBundle value) { flags = value; sensitiveHook.run(); }
+    }
+    private static Runnable sensitiveHook = NONE;
+    static final class PersistableBundle {
+        boolean sensitive;
+        void putBoolean(String key, boolean value) {
+            if (key.equals("android.content.extra.IS_SENSITIVE")) sensitive = value;
+        }
+    }
+
+    /* METHODS */
+
+    private static ToolbarVoiceChecks setup(boolean useBundle) {
+        bundled = useBundle;
+        OfflineVoice.Task.last = null;
+        SpeechRecognizer.last = null;
+        onCreateRecognizer = sensitiveHook = NONE;
+        return new ToolbarVoiceChecks();
+    }
+    private static void check(boolean passed, String label) {
+        cases++;
+        if (!passed) failures++;
+        System.out.println((passed ? "PASS " : "FAIL ") + label);
+    }
+
+    public static void main(String[] args) {
+        for (boolean local : new boolean[]{true, false}) {
+            String backend = local ? "bundled" : "device";
+            var h = setup(local);
+            h.startVoice();
+            if (local) h.offlineTask.listener.result("合成转写");
+            else h.recognizer.result("合成转写");
+            check("合成转写".equals(h.voiceReview) && h.reviewConnection == h.a && h.reviewCanInsert
+                  && h.offlineTask == null && h.recognizer == null,
+                  backend + " stable editor receives one review");
+            h.pressCopy(h.voiceReviewRevision);
+            check(h.clipboardManager.clip != null && h.clipboardManager.clip.flags.sensitive
+                  && "合成转写".equals(h.clipboardManager.clip.text), backend + " explicit copy keeps sensitive flag");
+
+            h = setup(local);
+            h.startVoice();
+            var task = h.offlineTask;
+            var device = h.recognizer;
+            h.active = h.b; // Swap the connection before the lifecycle callback increments the session.
+            if (local) task.listener.result("旧录音");
+            else device.result("旧录音");
+            check(h.voiceReview == null && h.offlineTask == null && h.recognizer == null,
+                  backend + " late final from another connection stays hidden");
+
+            h = setup(local);
+            h.startVoice();
+            var formatting = h;
+            h.onFormat = () -> formatting.active = formatting.b;
+            if (local) h.offlineTask.listener.result("旧录音");
+            else h.recognizer.result("旧录音");
+            check(h.voiceReview == null, backend + " owner change during formatting stays hidden");
+
+            h = setup(local);
+            h.active = null;
+            h.startVoice();
+            check(h.offlineTask == null && h.recognizer == null,
+                  backend + " no editor means no capture start");
+
+            h = setup(local);
+            h.shown = false;
+            h.startVoice();
+            check(OfflineVoice.Task.last == null && SpeechRecognizer.last == null,
+                  backend + " a hidden keyboard cannot start capture");
+
+            h = setup(local);
+            h.startVoice();
+            task = h.offlineTask;
+            device = h.recognizer;
+            h.cancelVoice();
+            h.startVoice();
+            if (local) task.listener.result("已取消");
+            else device.result("已取消");
+            check(h.voiceReview == null && (local ? h.offlineTask != null && h.offlineTask != task :
+                  h.recognizer != null && h.recognizer != device), backend + " revoked result leaves newer task intact");
+        }
+
+        var h = setup(false);
+        h.startVoice();
+        var cleanup = h;
+        h.recognizer.duringCleanup = () -> cleanup.active = cleanup.b;
+        h.recognizer.result("旧录音");
+        check(h.voiceReview == null, "device result cannot retarget while destroying recognizer");
+
+        h = setup(false);
+        var creating = h;
+        onCreateRecognizer = () -> creating.active = creating.b;
+        h.startVoice();
+        check(SpeechRecognizer.last.starts == 0 && SpeechRecognizer.last.destroys == 1 && h.recognizer == null,
+              "owner change during recognizer creation releases the unused recognizer");
+
+        h = setup(true);
+        h.showVoiceReview("旧内容", "", h.a, h.inputSession, true);
+        h.active = h.b;
+        h.pressCopy(h.voiceReviewRevision);
+        check(h.clipboardManager.clip == null, "explicit copy refuses the review from a detached connection");
+
+        h = setup(true);
+        h.showVoiceReview("旧内容", "", h.a, h.inputSession, true);
+        var copying = h;
+        sensitiveHook = () -> copying.active = copying.b;
+        h.pressCopy(h.voiceReviewRevision);
+        check(h.clipboardManager.clip == null, "copy rechecks the original field after preparing clip metadata");
+
+        h = setup(false);
+        h.startVoice();
+        var old = h.recognizer;
+        old.rejectCancel = true;
+        try { h.cancelVoice(); } catch (RuntimeException leaked) {}
+        check(old.cancels == 1 && old.destroys == 1 && h.recognizer == null &&
+              h.notice.contains("未确认"), "destroy runs and uncertainty is reported when cancel throws");
+
+        System.out.printf("TOTAL %d checks; %d failures%n", cases, failures);
+        if (failures != 0) System.exit(1);
+    }
+}

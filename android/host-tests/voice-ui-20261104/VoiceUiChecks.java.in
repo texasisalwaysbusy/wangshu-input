@@ -48,7 +48,10 @@ public final class VoiceUiChecks {
     static class R {static class color {static final int ink=1,muted=2,accent=3;}}
     static class DataFiles {static boolean ready=true;static String failure="";}
     static class MixedComposition {static String display(String text){return text;}}
-    static class BeforeCaret {boolean hasUndo(){return true;}}
+    static class BeforeCaretEditor {
+        static class UndoTicket {}
+        UndoTicket undoTicket(){return new UndoTicket();}
+    }
     static class OfflineVoice {static class Task {int cancels;void cancel(){cancels++;}}}
     static class HeldVoice {OfflineVoice.Task task=new OfflineVoice.Task();}
     static class SpeechRecognizer {int cancels,destroys;void cancel(){cancels++;}void destroy(){destroys++;}}
@@ -56,14 +59,16 @@ public final class VoiceUiChecks {
     static class Subject {
         final SharedPreferences preferences=new SharedPreferences();
         TextView composition=new TextView(this);StringBuilder buffer=new StringBuilder();
-        boolean editing,numbers,math,english,password;BeforeCaret beforeCaret;
-        OfflineVoice.Task offlineTask;HeldVoice heldVoice;SpeechRecognizer recognizer;
+        boolean editing,numbers,math,english,password;BeforeCaretEditor beforeCaret;
+        OfflineVoice.Task offlineTask;HeldVoice heldVoice;SpeechRecognizer recognizer;Object toolbarVoice;
         String voiceReview,voiceReviewReason="",voiceState="";Object reviewConnection;int reviewSession=-1;boolean reviewCanInsert=true;
         long voiceReviewRevision;
         View voiceReviewPanel;int holdCancels,toolUpdates;String tool;
         SharedPreferences getSharedPreferences(String name,int mode){return preferences;}
-        int getColor(int color){return color;}int dp(int value){return value;}boolean compact(){return false;}void undoBeforeCaret(){}
+        int getColor(int color){return color;}int dp(int value){return value;}boolean compact(){return false;}
+        void undoBeforeCaret(BeforeCaretEditor.UndoTicket ticket){}
         boolean showVoiceUndo(){return false;}
+        void toast(String text){}
         void cancelHoldForOtherInput(){holdCancels++;}void voiceToolState(String text,ToolbarIcon.Kind kind){tool=text;toolUpdates++;}
         // Calling whole refresh/rebuild while cancelling would restart unrelated work.
         void refresh(){throw new AssertionError("Cancellation must only update status, not refresh candidates/associations");}
@@ -94,7 +99,7 @@ public final class VoiceUiChecks {
         String[] modes={"pinyin","english","number","math","editing","pending","loading","failure","undo"};
         for(String mode:modes){
             Subject s=new Subject();DataFiles.ready=true;DataFiles.failure="";
-            switch(mode){case "english":s.english=true;break;case "number":s.numbers=true;break;case "math":s.math=true;break;case "editing":s.editing=true;break;case "pending":s.buffer.append("ni");break;case "loading":DataFiles.ready=false;break;case "failure":DataFiles.ready=false;DataFiles.failure="synthetic";break;case "undo":s.beforeCaret=new BeforeCaret();break;}
+            switch(mode){case "english":s.english=true;break;case "number":s.numbers=true;break;case "math":s.math=true;break;case "editing":s.editing=true;break;case "pending":s.buffer.append("ni");break;case "loading":DataFiles.ready=false;break;case "failure":DataFiles.ready=false;DataFiles.failure="synthetic";break;case "undo":s.beforeCaret=new BeforeCaretEditor();break;}
             s.refreshCompositionStatus();String expected=s.composition.text;int expectedColor=s.composition.color;
             s.offlineTask=new OfflineVoice.Task();OfflineVoice.Task task=s.offlineTask;
             s.voiceState="本地聆听 · 点击完成";s.composition.setText(s.voiceState);s.composition.setTextColor(R.color.ink);s.cancelVoice();
