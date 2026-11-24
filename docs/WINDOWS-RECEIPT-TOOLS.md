@@ -80,14 +80,36 @@ notices, install/uninstall scripts and their shared registration script, selecte
 docs and runtime evidence. It does
 not execute the scripts, bundle voice models/engine, or include private working
 stores. Every ZIP member is rehashed and CRC-checked. Add `--verify-only` for a
-no-write check. The runtime root and original runner must remain available for
-validation; this is not a portable re-verification mechanism after relocation.
+no-write check that still uses the original runtime root and runner.
+
+## Verify a delivered ZIP
+
+Keep the delivered ZIP, its `artifact.json`, and the expected archive SHA-256
+from the handoff. Use the verifier and adjacent `windows_receipts.py` from the
+matching source checkout with an existing Python 3.11 or newer.
+
+```text
+python -B tools/verify_windows_package.py <archive.zip> --receipt <artifact.json> --sha256 <handoff-hash>
+```
+
+After extraction into a fresh E-drive directory, repeat with
+`--extracted <directory>`. The verifier checks the archive identity, CRCs,
+member hashes, filename portability, binary architecture headers and every
+extracted file. It accepts Windows source candidates and binary development
+packages. A case-colliding entry, redirected extracted path, or synthetic binary
+receipt fails verification. It reports whether extraction was checked and leaves
+signature verification and execution as NOT_RUN.
 
 On Windows, `python -B tests/windows_registration_preflight_test.py <new-E-drive-directory>`
 checks the batch entry points with synthetic paths and non-executable files.
 The check leaves fixtures for review and performs no registration. The package's
 `install.cmd --preflight` and `uninstall.cmd --preflight` perform the same file
 checks on the extracted package without invoking a registrar.
+
+`python -B tests/windows_package_identity_test.py <new-E-drive-directory>`
+checks the detached verifier with synthetic files and PE header fixtures.
+The fixtures remain available for review. Use the actual ZIP and external
+handoff hash to verify a delivered package.
 
 ## Evidence limits and synthetic contract tests
 

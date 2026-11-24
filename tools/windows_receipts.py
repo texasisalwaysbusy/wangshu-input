@@ -112,20 +112,28 @@ def source_inputs(project, tests=False):
 
 
 def verify_pe(path, architecture, dll=False):
-    data = path.read_bytes()
-    require(len(data) >= 64 and data[:2] == b'MZ', 'Not a PE file: ' + str(path))
-    offset = struct.unpack_from('<I', data, 60)[0]
-    require(64 <= offset <= len(data) - 26 and data[offset:offset + 4] == b'PE\0\0',
-            'Invalid PE header: ' + str(path))
-    machine, sections = struct.unpack_from('<HH', data, offset + 4)
-    size, characteristics = struct.unpack_from('<HH', data, offset + 20)
-    magic = struct.unpack_from('<H', data, offset + 24)[0]
+    with path.open('rb') as source:
+        verify_pe_stream(source, path.stat().st_size, str(path), architecture, dll)
+
+
+def verify_pe_stream(source, length, name, architecture, dll=False):
+    dos = source.read(64)
+    require(len(dos) == 64 and dos[:2] == b'MZ', 'Not a PE file: ' + name)
+    offset = struct.unpack_from('<I', dos, 60)[0]
+    require(64 <= offset <= length - 26, 'Invalid PE header: ' + name)
+    source.seek(offset)
+    header = source.read(26)
+    require(len(header) == 26 and header[:4] == b'PE\0\0',
+            'Invalid PE header: ' + name)
+    machine, sections = struct.unpack_from('<HH', header, 4)
+    size, characteristics = struct.unpack_from('<HH', header, 20)
+    magic = struct.unpack_from('<H', header, 24)[0]
     expected = (0x8664, 0x20b, 112) if architecture == 'x64' else (0x14c, 0x10b, 96)
     require((machine, magic) == expected[:2] and sections > 0 and size >= expected[2]
-            and offset + 24 + size + sections * 40 <= len(data),
-            'Wrong or truncated PE architecture/header: ' + str(path))
+            and offset + 24 + size + sections * 40 <= length,
+            'Wrong or truncated PE architecture/header: ' + name)
     require(bool(characteristics & 0x0002) and bool(characteristics & 0x2000) == dll,
-            'Wrong PE executable/DLL kind: ' + str(path))
+            'Wrong PE executable/DLL kind: ' + name)
 
 
 def load_build(receipt_path, scope, project=PROJECT):

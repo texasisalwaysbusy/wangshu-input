@@ -88,7 +88,8 @@ def make_case(label, architectures=('x64', 'x86')):
     for folder in ('tools', 'tests', 'windows', 'core', 'staging/personal-native',
                    'third_party/nlohmann', 'third_party/sherpa', 'docs', 'data'):
         (project / folder).mkdir(parents=True)
-    for name in ('run_windows_personal_checks.py', 'package_windows_personal.py', 'windows_receipts.py'):
+    for name in ('run_windows_personal_checks.py', 'package_windows_personal.py',
+                 'verify_windows_package.py', 'windows_receipts.py'):
         shutil.copyfile(PROJECT / 'tools' / name, project / 'tools' / name)
     shutil.copyfile(PROJECT / 'docs/WINDOWS-RECEIPT-TOOLS.md', project / 'docs/WINDOWS-RECEIPT-TOOLS.md')
     shutil.copyfile(args.builder, project / 'tools/build_windows_personal.py')

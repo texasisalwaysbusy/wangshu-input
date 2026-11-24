@@ -22,15 +22,15 @@ Installation scripts change the project's COM/TSF registration state. Source ava
 
 ## 文件预检与回退准备
 
-在解压后的开发包目录可用 `install.cmd --preflight` 或 `uninstall.cmd --preflight` 检查所需注册工具和文件是否存在且非空。x64 主机一次检查 x64 和 x86 两个架构。该模式不执行注册工具。签名、哈希与架构身份按候选收据另行核对。
+保留交付 ZIP 和随附的 `artifact.json`。用相同源码版本的 `tools/verify_windows_package.py` 读取交接给出的 SHA-256，先核 ZIP，再用 `--extracted` 核新的解压目录。确认所有成员及 PE 架构匹配后，在该目录运行 `install.cmd --preflight` 或 `uninstall.cmd --preflight`。x64 主机会检查两种架构的注册工具和文件。候选签名按交接单另行核对。
 
-在获准注册或更新前，记下当前默认输入法，保留此前版本的两种架构文件、位置、哈希和个人数据备份。使用独立版本目录。若注册在中途失败，保留两步结果和目录，先确认各架构的注册状态，再按已确认的恢复方案使用原版匹配文件恢复。不要重跑脚本、删除原目录或清理个人数据来试错。
+在获准注册或更新前，记下当前默认输入法、旧版本和两个架构各自的注册文件路径及哈希。分别保留旧包、旧版本目录和本地个人数据备份，并按原版本支持的格式另存兼容备份。将新版放在独立目录。若出现中途失败，先暂停并保存两步结果。核实各架构生效的路径后，用已确认的原版匹配文件恢复，再核对默认输入法和个人数据读回。签名异常、文件不一致或状态无法确认时暂停注册及回退。
 
 ## File preflight and recovery preparation
 
-From the extracted development package, run `install.cmd --preflight` or `uninstall.cmd --preflight` to verify that the required registrars and files are present and nonempty. On an x64 host both architectures are checked together. This mode launches no registrar. Use the candidate receipt to check signatures, hashes and architecture separately.
+Keep the development ZIP and its `artifact.json`. Use `tools/verify_windows_package.py` from the matching source version with the SHA-256 from the handoff. Verify the ZIP first, then run the verifier with `--extracted` on a fresh directory. After checking the files and PE architectures, use `install.cmd --preflight` or `uninstall.cmd --preflight` in that directory to check the presence of files and registrars. An x64 host checks both architectures. Verify signing separately against the candidate handoff.
 
-Before an approved registration or upgrade, record the current default input method and retain the previous version's files and hashes for both architectures, their locations and the personal-data backup. Keep each version in its own directory. If only one operation succeeds, preserve both results and the files, establish the registration state for each architecture, then recover with the matching prior files under the approved recovery procedure. Avoid blind retries or clearing data.
+Before approved registration or upgrade, record the default input method and the previous version's registered paths and hashes for both architectures. Keep the old package and version directory, a local personal-data backup, and a compatibility export if the old version requires one. Use a separate directory for the upgrade. If an operation fails partway, preserve the two results and confirm the registered path for each architecture. Follow the approved recovery procedure with the matching prior files, then check the default input method and personal-data readback.
 
 项目代码沿用仓库 Apache-2.0 许可。词典及依赖保留自己的许可。
 

@@ -92,7 +92,7 @@ def source_members():
     names.update(path.relative_to(PROJECT).as_posix() for path in (PROJECT / 'tests').glob('windows*.py')
                  if path.is_file())
     names.update('tools/' + name for name in ('run_windows_personal_checks.py',
-                 'package_windows_personal.py', 'windows_receipts.py'))
+                 'package_windows_personal.py', 'verify_windows_package.py', 'windows_receipts.py'))
     names.update('docs/' + name for name in ('ACCEPTANCE.md', 'PRIVACY.md', 'VOICE.md',
                  'WINDOWS-COMPATIBILITY.md', 'WINDOWS-RECEIPT-TOOLS.md'))
     # Optional high-level context is source material, never evidence of acceptance.
