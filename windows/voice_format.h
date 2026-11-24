@@ -101,6 +101,17 @@ inline bool numberCharacter(wchar_t value) {
     return digit(value)>=0||std::wstring_view(L"十百千万亿点负").find(value)!=std::wstring_view::npos;
 }
 
+inline bool embeddedQuantity(std::wstring_view text, size_t start, bool spokenMinus) {
+    if (!start) return false;
+    const auto previous = text[start - 1];
+    if (spokenMinus && (previous == L'+' || previous == L'-')) return true;
+    if (start < 2 || std::wstring_view(L"@_/\\#=+-?&%").find(previous) == std::wstring_view::npos)
+        return false;
+    const auto prefix = text[start - 2];
+    return (prefix >= L'A' && prefix <= L'Z') || (prefix >= L'a' && prefix <= L'z') ||
+           (prefix >= L'0' && prefix <= L'9') || prefix == L'_';
+}
+
 // Same explicit contexts as Android VoiceNumberFormat. Uncertain forms and
 // existing punctuation are preserved.
 inline std::wstring numbers(const std::wstring& text) {
@@ -113,7 +124,7 @@ inline std::wstring numbers(const std::wstring& text) {
     static const std::wstring space=LR"([ \t\n\x0B\f\r]*)";
     static const std::wregex identifier(L"((?:验证码|邮编|编号|序列号)(?:是|为|[：:])"+space+
         L")(["+digitClass+L"]{1,20})(?="+space+L"(?:[。！？!?，,；;]|$))");
-    static const std::wregex quantity(L"(负?["+integerClass+L"]{1,20})(?:点(["+digitClass+L"]{1,12}))?(?=摄氏度|度|公斤|千克|克|公里|厘米|毫米|米|毫升|升|小时|个|件|元)");
+    static const std::wregex quantity(L"(负?["+integerClass+L"]{1,20}?)(?:点(["+digitClass+L"]{1,12}))?(?=摄氏度|度|公斤|千克|克|公里|厘米|毫米|米|毫升|升|小时|个|件|元)");
     auto dates=rewrite(text,date,[](const std::wsmatch& match,wchar_t previous) {
         if (numberCharacter(previous)) return match.str();
         const int year=std::stoi(digits(match[1].str()));
@@ -127,12 +138,13 @@ inline std::wstring numbers(const std::wstring& text) {
     auto ids=rewrite(dates,identifier,[](const std::wsmatch& match,wchar_t) {
         return match[1].str()+digits(match[2].str());
     });
-    return rewrite(ids,quantity,[](const std::wsmatch& match,wchar_t previous) {
+    return rewrite(ids,quantity,[&ids](const std::wsmatch& match,wchar_t previous) {
         if (numberCharacter(previous)||previous==L'.'||(previous>=L'A'&&previous<=L'Z')||
             (previous>=L'a'&&previous<=L'z')) return match.str();
         const auto whole=match[1].str();
         if (!match[2].matched&&asciiDigits(whole)) return match.str();
         const bool negative=whole.front()==L'负';
+        if (embeddedQuantity(ids, static_cast<size_t>(match.position()), negative)) return match.str();
         const auto value=integer(std::wstring_view(whole).substr(negative?1:0));
         if (value<0||(!value&&!match[2].matched&&!negative)) return match.str();
         return (negative?L"-":L"")+std::to_wstring(value)+

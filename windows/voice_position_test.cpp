@@ -142,7 +142,7 @@ static void voiceUndoSuite(){
 }
 static void formatSuite(const std::filesystem::path& folder){
  using Mode=wangshu::voice_format::Mode;
- test("bounded Windows number formatting matches six Android reference pairs",[]{
+ test("bounded Windows number formatting matches Android reference pairs",[]{
   const std::wstring ambiguous=L"一点点，下午三点五分，一百二个，一万二个，二〇二三年二月二十九日，编号为零九号，型号A三米，001个";
   const std::wstring prose=L"他说等一等。已经看过了吗？";
   const std::pair<std::wstring,std::wstring> examples[]={
@@ -150,6 +150,8 @@ static void formatSuite(const std::filesystem::path& folder){
    {L"序列号为〇〇四五，备件二十个。",L"序列号为0045，备件20个。"},
    {L"仓库里有两百零七个零件，缺口为零点五毫米。",L"仓库里有207个零件，缺口为0.5毫米。"},
    {L"它值一亿零五万元，另付十二点五元。",L"它值100050000元，另付12.5元。"},
+   {L"包裹十二千克，样品两千零六克。",L"包裹12千克，样品2006克。"},
+   {L"编号 A_三米；旧值-负三摄氏度。",L"编号 A_三米；旧值-负三摄氏度。"},
    {ambiguous,ambiguous},{prose,prose}};
   for(const auto& entry:examples)expect(wangshu::voice_format::numbers(entry.first)==entry.second);
  });
@@ -166,7 +168,7 @@ static void formatSuite(const std::filesystem::path& folder){
   TextServiceTestAccess::loadSpeechFormat(numeric.s,path);
   auto math=reopened.modifyLearning(numbers.revision,[](wangshu::LearningData& data){data.speechFormat=Mode::Math;});
   TextServiceTestAccess::recognizeSpeech(numeric.s,u8"两千克，根号。");
-  expect(numeric.enter()&&numeric.c->doc.value==L"before2000克，根号。after");
+  expect(numeric.enter()&&numeric.c->doc.value==L"before2千克，根号。after");
   Fixture maths;expect(TextServiceTestAccess::beginVoice(maths.s,maths.c));
   TextServiceTestAccess::loadSpeechFormat(maths.s,path);
   const std::string spoken=u8"根号";

@@ -58,6 +58,10 @@ public final class PresentationPolicyChecks {
                 "仓库里有207个零件，缺口为0.5毫米。","standalone zero preserves nouns; zero decimal is explicit");
         eq(VoiceNumberFormat.apply("它值一亿零五万元，另付十二点五元。"),
                 "它值100050000元，另付12.5元。","large unit and decimal");
+        eq(VoiceNumberFormat.apply("包裹十二千克，样品两千零六克。"),
+                "包裹12千克，样品2006克。","preserve kilogram and gram units");
+        eq(VoiceNumberFormat.apply("编号 A_三米；旧值-负三摄氏度。"),
+                "编号 A_三米；旧值-负三摄氏度。","keep structured tokens and ambiguous signs");
         String ambiguous="一点点，下午三点五分，一百二个，一万二个，二〇二三年二月二十九日，编号为零九号，型号A三米，001个";
         eq(VoiceNumberFormat.apply(ambiguous),ambiguous,"preserve time, shorthand, invalid dates and ambiguous identifiers");
         eq(VoiceNumberFormat.apply("他说等一等。已经看过了吗？"),"他说等一等。已经看过了吗？",
