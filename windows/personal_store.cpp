@@ -79,6 +79,45 @@ std::optional<PersonalData> decodeImportBase(const std::string& bytes){
     catch(const std::bad_alloc&){throw;}
     catch(const std::exception&){return std::nullopt;}
 }
+
+// Keep the previous backup in place until the new canonical file is published.
+// Both files are published from flushed siblings under the store's write lock.
+class PendingBackup {
+    std::wstring backup_;
+    std::optional<Handle> existing_;
+    std::optional<OwnedTemporary> staged_;
+public:
+    PendingBackup(const std::wstring& canonical,bool preserveInvalid):backup_(canonical+L".bak"){
+        if(!metadata(canonical).exists)return;
+        if(preserveInvalid){
+            const auto archive=canonical+L"."+uniqueSuffix()+L".invalid";
+            if(!CopyFileW(canonical.c_str(),archive.c_str(),TRUE))
+                throw std::runtime_error("Cannot retain damaged file; restore cancelled");
+            return;
+        }
+        if(metadata(backup_).exists){
+            existing_.emplace(CreateFileW(backup_.c_str(),GENERIC_WRITE|DELETE,
+                FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,nullptr));
+            if(existing_->value==INVALID_HANDLE_VALUE)
+                throw std::runtime_error("Cannot update previous backup; save cancelled");
+        }
+        const auto bytes=readBytes(canonical);
+        staged_.emplace(backup_+L"."+uniqueSuffix()+L".tmp");
+        staged_->write(bytes);
+    }
+    void publish(){
+        if(!staged_)return;
+        // Close our reservation before replacing the destination.
+        existing_.reset();
+        try{staged_->publish(backup_);}
+        catch(const std::exception&){
+            if(!staged_->discard())
+                throw std::runtime_error("Data was saved but backup rotation and cleanup were not confirmed; refresh before retrying");
+            throw std::runtime_error("Data was saved but backup rotation was not confirmed; refresh before retrying");
+        }
+    }
+};
 }
 WindowsPersonalStore::WindowsPersonalStore(std::wstring path):file_(std::move(path)){if(file_.empty())throw std::runtime_error("Personal-data location unavailable");}
 std::wstring WindowsPersonalStore::defaultPath(){std::vector<wchar_t> value(32768);DWORD n=GetEnvironmentVariableW(L"LOCALAPPDATA",value.data(),static_cast<DWORD>(value.size()));if(!n||n>=value.size())throw std::runtime_error("LocalAppData is unavailable; built-in input remains available");return (std::filesystem::path(std::wstring(value.data(),n))/L"WangshuIme"/L"personal-v1.json").wstring();}
@@ -96,15 +135,37 @@ PersonalSnapshot WindowsPersonalStore::read(){std::lock_guard<std::mutex> guard(
 PersonalSnapshot WindowsPersonalStore::readFresh(){auto fresh=readUncached();std::lock_guard<std::mutex> guard(cacheGate_);haveCache_=false;return fresh;}
 void WindowsPersonalStore::writeAtomic(const PersonalSnapshot& old,const PersonalData& input){
     auto data=normalizeWords(input);auto bytes=data.serialize();auto parent=std::filesystem::path(file_).parent_path();if(!parent.empty())std::filesystem::create_directories(parent);
-    auto temporary=file_+L"."+uniqueSuffix()+L".tmp";writeCreated(temporary,bytes);
-    // Both canonical and last-good backup survive a rejected/incomplete save.
-    // A corrupt canonical is retained separately instead of replacing a good backup.
-    if(metadata(file_).exists){auto backup=old.fromBackup?file_+L"."+uniqueSuffix()+L".invalid":file_+L".bak";if(!CopyFileW(file_.c_str(),backup.c_str(),old.fromBackup?TRUE:FALSE))throw std::runtime_error("Cannot retain prior personal data; save cancelled");}
-    if(!MoveFileExW(temporary.c_str(),file_.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))throw std::runtime_error("Atomic personal-data replacement failed; prior file retained");
-    std::lock_guard<std::mutex> guard(cacheGate_);haveCache_=false;
+    OwnedTemporary temporary(file_+L"."+uniqueSuffix()+L".tmp");
+    temporary.write(bytes);
+    PendingBackup backup(file_,old.fromBackup);
+    temporary.publish(file_);
+    {
+        std::lock_guard<std::mutex> guard(cacheGate_);
+        haveCache_=false;
+    }
+    if(readBytes(file_)!=bytes)
+        throw std::runtime_error("Personal-data save outcome not confirmed; refresh without retrying");
+    backup.publish();
 }
-PersonalSnapshot WindowsPersonalStore::modify(const std::string& expected,const std::function<void(PersonalData&)>& action){WriteLock guard(file_);auto current=readUncached();if(current.revision!=expected)throw std::runtime_error("Data changed in another window; refresh before editing");auto next=current.data;action(next);writeAtomic(current,next);return read();}
-PersonalSnapshot WindowsPersonalStore::merge(const PersonalData& source){auto checked=normalizeWords(source);WriteLock guard(file_);auto current=readUncached();auto next=current.data.merged(checked);writeAtomic(current,next);return read();}
+PersonalSnapshot WindowsPersonalStore::modify(const std::string& expected,const std::function<void(PersonalData&)>& action){
+    WriteLock guard(file_);
+    auto current=readUncached();
+    if(current.fromBackup)throw std::runtime_error("请先确认恢复有效备份，再编辑个人数据");
+    if(current.revision!=expected)throw std::runtime_error("Data changed in another window; refresh before editing");
+    auto next=current.data;
+    action(next);
+    writeAtomic(current,next);
+    return read();
+}
+PersonalSnapshot WindowsPersonalStore::merge(const PersonalData& source){
+    auto checked=normalizeWords(source);
+    WriteLock guard(file_);
+    auto current=readUncached();
+    if(current.fromBackup)throw std::runtime_error("请先确认恢复有效备份，再合并个人数据");
+    auto next=current.data.merged(checked);
+    writeAtomic(current,next);
+    return read();
+}
 PersonalSnapshot WindowsPersonalStore::restoreBackup(const std::string& expected){WriteLock guard(file_);auto current=readUncached();if(current.revision!=expected||!current.fromBackup)throw std::runtime_error("Recovery state changed; refresh first");writeAtomic(current,current.data);return read();}
 std::optional<PersonalImportPreview::FileState> WindowsPersonalStore::inspectImportFile(const std::wstring& path){
     auto state=metadata(path);
@@ -330,15 +391,16 @@ void WindowsPersonalStore::writeLearningAtomic(const LearningSnapshot& old,const
     if(gate&&gate->current&&!gate->current())throw LearningDiscarded("Learning preparation cancelled");
     auto bytes=data.serialize();auto path=learningPath();auto parent=std::filesystem::path(path).parent_path();if(!parent.empty())std::filesystem::create_directories(parent);OwnedTemporary temporary(path+L"."+uniqueSuffix()+L".tmp");
     try{temporary.write(bytes);
+    PendingBackup backup(path,old.fromBackup);
     // A successful claim is the publication linearization point. Cancellation
     // after this point does not revoke this already-confirmed selection's save.
     if(gate&&gate->claim&&!gate->claim())throw LearningDiscarded("Learning publication cancelled");
-    if(metadata(path).exists){auto backup=old.fromBackup?path+L"."+uniqueSuffix()+L".invalid":path+L".bak";if(!CopyFileW(path.c_str(),backup.c_str(),old.fromBackup?TRUE:FALSE))throw std::runtime_error("Cannot preserve prior learning data; save cancelled");}
     temporary.publish(path);
+    if(readBytes(path)!=bytes)throw std::runtime_error("Learning save outcome not confirmed; refresh without retrying");
+    backup.publish();
     }catch(const LearningDiscarded& e){std::string message=e.what();if(!temporary.discard())throw std::runtime_error(message+"; temporary cleanup not confirmed, private temporary may remain");throw;}
     catch(const std::exception& e){std::string message=e.what();if(!temporary.discard())message+="; temporary cleanup not confirmed, private temporary may remain";throw std::runtime_error(message);}
     catch(...){if(!temporary.discard())throw std::runtime_error("Learning save failed; temporary cleanup not confirmed, private temporary may remain");throw;}
-    if(readBytes(path)!=bytes)throw std::runtime_error("Learning save outcome not confirmed; refresh without retrying");
 }
 LearningSnapshot WindowsPersonalStore::modifyLearning(const std::string& expected,const std::function<void(LearningData&)>& action,const LearningWriteGate* gate){WriteLock guard(learningPath());auto current=readLearningUncached();if(current.revision!=expected)throw LearningDiscarded("Personal ranking changed; refresh before editing");if(current.fromBackup)throw LearningDiscarded("Personal ranking uses backup; explicitly restore before editing");auto next=current.data;action(next);if(next.serialize()==current.revision)return current;writeLearningAtomic(current,next,gate);return readLearningUncached();}
 LearningSnapshot WindowsPersonalStore::restoreLearningBackup(const std::string& expected){WriteLock guard(learningPath());auto current=readLearningUncached();if(current.revision!=expected||!current.fromBackup)throw std::runtime_error("Learning recovery state changed; refresh first");writeLearningAtomic(current,current.data);return readLearningUncached();}

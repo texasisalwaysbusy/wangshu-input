@@ -34,6 +34,7 @@ class PersonalImportPreview {
 public:
     const PersonalData& data()const{return data_;}
     bool repair()const{return repair_;}
+    bool usesLocalBackup()const{return fromBackup_;}
 };
 struct LearnedCandidate {std::string key,text;unsigned count=0;bool pinned=false;unsigned long long updated=0;};
 struct LearningData {

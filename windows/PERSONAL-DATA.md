@@ -8,6 +8,10 @@ The Windows source contains local personal-word/phrase storage and a native mana
 
 Import confirmation applies the result computed for the preview. If the local dictionary or its backup changes while the dialog is open, preview again. Confirmed repair preserves copies of damaged files.
 
+词库正在使用本机有效备份时，可以查看和导出。要恢复编辑，先确认「恢复有效备份」，或在明确说明将从本机备份合并的导入预览中确认。词库或学习设置保存时，如果主文件被占用而无法替换，原主文件和上一版备份仍可用。若提示主文件已保存、备份轮换未确认，先刷新或重开，核对本次改动及备份，再决定是否重试。
+
+When the local dictionary is reading from a valid backup, view or export it until you confirm a restore or confirm an import preview that names the local backup as the merge base. If replacing the main dictionary or learning-settings file fails because it is in use, the main file and previous backup remain available. If the app reports that the main file was saved but backup rotation is unconfirmed, refresh or reopen to check the change and backup before retrying.
+
 ## 收藏、交换与旧版恢复 / Favorites, exchange and recovery
 
 在本地个人数据管理选择「收藏表情」，选择内置条目后按「收藏」或「取消收藏」。在中文模式键入两个反斜杠，翻到符号菜单第三页，选择「收藏表情与颜文字」即可输入。使用两个反斜杠加 `favorites` 可直接打开。备份预览显示收藏数量，完整恢复保留收藏顺序。

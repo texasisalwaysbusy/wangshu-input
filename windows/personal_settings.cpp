@@ -351,7 +351,46 @@ struct App {
         else if(MessageBoxW(window,L"将有效备份恢复为当前数据？损坏原文件将另行保留。",L"恢复确认",MB_OKCANCEL|MB_ICONQUESTION)==IDOK){snapshot=store->restoreBackup(snapshot.revision);reload();}
     }
     void select(){if(loading)return;LRESULT index=SendMessageW(item(List),LB_GETCURSEL,0,0);if(index==LB_ERR)return;selected=static_cast<int>(index);if(favoritesMode()){selectFavorite();return;}if(clipboardMode()){selectClipboard();return;}if(ranking()){if(static_cast<size_t>(selected)>=learningSnapshot.data.entries.size())return;const auto& value=learningSnapshot.data.entries[selected];SetWindowTextW(item(Key),wide(value.key).c_str());SetWindowTextW(item(Text),wide(value.text).c_str());SendMessageW(item(Key),EM_SETREADONLY,TRUE,0);SendMessageW(item(Text),EM_SETREADONLY,TRUE,0);SetWindowTextW(item(Save),value.pinned?L"取消固定":L"固定候选");return;}if(phrases()){if(static_cast<size_t>(selected)>=snapshot.data.phrases.size())return;const auto& p=snapshot.data.phrases[selected];SetWindowTextW(item(Key),wide(p.shortcut).c_str());SetWindowTextW(item(Text),wide(p.text).c_str());}else{if(static_cast<size_t>(selected)>=snapshot.data.words.size())return;const auto& w=snapshot.data.words[selected];SetWindowTextW(item(Key),wide(w.pinyin).c_str());SetWindowTextW(item(Text),wide(w.text).c_str());}}
-    void reload(){configureMode();if(favoritesMode()){reloadFavorites();return;}if(clipboardMode()){reloadClipboard();return;}loadLearningControl();if(ranking()){reloadLearning();return;}EnableWindow(item(New),TRUE);auto fresh=store->read();snapshot=std::move(fresh);readError=false;EnableWindow(item(List),TRUE);EnableWindow(item(Save),TRUE);EnableWindow(item(Delete),TRUE);EnableWindow(item(Export),TRUE);loading=true;SendMessageW(item(List),LB_RESETCONTENT,0,0);if(phrases()){for(const auto& p:snapshot.data.phrases){auto line=(p.shortcut.empty()?L"":wide(p.shortcut)+L" · ")+preview(p.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}}else for(const auto& w:snapshot.data.words){auto line=wide(w.pinyin)+L" · "+preview(w.text);SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));}loading=false;selected=-1;SetWindowTextW(item(KeyLabel),phrases()?L"可选英文简称（1–32个字母）":L"完整拼音（ü 使用 v）");SetWindowTextW(item(TextLabel),phrases()?L"常用语内容（支持多行）":L"词条文字（仅词条使用 NFC 规范化）");SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");EnableWindow(item(Recover),snapshot.fromBackup);auto status=L"本地 · "+std::to_wstring(snapshot.data.words.size())+L" 个词条 / "+std::to_wstring(snapshot.data.phrases.size())+L" 条常用语";if(snapshot.fromBackup)status+=L" · 正在使用有效备份，原文件保留；可点“恢复有效备份”";else status+=L" · 不记录按键、剪贴板或录音";SetWindowTextW(item(Status),status.c_str());}
+    void reload(){
+        configureMode();
+        if(favoritesMode()){reloadFavorites();return;}
+        if(clipboardMode()){reloadClipboard();return;}
+        loadLearningControl();
+        if(ranking()){reloadLearning();return;}
+        snapshot=store->read();
+        readError=false;
+        const bool editable=!snapshot.fromBackup;
+        EnableWindow(item(New),editable);
+        EnableWindow(item(List),TRUE);
+        EnableWindow(item(Save),editable);
+        EnableWindow(item(Delete),editable);
+        EnableWindow(item(Export),TRUE);
+        loading=true;
+        SendMessageW(item(List),LB_RESETCONTENT,0,0);
+        if(phrases()){
+            for(const auto& p:snapshot.data.phrases){
+                auto line=(p.shortcut.empty()?L"":wide(p.shortcut)+L" · ")+preview(p.text);
+                SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));
+            }
+        }else{
+            for(const auto& w:snapshot.data.words){
+                auto line=wide(w.pinyin)+L" · "+preview(w.text);
+                SendMessageW(item(List),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(line.c_str()));
+            }
+        }
+        loading=false;
+        selected=-1;
+        SetWindowTextW(item(KeyLabel),phrases()?L"可选英文简称（1–32个字母）":L"完整拼音（ü 使用 v）");
+        SetWindowTextW(item(TextLabel),phrases()?L"常用语内容（支持多行）":L"词条文字（仅词条使用 NFC 规范化）");
+        SetWindowTextW(item(Key),L"");
+        SetWindowTextW(item(Text),L"");
+        EnableWindow(item(Recover),snapshot.fromBackup);
+        auto status=L"本地 · "+std::to_wstring(snapshot.data.words.size())+L" 个词条 / "+
+            std::to_wstring(snapshot.data.phrases.size())+L" 条常用语";
+        status+=snapshot.fromBackup?L" · 正在使用有效备份，确认恢复后可编辑。":
+            L" · 不记录按键、剪贴板或录音";
+        SetWindowTextW(item(Status),status.c_str());
+    }
     void loadSafely(){try{reload();}catch(const std::exception&){readError=true;loading=true;SendMessageW(item(List),LB_RESETCONTENT,0,0);SetWindowTextW(item(Key),L"");SetWindowTextW(item(Text),L"");loading=false;EnableWindow(item(List),FALSE);EnableWindow(item(Save),FALSE);EnableWindow(item(Delete),FALSE);EnableWindow(item(Export),FALSE);EnableWindow(item(Recover),FALSE);SetWindowTextW(item(Status),L"个人文件不可读，未重置。可刷新重试，或导入有效备份并确认修复；损坏原文件会另存保留。");}}
     void save(){if(favoritesMode()){saveFavorite();return;}if(clipboardMode()){pinClipboard();return;}if(ranking()){saveLearning();return;}std::string key=narrow(controlText(item(Key))),text=narrow(controlText(item(Text)));int index=selected;bool phrase=phrases();snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){if(phrase){wangshu::PersonalPhrase p{key,text};if(index<0)data.phrases.push_back(std::move(p));else{if(static_cast<size_t>(index)>=data.phrases.size())throw std::runtime_error("Phrase changed; refresh first");data.phrases[index]=std::move(p);}}else{wangshu::PersonalWord w{wangshu::PersonalData::key(key),text};if(index<0)data.words.push_back(std::move(w));else{if(static_cast<size_t>(index)>=data.words.size())throw std::runtime_error("Word changed; refresh first");data.words[index]=std::move(w);}}});reload();}
     void remove(){if(clipboardMode()){removeClipboard();return;}if(ranking()){removeLearning();return;}if(selected<0){MessageBoxW(window,L"先选择要删除的个人条目。",L"选择条目",MB_OK);return;}if(MessageBoxW(window,L"只删除这条个人数据，不影响内置词库。是否继续？",L"删除条目",MB_YESNO|MB_ICONQUESTION)!=IDYES)return;int index=selected;bool phrase=phrases();snapshot=store->modify(snapshot.revision,[&](wangshu::PersonalData& data){if(phrase){if(static_cast<size_t>(index)>=data.phrases.size())throw std::runtime_error("Phrase changed");data.phrases.erase(data.phrases.begin()+index);}else{if(static_cast<size_t>(index)>=data.words.size())throw std::runtime_error("Word changed");data.words.erase(data.words.begin()+index);}});reload();}
@@ -430,7 +469,9 @@ struct App {
         auto message=L"完成后将有 "+std::to_wstring(merged.words.size())+L" 个词条、"+
             std::to_wstring(merged.phrases.size())+L" 条常用语、"+
             std::to_wstring(merged.favorites.size())+L" 项收藏。\n";
-        message+=repair?L"将以所选备份修复，损坏文件另存保留。":L"保留已有内容，重复条目去重。";
+        if(repair)message+=L"将以所选备份修复，损坏文件另存保留。";
+        else if(preview.usesLocalBackup())message+=L"将有效本机备份与所选文件合并，损坏主文件另存保留。";
+        else message+=L"保留已有内容，重复条目去重。";
         message+=L"\n本机文件变化后，请重新预览。";
         if(MessageBoxW(window,message.c_str(),repair?L"备份修复预览":L"导入预览",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK)return;
         snapshot=store->confirmImport(preview);
