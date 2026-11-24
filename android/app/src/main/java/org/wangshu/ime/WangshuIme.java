@@ -1506,8 +1506,11 @@ public final class WangshuIme extends InputMethodService implements PersonalPane
         if(toolbarVoice==capture)rebuild();
     }
 
-    @android.annotation.TargetApi(31)
     private void startDeviceVoice(ToolbarVoice capture){
+        if(Build.VERSION.SDK_INT<31){
+            failToolbarVoice(capture,"当前 Android 版本不支持设备端语音，请导入离线语音包");
+            return;
+        }
         try{
             SpeechRecognizer created=SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
             if(!acceptToolbarVoice(capture)){
