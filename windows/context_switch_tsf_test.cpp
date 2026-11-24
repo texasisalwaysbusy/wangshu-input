@@ -97,6 +97,97 @@ int main(){
             f.first->doc.value==L"beforeniafter"&&f.second->doc.value==L"beforehaoafter"&&
             f.type(f.second,{VK_SPACE})&&f.second->doc.value==L"before好after";
     });
+    test("a read that reenters focus cannot write in the old field",[]{
+        Fixture f;
+        if(!f.type(f.first,{'N','I'}))return false;
+        bool nested=false;
+        const auto text=f.first->doc.value;
+        const auto writes=f.first->doc.textWrites;
+        f.first->doc.onRead=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'N','I'});
+        };
+        return f.type(f.first,{'H'})&&nested&&f.first->doc.value==text&&
+            f.first->doc.textWrites==writes&&f.type(f.second,{VK_SPACE})&&
+            f.second->doc.value==L"before你after";
+    });
+    test("starting a composition does not attach it after focus changes",[]{
+        Fixture f;
+        f.first->beforeCompositionReturn=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+        };
+        return f.type(f.first,{'N'})&&f.first->doc.value==L"beforeafter"&&
+            f.first->doc.textWrites==0&&f.first->selections==0&&
+            f.type(f.second,{'H','A','O',VK_SPACE})&&f.second->doc.value==L"before好after";
+    });
+    test("continuation already written in A cannot move its caret or damage B",[]{
+        Fixture f;
+        if(!f.type(f.first,{'N','I'}))return false;
+        bool nested=false;
+        const auto selections=f.first->selections;
+        f.first->doc.afterWrite=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'H'});
+        };
+        return f.type(f.first,{'K'})&&nested&&f.first->doc.value==L"beforenikafter"&&
+            f.first->selections==selections&&f.type(f.second,{'A','O',VK_SPACE})&&
+            f.second->doc.value==L"before好after";
+    });
+    test("confirming A cannot end or clear a composition started by B during SetText",[]{
+        Fixture f;
+        if(!f.type(f.first,{'N','I'}))return false;
+        bool nested=false;
+        const auto selections=f.first->selections;
+        f.first->doc.afterWrite=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'H','A','O'});
+        };
+        return f.type(f.first,{VK_SPACE})&&nested&&f.first->doc.value==L"before你after"&&
+            f.first->selections==selections&&f.type(f.second,{VK_SPACE})&&
+            f.second->doc.value==L"before好after";
+    });
+    test("backspace after a reentrant write never restores A's buffer into B",[]{
+        Fixture f;
+        if(!f.type(f.first,{'N','I'}))return false;
+        bool nested=false;
+        const auto selections=f.first->selections;
+        f.first->doc.afterWrite=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'H','A','O'});
+        };
+        return f.type(f.first,{VK_BACK})&&nested&&f.first->doc.value==L"beforenafter"&&
+            f.first->selections==selections&&f.type(f.second,{VK_SPACE})&&
+            f.second->doc.value==L"before好after";
+    });
+    test("a nested first key in B owns its own composition after A's start returns",[]{
+        Fixture f;
+        bool nested=false;
+        f.first->beforeCompositionReturn=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'H'});
+        };
+        return f.type(f.first,{'N'})&&nested&&f.first->doc.textWrites==0&&
+            f.second->starts==1&&f.type(f.second,{'A','O',VK_SPACE})&&
+            f.second->doc.value==L"before好after";
+    });
+    test("a selection callback can switch fields without ending the new composition",[]{
+        Fixture f;
+        if(!f.type(f.first,{'N','I'}))return false;
+        bool nested=false;
+        f.first->afterSelection=[&]{
+            f.document->setTop(f.second);
+            f.service->OnPushContext(f.second);
+            nested=f.type(f.second,{'H','A','O'});
+        };
+        return f.type(f.first,{VK_SPACE})&&nested&&f.first->doc.value==L"before你after"&&
+            f.type(f.second,{VK_SPACE})&&f.second->doc.value==L"before好after";
+    });
     std::cout<<"TOTAL "<<passed<<" PASS, "<<failed<<" FAIL; synthetic TSF context stack"<<std::endl;
     return failed?1:0;
 }

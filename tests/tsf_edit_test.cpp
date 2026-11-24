@@ -94,7 +94,7 @@ class Context final:public ContextStub {
 public:
     ITfDocumentMgr* documentManager=nullptr; // weak, owned by the manager fixture
     HRESULT STDMETHODCALLTYPE GetDocumentMgr(ITfDocumentMgr** out)override{if(!out)return E_POINTER;*out=documentManager;if(*out)(*out)->AddRef();return *out?S_OK:E_FAIL;}
-    Document doc;int starts=0,selections=0,fullReads=0;InputScope scope=IS_DEFAULT;RECT layout{100,200,140,225};BOOL clipped=FALSE;HRESULT layoutResult=S_OK;bool layoutAvailable=false;bool deferred=false,deferSynchronous=false;std::function<void()> afterRead;std::vector<ITfEditSession*> queued;
+    Document doc;int starts=0,selections=0,fullReads=0;InputScope scope=IS_DEFAULT;RECT layout{100,200,140,225};BOOL clipped=FALSE;HRESULT layoutResult=S_OK;bool layoutAvailable=false;bool deferred=false,deferSynchronous=false;std::function<void()> afterRead,beforeCompositionReturn,afterSelection;std::vector<ITfEditSession*> queued;
     std::vector<HRESULT> flush(){auto copy=queued;queued.clear();std::vector<HRESULT> results;for(auto* edit:copy){results.push_back(edit->DoEditSession(99));edit->Release();}return results;}
     HRESULT STDMETHODCALLTYPE GetStart(TfEditCookie,ITfRange** out) override{fullReads++;*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,0,0);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetEnd(TfEditCookie,ITfRange** out) override{*out=nullptr;if(doc.noFull)return E_NOTIMPL;*out=new Range(doc,doc.value.size(),doc.value.size());return S_OK;}
@@ -119,9 +119,10 @@ public:
         doc.selectionEnd=range?r->end:-1;
         if(preserveSelectionRange&&!overrideSelectionStyle)selectionStyle=selected->style;
         selections++;
+        if(afterSelection){auto fn=std::exchange(afterSelection,{});fn();}
         return S_OK;
     }
-    HRESULT STDMETHODCALLTYPE StartComposition(TfEditCookie,ITfRange* range,ITfCompositionSink* sink,ITfComposition** out) override{if(doc.denyComposition)return E_ACCESSDENIED;if(doc.nullComposition){*out=nullptr;return S_OK;}starts++;*out=new Composition(range,sink);return S_OK;}
+    HRESULT STDMETHODCALLTYPE StartComposition(TfEditCookie,ITfRange* range,ITfCompositionSink* sink,ITfComposition** out) override{if(doc.denyComposition)return E_ACCESSDENIED;if(doc.nullComposition){*out=nullptr;return S_OK;}starts++;if(beforeCompositionReturn){auto fn=std::exchange(beforeCompositionReturn,{});fn();}*out=new Composition(range,sink);return S_OK;}
     HRESULT STDMETHODCALLTYPE GetStatus(TF_STATUS* status) override{*status={};return S_OK;}
 };
 class Manager final:public ManagerStub,public ITfUIElementMgr {
