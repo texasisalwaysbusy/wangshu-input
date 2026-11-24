@@ -6,12 +6,6 @@
 namespace wangshu::context_prediction::long_english {
 using Id = uint16_t;
 using Key = std::array<Id, 7>;
-struct Rows {
-    const uint32_t* first = nullptr;
-    const uint32_t* end = nullptr;
-    bool empty() const { return first == end; }
-};
-
 struct Block {
     Key first;
     uint32_t keyOffset;
@@ -22,8 +16,38 @@ struct Block {
 
 static_assert(sizeof(Block) == 24, "unexpected English table block layout");
 static_assert(std::size(englishWords) == longEnglishWordCount, "English word IDs changed");
-static_assert(sizeof(longEnglishBlocks) + sizeof(longEnglishKeys) + sizeof(longEnglishRows) <= longEnglishByteLimit,
-              "the offline English next-word table must remain within its byte budget");
+static_assert(std::size(longEnglishWords) == std::size(longEnglishCounts), "missing English frequencies");
+static_assert(std::size(longEnglishWideIndices) == std::size(longEnglishWideCounts), "missing wide English frequencies");
+static_assert(sizeof(longEnglishBlocks) + sizeof(longEnglishKeys) + sizeof(longEnglishWords) +
+              sizeof(longEnglishCounts) + sizeof(longEnglishWideIndices) + sizeof(longEnglishWideCounts) <=
+              longEnglishByteLimit, "the offline English next-word table must remain within its byte budget");
+
+struct RowIterator {
+    uint32_t index = 0;
+
+    Id id() const { return longEnglishWords[index]; }
+    uint32_t operator*() const {
+        const auto encoded = longEnglishCounts[index];
+        unsigned count = encoded + 2u;
+        if (encoded == 255) {
+            const auto first = std::begin(longEnglishWideIndices);
+            const auto found = std::lower_bound(first, std::end(longEnglishWideIndices), index);
+            count = longEnglishWideCounts[found - first];
+        }
+        return (count << 16) | id();
+    }
+    RowIterator& operator++() {
+        ++index;
+        return *this;
+    }
+    bool operator!=(const RowIterator& other) const { return index != other.index; }
+};
+
+struct Rows {
+    RowIterator first{};
+    RowIterator end{};
+    bool empty() const { return !(first != end); }
+};
 
 // Each block starts with a complete key. Subsequent keys encode a shared prefix
 // length and a row count in one byte, then store only the changed word IDs.
@@ -35,13 +59,13 @@ inline Rows find(const Key& key) {
     const auto& block = next[-1];
     const auto stop = next == end ? std::end(longEnglishKeys) : longEnglishKeys + next->keyOffset;
     const auto* encoded = longEnglishKeys + block.keyOffset;
-    const auto* rows = longEnglishRows + block.rowOffset;
+    uint32_t rowIndex = block.rowOffset;
     auto current = block.first;
     constexpr size_t keySizes[] = {0, 2, 3, 4, 5, 6, 7, 3, 3, 4, 4};
     for (size_t group = 0; group < longEnglishBlockGroups && encoded != stop; ++group) {
         const auto header = *encoded++;
         size_t shared = header >> 4;
-        const auto count = (header & 15) + 1;
+        const uint32_t count = (header & 15) + 1;
         if (!shared) {
             current = {};
             current[0] = *encoded++;
@@ -51,9 +75,9 @@ inline Rows find(const Key& key) {
             const auto high = *encoded++;
             current[index] = high < 128 ? high : ((high & 127) << 8) | *encoded++;
         }
-        if (current == key) return {rows, rows + count};
+        if (current == key) return {{rowIndex}, {rowIndex + count}};
         if (key < current) return {};
-        rows += count;
+        rowIndex += count;
     }
     return {};
 }
@@ -148,8 +172,10 @@ inline std::vector<Result> rerank(std::u16string_view line, std::vector<Result> 
     if (contexts.size() == 1 && shifted.empty()) {
         std::vector<Result> result;
         const auto members = contexts.front();
-        for (auto row = members.first; row != members.end && result.size() < limit; ++row)
-            result.push_back(candidate(wordId(*row), frequency(*row), uppercase));
+        for (auto row = members.first; row != members.end && result.size() < limit; ++row) {
+            const auto entry = *row;
+            result.push_back(candidate(wordId(entry), frequency(entry), uppercase));
+        }
         return result.size() >= baseline.size() ? std::move(result) : std::move(baseline);
     }
 
@@ -159,17 +185,19 @@ inline std::vector<Result> rerank(std::u16string_view line, std::vector<Result> 
         const double denominator = mass(rows) + (scores.empty() ? 0 : 8);
         for (auto& item : scores) item.normal = item.normal * 8 / denominator;
         for (auto row = rows.first; row != rows.end; ++row) {
-            auto& item = evidenceFor(scores, wordId(*row));
-            item.normal += frequency(*row) / denominator;
-            item.count = static_cast<int>(frequency(*row));
+            const auto entry = *row;
+            auto& item = evidenceFor(scores, wordId(entry));
+            item.normal += frequency(entry) / denominator;
+            item.count = static_cast<int>(frequency(entry));
         }
     }
     for (const Rows rows : shifted) {
         const double denominator = 4.0 * (mass(rows) + 8);
         for (auto row = rows.first; row != rows.end; ++row) {
-            auto& item = evidenceFor(scores, wordId(*row));
-            item.skipped = std::max(item.skipped, frequency(*row) / denominator);
-            item.count = std::max(item.count, static_cast<int>(frequency(*row)));
+            const auto entry = *row;
+            auto& item = evidenceFor(scores, wordId(entry));
+            item.skipped = std::max(item.skipped, frequency(entry) / denominator);
+            item.count = std::max(item.count, static_cast<int>(frequency(entry)));
         }
     }
     std::vector<Evidence> order;
@@ -182,9 +210,9 @@ inline std::vector<Result> rerank(std::u16string_view line, std::vector<Result> 
     };
     for (const auto& item : baseline) keep(englishWordId(item.suffix));
     for (auto at = contexts.rbegin(); at != contexts.rend(); ++at)
-        for (auto row = at->first; row != at->end; ++row) keep(wordId(*row));
+        for (auto row = at->first; row != at->end; ++row) keep(row.id());
     for (const Rows rows : shifted)
-        for (auto row = rows.first; row != rows.end; ++row) keep(wordId(*row));
+        for (auto row = rows.first; row != rows.end; ++row) keep(row.id());
     std::stable_sort(order.begin(), order.end(), [](const Evidence& a, const Evidence& b) {
         return a.normal + a.skipped > b.normal + b.skipped;
     });

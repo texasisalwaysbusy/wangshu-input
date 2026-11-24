@@ -9,5 +9,5 @@
   "block_groups": 32,
   "groups": 198891,
   "rows": 677829,
-  "static_byte_limit": 4194304
+  "static_byte_limit": 3145728
 }
