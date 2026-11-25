@@ -96,6 +96,8 @@ X-ASR 继续对照 8 路和 16 路束搜索，16 路混合英文从 19/31 到 20
 
 同一冻结开发集的 X-ASR 无标点 480ms 权重英文 WER 为 17.5%，最差单句 61.5%，混合英文词保留降为 16/31，首个非空对应音频 P95 仍为 1.6 秒。Fun-ASR Nano 默认提示打开 ITN 后纯英文 WER 为 16.5%，最差单句 38.5%，但混合保留 16/31，两个全零输入均产生文字。自定义系统和用户提示都未通过综合门槛。两项旧控制的原始结果完全重现，30 种不同配置的 900 条输出复算后，参考辅助混合词上限仍为 27/31。没有选出生产替代模型，新说话人保留集与实际设备为 NOT_RUN。 [X-ASR 固定发行件](https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-480ms-streaming-zipformer-transducer-zh-en-int8-2026-06-05.tar.bz2) · [Nano 固定接口实现](https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v1.13.4/sherpa-onnx/csrc/offline-recognizer-funasr-nano-impl.cc)
 
+FireRedASR2-AED 注意力解码分支与此前 CTC-only 分支相比，混合英文词保留由 13/31 到 22/31，纯英文 WER 为 22.3%，仍有逐句未达标；两个全零输入均返回 `<sil>`。Windows 两线程整段解码 P95 为 7.41 秒，峰值工作集 2.42 GiB。31 种配置的 930 条开发输出复算，参考辅助逐词并集上限仍为 27/31，完整输出择取上限由 26/31 升至 27/31。该模型不满足综合开发门槛，未更换产品模型或评分独立集。 [原模型及授权](https://huggingface.co/FireRedTeam/FireRedASR2-AED) · [Sherpa-ONNX 转换](https://k2-fsa.github.io/sherpa/onnx/FireRedAsr/pretrained.html)
+
 ## 自动标点开发评估
 
 CT-Transformer 的直接输出在 7 条结构化文本中拆开了 5 条里的小数、版本号、网址等内容。原文对齐原型只插入可对齐的标点，在 10 条保护检查和 7 条结构化探针中保住原词、大小写和空白。新的 24 条合成文字中，中文、英文和混合标点的类别与位置 micro-F1 分别为 0.824、0.625、0.848。英文未达 0.75 阈值。英文轻量模型在相同英文样本上为 0.333。自动标点继续作为开发候选，实际 ASR 输出和设备验收待做。 [CT-Transformer 与轻量英文模型](https://k2-fsa.github.io/sherpa/onnx/punctuation/pretrained_models.html)
