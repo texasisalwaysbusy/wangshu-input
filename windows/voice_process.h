@@ -5,11 +5,13 @@
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
+#include <utility>
 
 /** Only starts our packaged child; no shell, inherited ambient handles, or text files. */
 class VoiceProcess {
     HANDLE process=nullptr,job=nullptr,input=nullptr,output=nullptr;
-    std::string pending;ULONGLONG deadline=0;
+    std::string pending,finalText;ULONGLONG deadline=0;
+    bool stopping=false;
     std::wstring partial;
     static void close(HANDLE& h){if(h&&h!=INVALID_HANDLE_VALUE)CloseHandle(h);h=nullptr;}
     void readPreview(const std::string& line){
@@ -23,17 +25,53 @@ class VoiceProcess {
         partial.resize(units);
         if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,bytes,static_cast<int>(size),partial.data(),units))partial.clear();
     }
+    void confirmFinalExit(){
+        const DWORD result=WaitForSingleObject(process,0);
+        if(result==WAIT_OBJECT_0){
+            DWORD code=0;
+            if(!GetExitCodeProcess(process,&code)||code!=0){
+                fail("Local voice process did not exit successfully");return;
+            }
+            close(process);close(job);
+            text=std::move(finalText);finalText.clear();state=Complete;
+        }else if(result!=WAIT_TIMEOUT||GetTickCount64()>deadline){
+            fail("Unable to confirm local voice process exit");
+        }
+    }
 public:
-    enum State{Idle,Starting,Recording,Finishing,Complete,Failed};State state=Idle;
+    enum State{Idle,Starting,Recording,Finishing,WaitingForExit,Complete,Failed};State state=Idle;
     std::string text,error;
-    ~VoiceProcess(){cancel();}
+    ~VoiceProcess(){cancel();close(process);}
     VoiceProcess()=default;VoiceProcess(const VoiceProcess&)=delete;VoiceProcess& operator=(const VoiceProcess&)=delete;
     DWORD processId()const{return process?GetProcessId(process):0;}
-    bool active()const{return state==Starting||state==Recording||state==Finishing;}
+    bool active()const{return state==Starting||state==Recording||state==Finishing||state==WaitingForExit;}
     const std::wstring& preview()const{return partial;}
-    void cancel(){if(job)TerminateJobObject(job,3);if(process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT)TerminateProcess(process,3);close(input);close(output);close(process);close(job);state=Idle;pending.clear();partial.clear();text.clear();error.clear();}
+    bool stopPending()const{return stopping;}
+    bool confirmStopped(){
+        if(!process){stopping=false;return true;}
+        if(!stopping||WaitForSingleObject(process,0)!=WAIT_OBJECT_0)return false;
+        close(process);stopping=false;return true;
+    }
+    bool cancel(){
+        // Discard session data immediately, but retain the owned process handle
+        // until the kernel confirms termination. TerminateProcess is asynchronous.
+        close(input);close(output);
+        state=Idle;pending.clear();finalText.clear();partial.clear();text.clear();error.clear();
+        if(process&&!stopping){
+            if(WaitForSingleObject(process,0)==WAIT_OBJECT_0){close(process);}
+            else{
+                if(!job||!TerminateJobObject(job,3))TerminateProcess(process,3);
+                stopping=true;
+            }
+        }
+        close(job);
+        return confirmStopped();
+    }
     bool start(const std::filesystem::path& folder,const std::wstring& fixtureArgs=L""){
-        cancel();HANDLE childInput=nullptr,childOutput=nullptr,nullError=nullptr;LPPROC_THREAD_ATTRIBUTE_LIST attrs=nullptr;PROCESS_INFORMATION info{};bool ok=false;
+        if(!cancel()){
+            error="Previous local voice process has not yet stopped";state=Failed;return false;
+        }
+        HANDLE childInput=nullptr,childOutput=nullptr,nullError=nullptr;LPPROC_THREAD_ATTRIBUTE_LIST attrs=nullptr;PROCESS_INFORMATION info{};bool ok=false;
         SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES),nullptr,TRUE};
         auto exe=folder/L"wangshu-voice-helper.exe";
         if(!std::filesystem::is_regular_file(exe)){error="Local voice helper absent";state=Failed;return false;}
@@ -61,14 +99,20 @@ public:
     void finish(){if((state!=Starting&&state!=Recording)||!input)return;DWORD written=0;char c='F';if(!WriteFile(input,&c,1,&written,nullptr)||written!=1){fail("Unable to finish local recording");return;}partial.clear();state=Finishing;deadline=GetTickCount64()+60000;}
     void fail(const std::string& message){cancel();state=Failed;error=message;}
     void poll(){
+        if(stopping){confirmStopped();return;}
+        if(state==WaitingForExit){confirmFinalExit();return;}
         if(!active()||!output)return;
-        if(GetTickCount64()>deadline){fail("Local voice timed out; recording stopped");return;}
+        if(GetTickCount64()>deadline){fail("Local voice timed out");return;}
         DWORD available=0;BOOL peek=PeekNamedPipe(output,nullptr,0,nullptr,&available,nullptr);
         if(peek&&available){char b[4096];DWORD n=0;if(ReadFile(output,b,std::min<DWORD>(sizeof(b),available),&n,nullptr)){pending.append(b,n);if(pending.size()>32768){fail("Local voice response too large");return;}
             size_t pos=0;while((pos=pending.find('\n'))!=std::string::npos){std::string line=pending.substr(0,pos);pending.erase(0,pos+1);if(!line.empty()&&line.back()=='\r')line.pop_back();
-                if(line=="READY"){if(state!=Finishing){state=Recording;deadline=GetTickCount64()+60000;}}
+                if(line=="READY"){if(state==Starting){state=Recording;deadline=GetTickCount64()+60000;}}
                 else if(state==Recording&&line.rfind("PREVIEW ",0)==0)readPreview(line);
-                else if(line.rfind("RESULT ",0)==0){std::string value=line.substr(7);cancel();text=value;state=Complete;return;}
+                else if(line.rfind("RESULT ",0)==0){
+                    finalText=line.substr(7);partial.clear();pending.clear();
+                    close(input);close(output);state=WaitingForExit;
+                    deadline=GetTickCount64()+3000;confirmFinalExit();return;
+                }
                 else if(line.rfind("ERROR ",0)==0){fail(line.substr(6));return;}
             }
         }}

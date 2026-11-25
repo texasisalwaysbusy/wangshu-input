@@ -149,8 +149,8 @@ struct TextServiceTestAccess {
     }
     static bool stageVoice(TextService* service,ITfContext* c,const std::string& text){service->stopVoice();service->voiceRecovery.clear();auto manager=dynamic_cast<Manager*>(service->manager);if(manager&&!manager->document)manager->document=new DocumentManager(c);if(FAILED(service->bindVoice(c)))return false;service->reviewVoice(text);return !service->voiceReview.empty();}
     static bool beginVoice(TextService* service,ITfContext* c){service->stopVoice();service->voiceRecovery.clear();return SUCCEEDED(service->bindVoice(c));}
-    static bool beginVoicePreviewFixture(TextService* service,ITfContext* c,const std::filesystem::path& folder){
-        if(!beginVoice(service,c)||!service->localVoice.start(folder,L"--preview"))return false;
+    static bool beginVoicePreviewFixture(TextService* service,ITfContext* c,const std::filesystem::path& folder,const wchar_t* mode=L"--preview"){
+        if(!beginVoice(service,c)||!service->localVoice.start(folder,mode))return false;
         service->listening=true;
         return true;
     }

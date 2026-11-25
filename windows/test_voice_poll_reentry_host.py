@@ -19,15 +19,18 @@ code=r'''
 using HRESULT=int32_t; constexpr HRESULT S_OK=0,E_FAIL=-1,E_ACCESSDENIED=-2,E_OUTOFMEMORY=-3;
 #define SUCCEEDED(h) ((h)>=0)
 constexpr int TF_ES_SYNC=1,TF_ES_READ=2;
+constexpr int VoiceTimer=32;
+const wchar_t VoiceStopPendingHint[]=L"pending";
+void KillTimer(int,int){}
 struct ITfContext{std::function<void()> callback;int result=S_OK;void Release(){} int RequestEditSession(int,void*,int,int* allowed){if(callback)callback();*allowed=result;return S_OK;}};
 template<class T>void drop(T*&p){p=nullptr;}
 struct VoiceGuard {explicit VoiceGuard(ITfContext*){} void Release(){delete this;}};
-struct VoiceProcess{enum State{Idle,Recording,Complete,Failed}; State state=Recording;std::string text="old";bool active()const{return state==Recording;}std::wstring preview()const{return L"";}void poll(){} };
+struct VoiceProcess{enum State{Idle,Recording,WaitingForExit,Complete,Failed}; State state=Recording;std::string text="old";bool active()const{return state==Recording||state==WaitingForExit;}std::wstring preview()const{return L"";}void poll(){} bool stopPending()const{return false;}bool confirmStopped(){return true;} };
 struct Dictionary{std::string voiceMath(std::string s){return s;}};
 struct TextService{
  ITfContext oldTarget,newTarget;ITfContext* voiceTarget=&oldTarget;std::shared_ptr<int> voicePosition=std::make_shared<int>(1);unsigned long long voiceGeneration=1;
- VoiceProcess localVoice;bool listening=true,math=false;std::string voiceReview,voiceRecovery;std::wstring status;int client=0,stops=0,retains=0,updates=0;bool sensitive=false;Dictionary dict;
- ITfContext* focused(){return voiceTarget;}bool disabled(ITfContext*){return false;}void stopVoice(){stops++;listening=false;voiceTarget=nullptr;voicePosition.reset();++voiceGeneration;}void retainVoice(){retains++;stopVoice();}void update(){updates++;}Dictionary& dictionary(){return dict;}void recognizeVoice(std::string){}
+ VoiceProcess localVoice;bool listening=true,math=false;std::string voiceReview,voiceRecovery;std::wstring status;int client=0,stops=0,retains=0,updates=0,popup=0;bool sensitive=false;Dictionary dict;
+ ITfContext* focused(){return voiceTarget;}bool disabled(ITfContext*){return false;}bool stopVoice(){stops++;listening=false;voiceTarget=nullptr;voicePosition.reset();++voiceGeneration;return true;}void retainVoice(){retains++;stopVoice();}void update(){updates++;}Dictionary& dictionary(){return dict;}void recognizeVoice(std::string){}
 ''' + method + r'''
 };
 int main(){int pass=0,fail=0;auto check=[&](bool v,const char* n){std::cout<<(v?"PASS ":"FAIL ")<<n<<"\n";(v?pass:fail)++;};

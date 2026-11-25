@@ -72,6 +72,53 @@ static void livePreviewSuite(const std::filesystem::path& folder){
          !TextServiceTestAccess::recovery(f.s)&&f.c->doc.value==L"beforeafter");
  });
 }
+static void waitForExitState(Fixture& f,const std::filesystem::path& folder,const wchar_t* mode){
+ expect(TextServiceTestAccess::beginVoicePreviewFixture(f.s,f.c,folder,mode));
+ auto deadline=GetTickCount64()+3000;
+ while(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Starting&&GetTickCount64()<deadline){
+  TextServiceTestAccess::voiceTick(f.s);Sleep(5);
+ }
+ expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Recording);
+ ScriptedKeyboardState chord(true,true);BOOL eat=FALSE;
+ expect(SUCCEEDED(f.s->OnTestKeyDown(f.c,'V',0,&eat))&&eat);
+ expect(SUCCEEDED(f.s->OnKeyDown(f.c,'V',0,&eat))&&eat);
+ deadline=GetTickCount64()+3000;
+ while(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Finishing&&GetTickCount64()<deadline){
+  TextServiceTestAccess::voiceTick(f.s);Sleep(5);
+ }
+ expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::WaitingForExit);
+}
+static void exitConfirmationSuite(const std::filesystem::path& folder){
+ test("helper RESULT cannot become a review before confirmed normal exit",[&]{
+  Fixture f;waitForExitState(f,folder,L"--late-exit");
+  expect(!TextServiceTestAccess::hasVoice(f.s)&&!TextServiceTestAccess::recovery(f.s)&&f.c->doc.textWrites==0);
+  const auto deadline=GetTickCount64()+5000;
+  while(!TextServiceTestAccess::hasVoice(f.s)&&GetTickCount64()<deadline){
+   TextServiceTestAccess::voiceTick(f.s);Sleep(10);
+  }
+  expect(TextServiceTestAccess::hasVoice(f.s)&&f.c->doc.textWrites==0);
+  expect(f.enter()&&f.c->doc.value==L"beforepending-exitafter"&&f.c->doc.textWrites==1);
+ });
+ test("failed child exit does not create a review or recovery",[&]{
+  Fixture f;waitForExitState(f,folder,L"--error-exit");
+  const auto deadline=GetTickCount64()+3000;
+  while(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::WaitingForExit&&GetTickCount64()<deadline){
+   TextServiceTestAccess::voiceTick(f.s);Sleep(10);
+  }
+  expect(TextServiceTestAccess::voiceProcessState(f.s)==VoiceProcess::Idle&&
+         !TextServiceTestAccess::hasVoice(f.s)&&!TextServiceTestAccess::recovery(f.s)&&f.c->doc.textWrites==0);
+ });
+ test("new top context discards RESULT still awaiting child exit",[&]{
+  Fixture f;waitForExitState(f,folder,L"--late-exit");
+  auto other=new Context;drop(f.m->document);f.m->document=new DocumentManager(other);
+  f.s->OnPushContext(other);
+  const auto deadline=GetTickCount64()+1700;
+  while(GetTickCount64()<deadline){TextServiceTestAccess::voiceTick(f.s);Sleep(10);}
+  expect(!TextServiceTestAccess::hasVoice(f.s)&&!TextServiceTestAccess::recovery(f.s)&&
+         f.c->doc.textWrites==0&&other->doc.textWrites==0);
+  other->Release();
+ });
+}
 static bool claimUndo(Fixture& fixture,LPARAM message=0){
  ScriptedKeyboardState chord(true,true);BOOL eat=FALSE;
  expect(SUCCEEDED(fixture.s->OnTestKeyDown(fixture.c,'Z',message,&eat)));
@@ -225,7 +272,7 @@ int main(int argc,char** argv){
  test("PRIVATE change during initial capture refuses binding",[]{Fixture f;bool fired=false;f.c->doc.onRead=[&]{fired=true;f.c->scope=IS_PRIVATE;};expect(!TextServiceTestAccess::beginVoice(f.s,f.c)&&fired);});
  test("PRIVATE change during completion capture discards recognized result",[]{Fixture f;expect(TextServiceTestAccess::beginVoice(f.s,f.c));bool fired=false;f.c->doc.onRead=[&]{fired=true;f.c->scope=IS_PRIVATE;};TextServiceTestAccess::resultVoice(f.s,"heard");expect(fired&&!TextServiceTestAccess::hasVoice(f.s)&&!TextServiceTestAccess::recovery(f.s));});
  test("unreadable selection is unknown and retains recoverable result",[]{Fixture f;f.stage();f.c->doc.noSelection=true;f.unchanged();expect(!TextServiceTestAccess::hasVoice(f.s)&&TextServiceTestAccess::recovery(f.s));});
- if(argc==2){const std::filesystem::path folder(argv[1]);livePreviewSuite(folder);voiceUndoSuite();formatSuite(folder);}
+ if(argc==2){const std::filesystem::path folder(argv[1]);livePreviewSuite(folder);exitConfirmationSuite(folder);voiceUndoSuite();formatSuite(folder);}
  test("fixture COM references release",[]{expect(objectCount==0);});
  std::cout<<"RESULT passed="<<passed<<" failed="<<failed<<" total="<<passed+failed<<"; production PE/mock TSF, generated speech; real Windows/microphone NOT_RUN"<<std::endl;return failed?1:0;
 }

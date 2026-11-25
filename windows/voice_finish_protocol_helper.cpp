@@ -19,6 +19,17 @@ static int previewFixture(){
 
 int main(int argc,char** argv){
  if(argc==2&&std::string(argv[1])=="--preview")return previewFixture();
+ if(argc==2){
+  const std::string mode=argv[1];
+  if(mode!="--late-exit"&&mode!="--error-exit"&&mode!="--hang-after-result")return 2;
+  std::cout<<"READY\n"<<std::flush;
+  char control=0;DWORD read=0;
+  if(!ReadFile(GetStdHandle(STD_INPUT_HANDLE),&control,1,&read,nullptr)||read!=1||control!='F')return 3;
+  std::cout<<"RESULT pending-exit\n"<<std::flush;
+  if(mode=="--late-exit"){Sleep(1500);return 0;}
+  if(mode=="--error-exit"){Sleep(500);return 9;}
+  Sleep(8000);return 5;
+ }
  std::cout<<"READY\n"<<std::flush;
  Sleep(1200);
  HANDLE in=GetStdHandle(STD_INPUT_HANDLE);DWORD available=0,total=0,n=0;char bytes[512];

@@ -34,7 +34,8 @@ static void preview(const std::filesystem::path& folder){
        "bounded UTF-8 preview replaces earlier text without publishing the final result");
  process.finish();
  check(process.state==VoiceProcess::Finishing&&process.preview().empty(),"finish hides preview immediately");
- while(process.state==VoiceProcess::Finishing){
+ const auto deadline=GetTickCount64()+10000;
+ while(process.active()&&GetTickCount64()<deadline){
   process.poll();
   if(!process.preview().empty())throw std::runtime_error("late preview became visible");
   Sleep(10);

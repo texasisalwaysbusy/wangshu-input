@@ -12,7 +12,7 @@
 
 **当前是供自愿试用的 beta，不是商店稳定版。** Android 包使用调试签名，存在已知编辑、语音和宿主兼容问题。请勿用于密码、敏感信息或重要文本；先用合成内容了解行为，并保留常用输入法作为备选。具体构建、SHA-256 和检查范围以对应发布说明为准。
 
-[下载与版本说明](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.2) · [已知限制](docs/public/BETA-STATUS.md) · [隐私边界](docs/public/PRIVACY.md) · [构建说明](docs/public/BUILDING.md)
+[Beta.2 源码与候选说明](releases/android/v0.1.0-beta.2/README.md)（正式附件上传待确认） · [已发布 Beta.1 下载](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.1) · [已知限制](docs/public/BETA-STATUS.md) · [隐私边界](docs/public/PRIVACY.md) · [构建说明](docs/public/BUILDING.md)
 
 ## 这块键盘能做什么
 
@@ -43,7 +43,7 @@ Basic Typing Preview 不是完整变体的别名，也不能代替完整变体�
 
 ## 开始试用 Android beta
 
-1. 在 [Releases](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.2) 选择明确标注 **Full Beta** 的 APK。先阅读该版本的已知问题、文件哈希和签名说明；只有实际附带的文件才是可下载产物。
+1. 在 [Releases](https://github.com/texasisalwaysbusy/wangshu-input/releases) 选择明确标注 **Full Beta** 的 APK。先阅读该版本的已知问题、文件哈希和签名说明；只有实际附带的文件才是可下载产物。
 2. Android 最低版本为 8.0 / API 26。由你决定是否安装，并在系统输入法设置中启用“望舒输入法”。认真阅读 Android 的输入法访问提示。
 3. 先在不含私人内容的普通文本框尝试 `nihao` → `你好`，再尝试符号面板。遇到提交、光标或退格异常时，切回原输入法并核对文本。
 4. 如需离线语音，导入该版本说明中指定的 `wangshu-voice-zh-en-v1.zip`，仅在使用语音时授予麦克风权限。模型与 APK 分开发放，模型不内置于 APK。没有可用模型或本机离线服务时，应提示不可用，不改走云端识别。

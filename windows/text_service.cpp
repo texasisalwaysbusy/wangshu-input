@@ -54,6 +54,7 @@ const GUID PROFILE_Wangshu={0x297331cb,0x1972,0x4d66,{0xb7,0x3b,0xa7,0x64,0x4f,0
 static constexpr LANGID Chinese=MAKELANGID(LANG_CHINESE,SUBLANG_CHINESE_SIMPLIFIED);
 static constexpr UINT VoiceMessage=WM_APP+31;
 static constexpr UINT VoiceTimer=32;
+static constexpr wchar_t VoiceStopPendingHint[]=L"本地录音停止请求已发出，尚未确认进程退出";
 static constexpr UINT LearningTimer=33;
 static constexpr UINT PredictionTimer=34;
 static constexpr UINT VoiceUndoTimer=35;
@@ -769,7 +770,7 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
     void paint(HWND w){PAINTSTRUCT p;HDC dc=BeginPaint(w,&p);RECT r;GetClientRect(w,&r);HBRUSH bg=CreateSolidBrush(RGB(245,248,253));FillRect(dc,&r,bg);DeleteObject(bg);auto old=SelectObject(dc,font);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(20,35,60));
         std::wstring title=editorPanel?(editorPanel->selecting?L"望舒 · 选择文字":L"望舒 · 光标编辑"):
             clipboardPanel?(clipboardPanel->splitEntry?L"望舒 · 剪贴板拆词":L"望舒 · 剪贴板历史"):
-            L"望舒 · "+wide(buffer)+(math?L"  数学":L"")+(listening?L"  本地聆听中":L"")+(noLearn?L"  不学习":L"")+(privateInput?L"  隐私保护":L"");TextOutW(dc,10,8,title.c_str(),static_cast<int>(title.size()));
+            L"望舒 · "+wide(buffer)+(math?L"  数学":L"")+(listening?(localVoice.state==VoiceProcess::Finishing||localVoice.state==VoiceProcess::WaitingForExit?L"  语音处理中":L"  本地聆听中"):L"")+(noLearn?L"  不学习":L"")+(privateInput?L"  隐私保护":L"");TextOutW(dc,10,8,title.c_str(),static_cast<int>(title.size()));
         const auto& preview=localVoice.preview();
         const bool showSpeech=!preview.empty()||!voiceReview.empty();
         if(showSpeech){
@@ -1501,25 +1502,40 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         drop(target);update();
     }
     void retainVoice(){stopVoice(true);status=L"语音位置已变化，结果暂存内存；Ctrl+Shift+V 重新定位后再确认";}
-    void stopVoice(bool preserve=false){voiceLastStopPreserved=preserve;if(preserve&&!voiceReview.empty())voiceRecovery=std::move(voiceReview);voiceReview.clear();voicePosition.reset();++voiceGeneration;localVoice.cancel();if(popup)KillTimer(popup,VoiceTimer);listening=false;if(grammar)grammar->SetDictationState(SPRS_INACTIVE);if(recognizer)recognizer->SetRecoState(SPRST_INACTIVE_WITH_PURGE);drop(grammar);drop(recoContext);drop(recognizer);drop(voiceTarget);}
+    bool stopVoice(bool preserve=false){
+        voiceLastStopPreserved=preserve;if(preserve&&!voiceReview.empty())voiceRecovery=std::move(voiceReview);
+        voiceReview.clear();voicePosition.reset();++voiceGeneration;
+        const bool localStopped=localVoice.cancel();
+        if(popup){
+            KillTimer(popup,VoiceTimer);
+            if(!localStopped)SetTimer(popup,VoiceTimer,100,nullptr);
+        }
+        listening=false;
+        if(grammar)grammar->SetDictationState(SPRS_INACTIVE);
+        if(recognizer)recognizer->SetRecoState(SPRST_INACTIVE_WITH_PURGE);
+        drop(grammar);drop(recoContext);drop(recognizer);drop(voiceTarget);
+        return localStopped;
+    }
     void startVoice(ITfContext* c){
         clearVoiceUndo();
         if(activationFlags&(TF_TMAE_SECUREMODE|TF_TMAE_COMLESS|TF_TMAE_CONSOLE|TF_TMAE_UIELEMENTENABLEDONLY)){stopVoice();status=L"当前 Windows 输入上下文仅启用键盘文字，未启动麦克风";update();return;}
         if(localVoice.active()){
             localVoice.finish();
-            if(localVoice.active())status=L"本地识别中，完成后请核对文字";
-            else{stopVoice();status=L"本地录音已停止；未取得最终结果";}
+            if(localVoice.state==VoiceProcess::WaitingForExit)status=L"正在确认本地语音进程退出";
+            else if(localVoice.active())status=L"本地识别中，完成后请核对文字";
+            else{const bool stopped=stopVoice();status=stopped?L"未取得本地语音最终结果":VoiceStopPendingHint;}
             update();return;
         }
-        if(listening){stopVoice();status.clear();update();return;}if(disabled(c))return;makeWindow();
-        stopVoice(true);HRESULT allowed=bindVoice(c);
+        if(listening){const bool stopped=stopVoice();status=stopped?L"":VoiceStopPendingHint;update();return;}if(disabled(c))return;makeWindow();
+        if(!stopVoice(true)){status=VoiceStopPendingHint;update();return;}
+        HRESULT allowed=bindVoice(c);
         if(FAILED(allowed)){status=L"无法完整核对输入位置或当前框不允许语音；未启动麦克风";update();return;}
         if(!voiceRecovery.empty()){voiceReview=std::move(voiceRecovery);voiceRecovery.clear();status=L"已重新定位；请核对文字，再按 Enter/空格插入，Esc取消";SetTimer(popup,VoiceTimer,250,nullptr);update();return;}
         loadVoiceFormat();
         auto base=std::filesystem::path(modulePath()).parent_path()/L"voice";
         if(std::filesystem::is_regular_file(base/L"models"/L"tokens.txt")){
             if(!popup||!SetTimer(popup,VoiceTimer,100,nullptr)||!localVoice.start(base)){
-                stopVoice();status=L"本地语音进程未启动；键盘仍可用";update();return;
+                const bool stopped=stopVoice();status=stopped?L"本地语音进程未启动；键盘仍可用":VoiceStopPendingHint;update();return;
             }
             listening=true;status=L"正在准备本地模型；Ctrl+Shift+V 完成，切换输入框取消";update();return;
         }
@@ -1545,6 +1561,13 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         update();
     }
     void pollVoice() noexcept{const auto generation=voiceGeneration;try{
+        if(localVoice.stopPending()){
+            if(localVoice.confirmStopped()){
+                if(popup)KillTimer(popup,VoiceTimer);
+                if(status==VoiceStopPendingHint){status.clear();update();}
+            }
+            return;
+        }
         if(!listening&&!localVoice.active()&&voiceReview.empty())return;
         ITfContext* c=focused();bool valid=c&&c==voiceTarget&&!disabled(c);
         if(generation!=voiceGeneration){drop(c);return;}
@@ -1556,9 +1579,10 @@ class TextService final:public ITfTextInputProcessorEx,public ITfKeyEventSink,pu
         if(localVoice.state==VoiceProcess::Recording&&(previousState!=VoiceProcess::Recording||previousPreview!=localVoice.preview())){
             status=L"本地聆听 · Ctrl+Shift+V 完成（最长30秒）";update();
         }
+        else if(localVoice.state==VoiceProcess::WaitingForExit&&previousState!=VoiceProcess::WaitingForExit){status=L"正在确认本地语音进程退出";update();}
         else if(localVoice.state==VoiceProcess::Complete)recognizeVoice(localVoice.text);
-        else if(localVoice.state==VoiceProcess::Failed){stopVoice();status=L"本地语音未完成，请检查语音包和麦克风；未转云";update();}
-    }catch(...){if(generation==voiceGeneration){stopVoice();status=L"本地语音未完成；键盘仍可用";update();}}}
+        else if(localVoice.state==VoiceProcess::Failed){const bool stopped=stopVoice();status=stopped?L"本地语音未完成，请检查语音包和麦克风；未转云":VoiceStopPendingHint;update();}
+    }catch(...){if(generation==voiceGeneration){const bool stopped=stopVoice();status=stopped?L"本地语音未完成；键盘仍可用":VoiceStopPendingHint;update();}}}
     void voiceEvents(){
         if(!recoContext||!listening)return;
         const auto generation=voiceGeneration;auto source=recoContext;source->AddRef();
@@ -1863,7 +1887,7 @@ public:
             else if(!buffer.empty()&&!(candidates.empty()?commit(c,wangshu::mixed::raw(buffer)):selectCandidate(c,0)))return S_OK;
             startVoice(c);return S_OK;
         }
-        if(listening&&k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}
+        if(listening&&k==VK_ESCAPE){const bool stopped=stopVoice();voiceRecovery.clear();status=stopped?L"":VoiceStopPendingHint;update();return S_OK;}
         if(!voiceReview.empty()){if(k==VK_RETURN||k==VK_SPACE){std::string value=voiceReview;commit(c,value);*eat=TRUE;return S_OK;}if(k==VK_ESCAPE){stopVoice();voiceRecovery.clear();status.clear();update();return S_OK;}stopVoice(true);}
         if(listening)stopVoice();
         if(ctrl()&&shift()&&k=='M'){math=!math;status=math?L"数学模式 · \\alpha 符号 · 算式 = 后点选精确结果":L"";update();return S_OK;}
