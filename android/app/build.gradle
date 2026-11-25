@@ -8,8 +8,8 @@ android {
         applicationId 'org.wangshu.ime'
         minSdk 26
         targetSdk 36
-        versionCode 2
-        versionName '0.1.0-beta.1'
+        versionCode 3
+        versionName '0.1.0-beta.2'
         testInstrumentationRunner 'org.wangshu.ime.ImeInstrumentation'
         ndk { abiFilters 'arm64-v8a','armeabi-v7a','x86','x86_64' }
         externalNativeBuild { cmake { arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
