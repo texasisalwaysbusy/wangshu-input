@@ -1,0 +1,231 @@
+{
+  "source_commit": "df154a47866877778b29feeb95e4ea2b7247d3e8",
+  "public_asset": "wangshu-input-full-0.1.0-beta.2.apk",
+  "other_artifacts": "local verification only, not downloadable release attachments",
+  "artifacts": [
+    {
+      "file": "app-full-debug.apk",
+      "package": "org.wangshu.ime",
+      "version_code": "3",
+      "version_name": "0.1.0-beta.2",
+      "bytes": 60667009,
+      "sha256": "3972b56f654806626981b3aecc3e5e61c9782f6c5fab7f62226c1c06d59b4b8a",
+      "certificate": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "abi": [
+        "arm64-v8a",
+        "armeabi-v7a",
+        "x86",
+        "x86_64"
+      ],
+      "native": {
+        "lib/arm64-v8a/libonnxruntime.so": {
+          "needed": [
+            "libdl.so",
+            "liblog.so",
+            "libm.so",
+            "libc.so"
+          ],
+          "sha256": "892bde5701ea47edffb3f1cc070f5bab690fccfca40e11baaed7b252084af477"
+        },
+        "lib/arm64-v8a/libsherpa-onnx-jni.so": {
+          "needed": [
+            "libandroid.so",
+            "liblog.so",
+            "libonnxruntime.so",
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "4026d4f50a832c18f2664acf72262ae427732471c646a07748bf311c4ead6f73"
+        },
+        "lib/arm64-v8a/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "12243f64ac68fff5a6ac003ee84418ede541414b4bb19ec8a55f0119e01e79c8"
+        },
+        "lib/armeabi-v7a/libonnxruntime.so": {
+          "needed": [
+            "libdl.so",
+            "liblog.so",
+            "libm.so",
+            "libc.so"
+          ],
+          "sha256": "c8a53da59795c5c96e8882be909d4919cc9da67bd3a4d732a0ddfcea9f4e9a0b"
+        },
+        "lib/armeabi-v7a/libsherpa-onnx-jni.so": {
+          "needed": [
+            "libandroid.so",
+            "liblog.so",
+            "libonnxruntime.so",
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "140fb9905c04815895859f0d58bd053b18688a575791688ef283425700f8677f"
+        },
+        "lib/armeabi-v7a/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "5df63661c563ab3367662b776d4fadb92777a5d4cc057ed45e3a4552a117b8b2"
+        },
+        "lib/x86/libonnxruntime.so": {
+          "needed": [
+            "libdl.so",
+            "liblog.so",
+            "libm.so",
+            "libc.so"
+          ],
+          "sha256": "e4d0b20a12b54fa7135bfca034fdf931a4e7e28c7a98bb1f1944402e817480e1"
+        },
+        "lib/x86/libsherpa-onnx-jni.so": {
+          "needed": [
+            "libandroid.so",
+            "liblog.so",
+            "libonnxruntime.so",
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "dce1f35711ad78c99264dea251f2cb1316c9bd4cd57da91ee01157cf2c15d190"
+        },
+        "lib/x86/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "b27b8b6a0767375cff3aff6130580af35fa4c00d830fc8b06383036c56ce7cdc"
+        },
+        "lib/x86_64/libonnxruntime.so": {
+          "needed": [
+            "libdl.so",
+            "liblog.so",
+            "libm.so",
+            "libc.so"
+          ],
+          "sha256": "a3901bc4d8a6bd06118fd209351d1d632455b471f817d255edf8fbdd69af15fe"
+        },
+        "lib/x86_64/libsherpa-onnx-jni.so": {
+          "needed": [
+            "libandroid.so",
+            "liblog.so",
+            "libonnxruntime.so",
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "eb62163684dad5963e9a8e872735446ab1addacce39b610d6040936990225607"
+        },
+        "lib/x86_64/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "c10fe5e365c995d302b39b85be1d29d17b31844c55e4634f9b3f8197c2bd5759"
+        }
+      },
+      "changed_members": [
+        "AndroidManifest.xml",
+        "classes3.dex"
+      ],
+      "alignment": "PASS",
+      "device": "NOT_RUN"
+    },
+    {
+      "file": "app-full-debug-androidTest.apk",
+      "package": "org.wangshu.ime.test",
+      "version_code": "",
+      "version_name": "",
+      "bytes": 208028,
+      "sha256": "7918efe3246b10dd7c9261734e602dd25a9260cb0851cf536677f53b139b9c91",
+      "certificate": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
+      "permissions": [],
+      "abi": [],
+      "native": {},
+      "changed_members": [],
+      "alignment": "NOT_APPLICABLE",
+      "device": "NOT_RUN"
+    },
+    {
+      "file": "app-typingPreview-debug.apk",
+      "package": "org.wangshu.ime.typingpreview",
+      "version_code": "3",
+      "version_name": "0.1.0-beta.2-basic-typing-preview",
+      "bytes": 17549592,
+      "sha256": "dfaae57f135d2fa9df628f8fc9177f5d419274864547d32fa8960463a9d83da6",
+      "certificate": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
+      "permissions": [],
+      "abi": [
+        "arm64-v8a",
+        "armeabi-v7a",
+        "x86",
+        "x86_64"
+      ],
+      "native": {
+        "lib/arm64-v8a/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "12243f64ac68fff5a6ac003ee84418ede541414b4bb19ec8a55f0119e01e79c8"
+        },
+        "lib/armeabi-v7a/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "5df63661c563ab3367662b776d4fadb92777a5d4cc057ed45e3a4552a117b8b2"
+        },
+        "lib/x86/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "b27b8b6a0767375cff3aff6130580af35fa4c00d830fc8b06383036c56ce7cdc"
+        },
+        "lib/x86_64/libwangshuime.so": {
+          "needed": [
+            "libm.so",
+            "libdl.so",
+            "libc.so"
+          ],
+          "sha256": "c10fe5e365c995d302b39b85be1d29d17b31844c55e4634f9b3f8197c2bd5759"
+        }
+      },
+      "changed_members": [
+        "AndroidManifest.xml",
+        "classes2.dex"
+      ],
+      "alignment": "PASS",
+      "device": "NOT_RUN"
+    },
+    {
+      "file": "app-typingPreview-debug-androidTest.apk",
+      "package": "org.wangshu.ime.typingpreview.test",
+      "version_code": "",
+      "version_name": "",
+      "bytes": 208256,
+      "sha256": "acba20b01d3f67866f6b8ba97bbb27eb3b3e7bd11f3a0b79d554d0b9db5043b3",
+      "certificate": "7126a0af876f97fac3d20f133ac1368a69eb790003570e677c9e0b00d3e80212",
+      "permissions": [],
+      "abi": [],
+      "native": {},
+      "changed_members": [],
+      "alignment": "NOT_APPLICABLE",
+      "device": "NOT_RUN"
+    }
+  ]
+}

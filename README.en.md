@@ -12,7 +12,7 @@ Wangshu is a native input-method project built around local processing. The Andr
 
 **This is an opt-in beta, not a stable store release.** Android builds are debug-signed and have known editing, speech and host-compatibility limitations. Do not use this beta for passwords, sensitive information or important text. Start with synthetic text and keep another keyboard available. Consult each release for its exact build, SHA-256 hashes and verification scope.
 
-[Downloads and release notes](https://github.com/texasisalwaysbusy/wangshu-input/blob/main/releases/android/v0.1.0-beta.1/README.md) · [Known limitations](docs/public/BETA-STATUS.en.md) · [Privacy boundaries](docs/public/PRIVACY.en.md) · [Building](docs/public/BUILDING.md)
+[Downloads and release notes](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.2) · [Known limitations](docs/public/BETA-STATUS.en.md) · [Privacy boundaries](docs/public/PRIVACY.en.md) · [Building](docs/public/BUILDING.md)
 
 ## What the keyboard includes
 
@@ -43,7 +43,7 @@ Basic Typing Preview is not another name for the full variant and cannot substit
 
 ## Try the Android beta
 
-1. Open [Releases](https://github.com/texasisalwaysbusy/wangshu-input/blob/main/releases/android/v0.1.0-beta.1/README.md) and select an APK explicitly labelled **Full Beta**. Read its known issues, hashes and signing notes. A file is available only when it is actually attached to that release.
+1. Open [Releases](https://github.com/texasisalwaysbusy/wangshu-input/releases/tag/v0.1.0-beta.2) and select an APK explicitly labelled **Full Beta**. Read its known issues, hashes and signing notes. A file is available only when it is actually attached to that release.
 2. Android 8.0 / API 26 is the minimum. Decide whether to install it, then enable Wangshu Input in Android's keyboard settings. Read the system's input-method access warning carefully.
 3. Start in an ordinary text field with non-private content, for example `nihao` → `你好`, then try the symbol panel. If commits, cursor movement or backspace behave unexpectedly, switch to your usual keyboard and check the text.
 4. For offline speech, import the release's specified `wangshu-voice-zh-en-v1.zip` and grant microphone access when using speech. The model is distributed separately and is not embedded in the APK. If neither an imported model nor a supported local system recognizer is available, recognition should be unavailable rather than fall back to the cloud.

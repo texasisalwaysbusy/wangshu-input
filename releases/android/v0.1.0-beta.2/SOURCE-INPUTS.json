@@ -1,0 +1,1636 @@
+{
+  "build_source_commit": "df154a47866877778b29feeb95e4ea2b7247d3e8",
+  "inputs": {
+    "android/app/build.gradle": {
+      "git_bytes": 2171,
+      "git_sha256": "0aeb50bd7ce87946060379649587c203acc6a6b7a82e43467d768d01c2c380b9",
+      "build_checkout_sha256": "83ea58c013215f22a0aa8bc9143f63c356da7fa6a651415f3b47e20feddea846"
+    },
+    "android/app/src/androidTest/AndroidManifest.xml": {
+      "git_bytes": 310,
+      "git_sha256": "f573c35cd13397acd47c9eb215c8ce138fa8d6fee11f615eb91dad4eb07f512a",
+      "build_checkout_sha256": "f573c35cd13397acd47c9eb215c8ce138fa8d6fee11f615eb91dad4eb07f512a"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/BackspaceUiChecks.java": {
+      "git_bytes": 25867,
+      "git_sha256": "7d9968852a3cf91e69c0948a12ad80bfad103688c471d54676875b62e03ad59e",
+      "build_checkout_sha256": "7050ee49b72aa9acae5eccfe685f51e3223b44bfd7c07c6022a09c2ce3d31fe6"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/BeforeCaretEditorChecks.java": {
+      "git_bytes": 16339,
+      "git_sha256": "e987d738d66a5a5346a18196b735216b1bbed99f66a3c492b18f2e7e541bc360",
+      "build_checkout_sha256": "ebb21b426018249ea73565183fb51f7f385b0c1eebb5760a7c5345575c93f470"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/CandidatePanelChecks.java": {
+      "git_bytes": 5141,
+      "git_sha256": "7713296eaea1f748f209b05d1237c798a4fc367340ebca6f6689c7f5a9e0066c",
+      "build_checkout_sha256": "7713296eaea1f748f209b05d1237c798a4fc367340ebca6f6689c7f5a9e0066c"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/CaseModeChecks.java": {
+      "git_bytes": 5129,
+      "git_sha256": "7f0d8fe33840e36cb06a6d4a91bd094fac488efd9e1c5aae032ea21d3484b53f",
+      "build_checkout_sha256": "3f52bf6f19b968f0fe2dcf15190106fef1b0566892844a0a51842af52d0ff5a0"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ClipboardFenceChecks.java": {
+      "git_bytes": 3352,
+      "git_sha256": "a8c7e6f9f5d157f5b1ed92abc3fd14fe4690f6dde8367f2c4ee2f92cc25d3b2b",
+      "build_checkout_sha256": "3b0fead961c10c9b10a4e5cb82ea0e01fd609654632331b78efa3cf0bcf48044"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ClipboardFenceModel.java": {
+      "git_bytes": 12737,
+      "git_sha256": "08afc8beca0ba4f3ed39cee88cead55edb9199306b5fab529adf88a1fd82ae3a",
+      "build_checkout_sha256": "b22149cfaa233b574f86d96158fdf61011cd238939fd8f36456be4ec37f901ec"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ClipboardStoreChecks.java": {
+      "git_bytes": 6502,
+      "git_sha256": "1fcba6599cd2d979b9fa9dbb610b22d54d6af4792559422aee2b9acb0e713d42",
+      "build_checkout_sha256": "8b34241ef7196b1a9b5d0523fd63ae4c4b94c194475280d4732bf7042622c05d"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ClipboardUiChecks.java": {
+      "git_bytes": 13164,
+      "git_sha256": "d8a2e5a3443218db43b59d357a374cacf4d41b475b68de8da59f2e26459c4135",
+      "build_checkout_sha256": "a1ab0450e6d42bb31f6f27020a7ada93a85f6ef9188ba17599b1b04324c820dc"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/EditorPanelChecks.java": {
+      "git_bytes": 9156,
+      "git_sha256": "a9577662231e5b52da6468c2f8f906b1681a03d629c0413e958dc7966a35d6e6",
+      "build_checkout_sha256": "be2a0e2d367e8cfa1a4d1d8ef4e105392f5a7048e8a617169e231cb308138d07"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/EmojiEditorFixture.java": {
+      "git_bytes": 2824,
+      "git_sha256": "4b85208fbea70eef7dc25209f54a351d3d74d3cc4694a2bbd39bf078f8ef9d16",
+      "build_checkout_sha256": "8acb5cb9b3dddabb265fdb949b4d56e2b73ba1ef018b929c3e5784dd9898ce6f"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/EmojiUiChecks.java": {
+      "git_bytes": 12990,
+      "git_sha256": "01858eeb245a58d3507627415a66eabf75b637f10d38084e86158d4c4a03e49d",
+      "build_checkout_sha256": "99c3e348aca31a2539398341d2b516231dce6f1c2f73dda545ba171c5eb89a98"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/EnglishVoiceChecks.java": {
+      "git_bytes": 2811,
+      "git_sha256": "21d8459f447947b23db0ed7c4e701f0b11c5fbfdd74d13e6370cfe113546f305",
+      "build_checkout_sha256": "abaeeabb5e4b03fa20e0ab01445a9367a4f941349971c3623cd0d53b30f55841"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ExternalMathUiChecks.java": {
+      "git_bytes": 23101,
+      "git_sha256": "c97867bdc7fce76e40b6291a5a17b9a19ebbfc87394af48d8415637960bb7227",
+      "build_checkout_sha256": "584a6fa74457df8be1eb7aab91d786ade52900086a35cb488930a7443f885f56"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/FixtureEditorState.java": {
+      "git_bytes": 2913,
+      "git_sha256": "45a9e997be4bfe10f2ba95dbfeba46d9ac264b0297d7fd91cd30ff2237924cfc",
+      "build_checkout_sha256": "47f0b7d8e07827014949ecac8d6eb2878c47d4638184abbf978046c279abcf2c"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/FuzzyCandidateChecks.java": {
+      "git_bytes": 9019,
+      "git_sha256": "804a94dfdb2fbfc83f15ef7e0008b37f207b68a7f861ddc6d0a8f5afe2a49beb",
+      "build_checkout_sha256": "804a94dfdb2fbfc83f15ef7e0008b37f207b68a7f861ddc6d0a8f5afe2a49beb"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/HideChecks.java": {
+      "git_bytes": 3792,
+      "git_sha256": "cba92b056b76396177801aadc58e6b7079cab2bde5c1f2cd1ff0ad7715f1c13b",
+      "build_checkout_sha256": "af621002325fcfada3aa03ddca28ea3e3e65dbf1f7bdbd1867b9acacde84e034"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ImeInstrumentation.java": {
+      "git_bytes": 13086,
+      "git_sha256": "8d76a0e62ff11b1bec1b7a378e8e6af4336f89a18d25c96709e779a83ae508d9",
+      "build_checkout_sha256": "8d76a0e62ff11b1bec1b7a378e8e6af4336f89a18d25c96709e779a83ae508d9"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ImeSelectorDiagnostics.java": {
+      "git_bytes": 5352,
+      "git_sha256": "86868174c15df7266adbdd6639d654109e39bae08790288121325014f87de163",
+      "build_checkout_sha256": "7a2c738d92f2ba8e8e8563c0ca891ff91e550d747066fc28aa96bd054993be06"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ImeTestDiagnostics.java": {
+      "git_bytes": 19048,
+      "git_sha256": "0d931cab93906fddf75a34434f5046890f003301609102786a1adb7bf42d1057",
+      "build_checkout_sha256": "76a2111ce9a98fbaf31e54497b379cc66acc852db4b50b2b7a2e00977852829b"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ImeTestPolicy.java": {
+      "git_bytes": 7576,
+      "git_sha256": "f08d66bda7682c9219e25214438a93c5a689ffaf70a4ba949ff72ca66af513d7",
+      "build_checkout_sha256": "186884d57c2d1d0edd31929bbb440378653f904d7bd212f97c2a834e6b7b3006"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/LandscapeViewportChecks.java": {
+      "git_bytes": 4325,
+      "git_sha256": "b10ff6bbba15bc561c3ca71eb3e99528fc27662eee11a099544995a68caaf66b",
+      "build_checkout_sha256": "b10ff6bbba15bc561c3ca71eb3e99528fc27662eee11a099544995a68caaf66b"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/LandscapeViewportModernInsets.java": {
+      "git_bytes": 1569,
+      "git_sha256": "da9425b78c9eccd8e0e5f5e387a53937f4e30ae28fcc06a9124f324743a95811",
+      "build_checkout_sha256": "da9425b78c9eccd8e0e5f5e387a53937f4e30ae28fcc06a9124f324743a95811"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/LayoutChecks.java": {
+      "git_bytes": 5075,
+      "git_sha256": "201ddc2cfd810d6ee2defa15b80ec852d6d2d0c1bd2d5902073af6c54f28856f",
+      "build_checkout_sha256": "fcc423223d67e08ede2102c4e3e84c30b9963637e6b62d9c963480ca66e99b0a"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/LearningStoreChecks.java": {
+      "git_bytes": 5791,
+      "git_sha256": "49fe5d2589a4c7874c18a60500c5e47f90faa7329f06e4a5b0844922eda8ccc3",
+      "build_checkout_sha256": "377fa94d473eaea1b8707bbbfc5dac8e39ff77f7b3ef73af51fe8e8990ab5b8a"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/LearningUiChecks.java": {
+      "git_bytes": 11960,
+      "git_sha256": "68c514fe5f91f3991d7200b08a63cc7fef79701ccf9bbc28498cb43e283e7125",
+      "build_checkout_sha256": "68c514fe5f91f3991d7200b08a63cc7fef79701ccf9bbc28498cb43e283e7125"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/MathAssociationChecks.java": {
+      "git_bytes": 20751,
+      "git_sha256": "baa8290a4a8f15a1281d9e863a3e5e49640e1b93d60fff0524acbd31414eba0f",
+      "build_checkout_sha256": "2dabb55e7a77b16b270887a96555d2bb6b709ff46461d720e92fc61afc62c271"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/MathAssociationUiChecks.java": {
+      "git_bytes": 11207,
+      "git_sha256": "bb1e80c5f738accff92f5bd08ceaf77c8578fcf035653e22f99a1bac3730901b",
+      "build_checkout_sha256": "6e34ddbed853d17c02c1e805203ded71bc64487b0496f6eb8c0d60a13011703c"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/MathImePrecondition.java": {
+      "git_bytes": 12351,
+      "git_sha256": "f410336c6cca6c0b4d641d139231425b4843fe6dc290fc96348be967595b2f3c",
+      "build_checkout_sha256": "5f96877bbfecbad71b1dd694a71a726393f9b57f994203fc1e87b19e82713ed1"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/NativeEditorFixture.java": {
+      "git_bytes": 11743,
+      "git_sha256": "5368b33470a9c592acf33534e388a867a57f6a5f5574a24037d3aca110ff7272",
+      "build_checkout_sha256": "5368b33470a9c592acf33534e388a867a57f6a5f5574a24037d3aca110ff7272"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/NumericPanelChecks.java": {
+      "git_bytes": 4469,
+      "git_sha256": "b2fc146c4b18d67c0926350e1b3ec80dd13b2d87ad488db12ba1259b9bf1c4d2",
+      "build_checkout_sha256": "32f272b3aa8a4c9a84de8313708a3b6d4283b62f65e90f3e0c0d955cd9a2d73f"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/PersonalCapacityRegressionChecks.java": {
+      "git_bytes": 2965,
+      "git_sha256": "1d5bf80336bc6e5acd1d1b12702ab6d4d6d5c2c7dfd3aff82851d6964cb01d92",
+      "build_checkout_sha256": "af8f3e348e5263b4a7771778e94d8513f096d31e73a38909afb77269fbb2547f"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/PersonalStoreChecks.java": {
+      "git_bytes": 21070,
+      "git_sha256": "f56abfdc7eba38c9cd9e42a788a005dbfed3200c8058ec12668c1eefe9cd863e",
+      "build_checkout_sha256": "0068232fcec529a1bf58beb499e7ed680080738bf76f88fbdbffe2ee559f18e3"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/PersonalUiChecks.java": {
+      "git_bytes": 7899,
+      "git_sha256": "dd56759336ae209c4f227c77df298d073c7e145383c404f9192389d143c49457",
+      "build_checkout_sha256": "1c55596d6a1308dc16ee2a4dfb301ae77ffe0cb12f46aa62a9d37ec123a0939f"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/PublicVoiceFixture.java": {
+      "git_bytes": 3506,
+      "git_sha256": "5e67029f0bf2fc4968e3109527f43ef88bf9fe4173bf7502c65a0a2a57b75ac3",
+      "build_checkout_sha256": "5e67029f0bf2fc4968e3109527f43ef88bf9fe4173bf7502c65a0a2a57b75ac3"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/SettingsBackupChecks.java": {
+      "git_bytes": 5022,
+      "git_sha256": "a6ec7c2facdb33022430cc85a76bc43ec1017d60db5e90de9fb8fb0a35c8052f",
+      "build_checkout_sha256": "a6ec7c2facdb33022430cc85a76bc43ec1017d60db5e90de9fb8fb0a35c8052f"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/SettingsUiChecks.java": {
+      "git_bytes": 4697,
+      "git_sha256": "d5d2d34b09cd66932cccad9fbb715cb1e855670d3c29dce916d561930120e509",
+      "build_checkout_sha256": "18063e880c6386a42480578066708989fb3c7a1c97029fa9d167f206c66f234a"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/StrictImeSelector.java": {
+      "git_bytes": 3842,
+      "git_sha256": "cff63967c8282801016b192a0f9504a984059f31406a1963e3f230fcceb403e7",
+      "build_checkout_sha256": "c2b8a09c51707dc89e2dd92af89261487ac6a2315e4d31be87c31a89f66f4967"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/StrictImeToolbarTouch.java": {
+      "git_bytes": 5254,
+      "git_sha256": "a990d1228f423755fe6d8437d1de1d035fd47a593e05f471a64ae53005e4f9ee",
+      "build_checkout_sha256": "4603ec6b1ac1e5e89a17d5b489fa3a873547b2f92c356caf8fe330593aed9e6b"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/StrictImeWindowQuery.java": {
+      "git_bytes": 5991,
+      "git_sha256": "f440055283fb4ba5d7628868f9f98e06f707c88bb6984942b6ba9a0f4539a4ad",
+      "build_checkout_sha256": "8d14aa3fff3ba00e1d5625fe18e13a9ac12f77b11224b2384a63fb81801b81be"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/SwitcherChecks.java": {
+      "git_bytes": 4204,
+      "git_sha256": "7e58825315519ec74a639c4fab8cc49c0c60677162cdc8ab3efb82fa37ab205e",
+      "build_checkout_sha256": "22bb074a9529ea2fa6bfbea5207a71c48a6bdbde3566f43d71279673909fe155"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/TestBooleanPreferenceCheckpoint.java": {
+      "git_bytes": 3848,
+      "git_sha256": "329b761ee360e208b5a45ff4ff484687883ec33f44c3652d5ae6a6e2a281b80d",
+      "build_checkout_sha256": "ff47dbef24f7fef329173428b38718fea06708c2882d8a3906cdd86b3feef55e"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/TestCleanupSteps.java": {
+      "git_bytes": 1070,
+      "git_sha256": "8513a1a92886353156f9be224254b105e2b7b6a72876ca41ee377c83e1ceae36",
+      "build_checkout_sha256": "f4ec34248880a06468016311a76b320d325249197538ea85af041819e3754342"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/TestViewScreenBounds.java": {
+      "git_bytes": 3959,
+      "git_sha256": "7c4ae79bc0286df5f61ab0d051ee4ea7de15ed414d7907ef5dcb2731079d143d",
+      "build_checkout_sha256": "ee174db21b62d425800c2fdc8c07d035392c16e5b2a45babef408a7d563ccd93"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/ToolbarUiChecks.java": {
+      "git_bytes": 11885,
+      "git_sha256": "3a94675e7db3e57c06a477f94352ba796c593dda2d56685f1af26b0925f5e639",
+      "build_checkout_sha256": "b81094e25ac236341a218e4558f5f9e744de102eb984ad4daaa08fd2c051fa94"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/VoiceChecks.java": {
+      "git_bytes": 4846,
+      "git_sha256": "89d86fe137c3fc46565a45ef266f995cd067c3787d4637aa5553beb76f7de24a",
+      "build_checkout_sha256": "89d86fe137c3fc46565a45ef266f995cd067c3787d4637aa5553beb76f7de24a"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/VoiceHoldChecks.java": {
+      "git_bytes": 23350,
+      "git_sha256": "0dde36a86ebe2f31b54107931bfcd4b76a272b22f1d84d9b509e9b6fad85302a",
+      "build_checkout_sha256": "e6f66b18225de4a9f8027181e66e6b4afd3b0161378b196139cc4b382b818b5e"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/VoiceSessionChecks.java": {
+      "git_bytes": 4760,
+      "git_sha256": "09c40d584d9c4e671adb3891bc7ab30215cc78609758474aefd04f4b388f7b2e",
+      "build_checkout_sha256": "39619add4e9d171ddda89855ba05d4fae98b2c5a2da3dc269bf3bfc42d1ead07"
+    },
+    "android/app/src/androidTest/java/org/wangshu/ime/VoiceTouchTrace.java": {
+      "git_bytes": 2082,
+      "git_sha256": "696c2627f8e2101e22dacb271f6ae475673deeaf20934cf878816116625b60bb",
+      "build_checkout_sha256": "219fea8c4119e633315b2abcec485573f93eb238c6fbd8215f196abd7dca07cf"
+    },
+    "android/app/src/main/AndroidManifest.xml": {
+      "git_bytes": 1786,
+      "git_sha256": "9b38d41e1322b52fd45467ca77167cf0e0b787545598573829f874e080015e46",
+      "build_checkout_sha256": "532096d104156cbddf8767a21ca76065683abd2f25e2606f4f2c21e36e8c9a68"
+    },
+    "android/app/src/main/cpp/CMakeLists.txt": {
+      "git_bytes": 661,
+      "git_sha256": "86da6959ad7deac40977ca67ac8f4567814096ef2f1bd046867e87ae6c73ccb1",
+      "build_checkout_sha256": "8570901121df33c505ff8d48232e9fb2d7a2ee5d3bb7bc323c7ec2fc45bb4f86"
+    },
+    "android/app/src/main/cpp/bridge.cpp": {
+      "git_bytes": 4911,
+      "git_sha256": "9ce2cc0cf2ce8899e515b50bccaa55e4d416b8e4e41d7493ffaf4f74143f3dac",
+      "build_checkout_sha256": "9ce2cc0cf2ce8899e515b50bccaa55e4d416b8e4e41d7493ffaf4f74143f3dac"
+    },
+    "android/app/src/main/java/org/wangshu/ime/AppPreferences.java": {
+      "git_bytes": 16194,
+      "git_sha256": "dba5886fa1ec21201f72b6b70adf05b879d13bf86d572e6ef39b6e02450c10e3",
+      "build_checkout_sha256": "584576cfbd89c09317f7ccdd458bd312532125d10b2cf63097ecbf6eec0886d4"
+    },
+    "android/app/src/main/java/org/wangshu/ime/BackspaceGesture.java": {
+      "git_bytes": 5632,
+      "git_sha256": "65e9c394e3a4dceec5d49ef1d1b3a91d43c1c26f0106dadf99af5058258aff68",
+      "build_checkout_sha256": "f2dba1696e95b08c0b384ec7b0b4f48c993d760e3d015cd1c16bcd74c1f4d9db"
+    },
+    "android/app/src/main/java/org/wangshu/ime/BeforeCaretEditor.java": {
+      "git_bytes": 11642,
+      "git_sha256": "b7285eaf6643437e7047c6aedf7f308a53f0066439f110837c9b844322208f42",
+      "build_checkout_sha256": "1be1e7c78c150511238bb48babc4c91f6e0623836b75a1abd554e55567f5868d"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CandidateLearning.java": {
+      "git_bytes": 11972,
+      "git_sha256": "195e8947bdbb7792fd6f5acfec4d5ffec277756cfbba1f274cda5d6bdf0627bb",
+      "build_checkout_sha256": "7f816d3ef16350cf06cf404baa0d13cb25b1ac1b821dd5091eabb5a35f5da69a"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CandidatePages.java": {
+      "git_bytes": 7462,
+      "git_sha256": "42232dc2dd31abdc5d45f04f86c05622f78ea4007ad323918b3684d372e1d50b",
+      "build_checkout_sha256": "42232dc2dd31abdc5d45f04f86c05622f78ea4007ad323918b3684d372e1d50b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CandidateTextSize.java": {
+      "git_bytes": 874,
+      "git_sha256": "d8b660353d79aae9b1e91b101c9eaf6644f3a27aace2ff89514f56af9ac2cd84",
+      "build_checkout_sha256": "13be517cca334e584b09ba894bab7472ef04b12cecea1b2f6835905fb189babc"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CaseIcon.java": {
+      "git_bytes": 1388,
+      "git_sha256": "a699f8fd37ce34fd5dc9f421357c684a7303da330abe87a4352e3ec4a078564a",
+      "build_checkout_sha256": "4465ae490caf3efde683d7e042ac57762467944290c675e03499512b9f0720c0"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ClipboardEditActivity.java": {
+      "git_bytes": 3634,
+      "git_sha256": "1419479363117e9cc720300c8384ad373b7c075480c043808250dc48992b02e8",
+      "build_checkout_sha256": "379dba01bf19fc18bf02ad78c28da4abe51d512cd142fe445e5519360e4a3958"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ClipboardSettingsActivity.java": {
+      "git_bytes": 5132,
+      "git_sha256": "6d84109f60f1f88a5e8f54f6b4972387a8f89d8319f457c283e316e030118a9c",
+      "build_checkout_sha256": "2f68ea074c2d584e87c5c24e9087ddfd608c07e5a9659068c89d5da258b31de9"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ClipboardStore.java": {
+      "git_bytes": 10351,
+      "git_sha256": "1bb4798741357118674e27d3a281a106a217a6dd2abfc079a12d6b9e833e4eb3",
+      "build_checkout_sha256": "6e9bb8747db7e265b7e5504c48fbc890def2f3e3c33b9015f1caf2f831af3bd0"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ContextMathCandidates.java": {
+      "git_bytes": 16522,
+      "git_sha256": "36d11c79f101eeb9f36f7942506ee095920c2d7a5f2df4f71c9c50bd3f71d468",
+      "build_checkout_sha256": "cdc948fd2888d3844cde76f20c45a68ff6d2c7ce335233b3565cd4fd3c9ebf3c"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CursorControlButton.java": {
+      "git_bytes": 469,
+      "git_sha256": "cfbf7f2c194b48ed9114a7fa82096a1cf41d80268a67b6f035637f12616dcbc9",
+      "build_checkout_sha256": "94fd446b6979b5d966e252b786b1ffe0c2dc045c19c2c34cecaac0f4654871ae"
+    },
+    "android/app/src/main/java/org/wangshu/ime/CursorIcon.java": {
+      "git_bytes": 1038,
+      "git_sha256": "b4f7e24a37a295e346f8d5032fb3a96918373f2456365d2f02b775dcc6b90662",
+      "build_checkout_sha256": "bd84704aaeea945b2710705f88d82ce14ea44204bbea6825f760c4803039a443"
+    },
+    "android/app/src/main/java/org/wangshu/ime/DataFiles.java": {
+      "git_bytes": 2035,
+      "git_sha256": "36c40723e8b16cff8301d955af2945b3c588a23ee74171ead57f2bf692d93596",
+      "build_checkout_sha256": "08e2f0cec01a2a33ba5173def2a1c399044dffe581d79a97341eb4618e68741b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EditorActions.java": {
+      "git_bytes": 11915,
+      "git_sha256": "9115d58c7ef41773ec76d0b2c45a293eaebd6caaa00327dff56397eb52359bbf",
+      "build_checkout_sha256": "9115d58c7ef41773ec76d0b2c45a293eaebd6caaa00327dff56397eb52359bbf"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiCatalog.java": {
+      "git_bytes": 8580,
+      "git_sha256": "c351dff41f848a3bdc1acce7cea51fc8bbace370ce96d5ba2ade6458db1b8e32",
+      "build_checkout_sha256": "6e26a7d03d650c66f9e34923372a64610ea63272b048baec1d918d40f74a5f47"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiPanel.java": {
+      "git_bytes": 10575,
+      "git_sha256": "ead4aaf2ec1db63884d8f7f0d275b2bf7dd0a830be4ff20e1ff665b5dfd83512",
+      "build_checkout_sha256": "9104a70742252f260eba5a375d49e78e42a3be11b17eaa10d95aa973681b9d7b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiPinyin.java": {
+      "git_bytes": 8793,
+      "git_sha256": "9a39a58da6a39ca0a6cdaf8cde6412df3637ecd633f3ebe79ad2521c03b67df5",
+      "build_checkout_sha256": "9a39a58da6a39ca0a6cdaf8cde6412df3637ecd633f3ebe79ad2521c03b67df5"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiScrollMemory.java": {
+      "git_bytes": 1021,
+      "git_sha256": "d31d206750ad19d65416b0bb87ce3e2fd53f5585d62056a6cda8719e460b4cc0",
+      "build_checkout_sha256": "dffdb04962f266fea2d621f7779888ffe60a0cad2442acde59120b234f5793c0"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiSearchQuery.java": {
+      "git_bytes": 1315,
+      "git_sha256": "35487fcaa665bd65319b5abcc5a2330ce1af7b1f8075a20b94d82ea2cae6b8b5",
+      "build_checkout_sha256": "35487fcaa665bd65319b5abcc5a2330ce1af7b1f8075a20b94d82ea2cae6b8b5"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EmojiSelection.java": {
+      "git_bytes": 2179,
+      "git_sha256": "fa6b117e9a54f4447b27113fb53002d115ba3bfd4a2871cd4b635ef28060f8d2",
+      "build_checkout_sha256": "0b48dbf6e6af7bf5a2a852b3776216c0684029a009b59a59688ced721a50867b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EnterPolicy.java": {
+      "git_bytes": 639,
+      "git_sha256": "1244e02f944e354db1890e2bc493ce1eb2d87835fe64562983c5cee07d9f848c",
+      "build_checkout_sha256": "13b989f4305f930baa986e34836ca3fd815707d6092dadbb738caa813422a2ad"
+    },
+    "android/app/src/main/java/org/wangshu/ime/EnterSequenceTracker.java": {
+      "git_bytes": 967,
+      "git_sha256": "d3e7e2d417ae23f1995f32ff577ba85754b61203e59bffd106ba74629e19a12f",
+      "build_checkout_sha256": "c7f0750d88ffda18a9585a9dc4b5de517e8e4d357d2b8f43a323622fade44892"
+    },
+    "android/app/src/main/java/org/wangshu/ime/FuzzyPinyin.java": {
+      "git_bytes": 11387,
+      "git_sha256": "5e6ee9795218c95360353a4e5d9e5d5b5a4b112479d9ab544e0947e6e8fe14f4",
+      "build_checkout_sha256": "27795bde49fe45aac0c0b23a81df89a729a9935f70534f89387e823cf34a119b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/FuzzySettingsActivity.java": {
+      "git_bytes": 6778,
+      "git_sha256": "d57d3da9069d540ade33e87c1c9ff82c99383228079f7d5207e1bf84b694fde7",
+      "build_checkout_sha256": "443612f7737d833526413f694eda9332bcd6ed127e40b4428f80e0a79a157b14"
+    },
+    "android/app/src/main/java/org/wangshu/ime/GlyphKey.java": {
+      "git_bytes": 1442,
+      "git_sha256": "f0780cac865f2519753b615c0f0989c87be6a1dea41f91e37fbeba1630ec161c",
+      "build_checkout_sha256": "749bd2c0c0e21000ed98f330a965c6e6eeb14841d5c9b3723b810611b192eb27"
+    },
+    "android/app/src/main/java/org/wangshu/ime/KeyboardSkin.java": {
+      "git_bytes": 2020,
+      "git_sha256": "c39fe4268da369739896ba2fabd9c5ebd1a04a89d94c613bea99ff96d9a3f86f",
+      "build_checkout_sha256": "b9a2062f7be2e828ad0d08c8bd8c1868becc841bb8e177e44f48b9a43cda15c2"
+    },
+    "android/app/src/main/java/org/wangshu/ime/LandscapeKeyboardViewport.java": {
+      "git_bytes": 3812,
+      "git_sha256": "db764918ce62867212f6e395d74138713270b896db30e9abe234bfa9c0d92c22",
+      "build_checkout_sha256": "db764918ce62867212f6e395d74138713270b896db30e9abe234bfa9c0d92c22"
+    },
+    "android/app/src/main/java/org/wangshu/ime/LanguageKeyPosition.java": {
+      "git_bytes": 519,
+      "git_sha256": "6e61eaa2b535f5cd63cb3be0f00ec1c76ad2a2481c35fd52b855338e0f8ebede",
+      "build_checkout_sha256": "cbc5014f0ffe6e15801dbae68abcaeac6e4abccff3d1c76a820f159f1ddaced8"
+    },
+    "android/app/src/main/java/org/wangshu/ime/LearningSettingsActivity.java": {
+      "git_bytes": 5070,
+      "git_sha256": "4a6c6af3e9bead9848e94a75a6940bbfc67bdbb618f2280d0524d32074be24df",
+      "build_checkout_sha256": "715fe4c8bc72b77e7e37dc99fe76280a9eb06e686bb835b7601636c5b649ff32"
+    },
+    "android/app/src/main/java/org/wangshu/ime/LearningStore.java": {
+      "git_bytes": 12317,
+      "git_sha256": "1b9a1317e2e7c8ab6c31ac39f10eb852d4be13c0d86364ad1e8cc5d79f34ff21",
+      "build_checkout_sha256": "a4d1e7982d53f54c863fc71b4618c32aaccb1d33406db8a150a394106a6e52dc"
+    },
+    "android/app/src/main/java/org/wangshu/ime/MathAssociation.java": {
+      "git_bytes": 8138,
+      "git_sha256": "4b57db096d45682c77f8fde6fb56667314b7e0516da3a89d2dfcd2fd5c04bdc6",
+      "build_checkout_sha256": "ccc6bf62e947b45f9bb1e5617d39a0ce7b94c0ce27bee0ff5fd0619b7e06447a"
+    },
+    "android/app/src/main/java/org/wangshu/ime/MathSidebar.java": {
+      "git_bytes": 1093,
+      "git_sha256": "e04da3506d0507d9b3a3534dbc0237015c99e17c753e994341ad712807a1b358",
+      "build_checkout_sha256": "a9a3c766dc3682cc1837aed2316347951126836c75926ba02d4e01c77ee0f340"
+    },
+    "android/app/src/main/java/org/wangshu/ime/MixedComposition.java": {
+      "git_bytes": 741,
+      "git_sha256": "2380f3f25f28c5d3582ff39afdda01a14f0987eb88c7b7ce2aef7c752a6d51b6",
+      "build_checkout_sha256": "7032e23017afdca60e041823123f7a18e3489cb5e28ebbc588c6eff913cd0558"
+    },
+    "android/app/src/main/java/org/wangshu/ime/NativeBridge.java": {
+      "git_bytes": 542,
+      "git_sha256": "f0cd2789bbbbdd280da184d60e222ddf4a5eab510f0edaa3ba9ecb2080290617",
+      "build_checkout_sha256": "f0cd2789bbbbdd280da184d60e222ddf4a5eab510f0edaa3ba9ecb2080290617"
+    },
+    "android/app/src/main/java/org/wangshu/ime/OfflineVoice.java": {
+      "git_bytes": 9473,
+      "git_sha256": "5635c4b5b752b6acc7b695dc20979218c6a4e0a781ec9325c757888976d9743b",
+      "build_checkout_sha256": "5635c4b5b752b6acc7b695dc20979218c6a4e0a781ec9325c757888976d9743b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PendingTextCommit.java": {
+      "git_bytes": 2279,
+      "git_sha256": "9b811e5cd33706aee193210f6d78c32fa417b7c8188ff83e984ddeca4e8c963b",
+      "build_checkout_sha256": "7cad8505e847c61884e51efafcb2908d03b81c3fa1aa84d442dfe19556ffbe21"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalActivity.java": {
+      "git_bytes": 19921,
+      "git_sha256": "19028e88a74cabe6b97174e5d8e45fa2bc9b7c35c3bfa548d6d564a63963185b",
+      "build_checkout_sha256": "6ae402a863ad1ce65c5c4f50e92e1fd199be3ca5140a7e46794518f7a5c56b9b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalPanel.java": {
+      "git_bytes": 13111,
+      "git_sha256": "12c132279283acd80c6471a3e0cbdd2184c69612258e28f7fabeb40bd51986d3",
+      "build_checkout_sha256": "27439efdaa3f040771d533e63dd4d039c92c2eabf564c0e87ecfd586bc0a1959"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalPhraseAssociation.java": {
+      "git_bytes": 15594,
+      "git_sha256": "0229ecb8179560e3c96e2a085bfda23c607dc7c2c16dc64931ac6532282e983c",
+      "build_checkout_sha256": "0229ecb8179560e3c96e2a085bfda23c607dc7c2c16dc64931ac6532282e983c"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalPhraseSuggestions.java": {
+      "git_bytes": 6126,
+      "git_sha256": "3b113d0d67969f6ae96d25fd5cbf03ab00516279f59baae9a6a000e5fa869a5b",
+      "build_checkout_sha256": "bb387c35e6210993f9cbe10d68d5fca7bf86e6ee446c901f8620d432b13e080f"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalRecoveryFiles.java": {
+      "git_bytes": 10320,
+      "git_sha256": "4c7bce00d22f74af65fe14c2c04e52ef0b2756e57c967fd585c0f0c1b2b0a6f7",
+      "build_checkout_sha256": "4c7bce00d22f74af65fe14c2c04e52ef0b2756e57c967fd585c0f0c1b2b0a6f7"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PersonalStore.java": {
+      "git_bytes": 24979,
+      "git_sha256": "9ed094614c07cfb8cee3a9ce32a98745b6db0f2586bd34264a1db14c1c9d4694",
+      "build_checkout_sha256": "9ed094614c07cfb8cee3a9ce32a98745b6db0f2586bd34264a1db14c1c9d4694"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PinyinDisplayPosition.java": {
+      "git_bytes": 525,
+      "git_sha256": "b98b49d54e27db6b6720d5e7f9454f0c1c46083c260f45efb9654464fed18856",
+      "build_checkout_sha256": "e5472cbb4fa8452c75ee8fcc3f3aac1c13eb0a8b71a2a21a2b8bfdd8cb064fa7"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PreeditSelection.java": {
+      "git_bytes": 1909,
+      "git_sha256": "6b956dd5d78dbe0987f5a602d34a448134e82a6b671eed4997548882774a95c5",
+      "build_checkout_sha256": "6b956dd5d78dbe0987f5a602d34a448134e82a6b671eed4997548882774a95c5"
+    },
+    "android/app/src/main/java/org/wangshu/ime/PreviewFeatures.java": {
+      "git_bytes": 1747,
+      "git_sha256": "33d947c298400040e68d38e7748dc464dfac6c7a9349feb4e74e038616aa31de",
+      "build_checkout_sha256": "e6c593af9dda2b069fb06038fd7b63cc89f958c51b63a7ffcbf0c3989998750e"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SegmentKeyState.java": {
+      "git_bytes": 679,
+      "git_sha256": "b71c4364218f494c4c07f6ea2f3d136831088e1cbb30308d34202c0d8dfe3c9c",
+      "build_checkout_sha256": "2b081d4a62931d4992ee93e93cc55058c127497ec6fbf4106644a4a43af2e0aa"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SettingsActivity.java": {
+      "git_bytes": 31634,
+      "git_sha256": "4692196bc330f2a912bd4b11e3f69d137acf50512792ef7ac6ca891c30a571e3",
+      "build_checkout_sha256": "4692196bc330f2a912bd4b11e3f69d137acf50512792ef7ac6ca891c30a571e3"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SettingsBackup.java": {
+      "git_bytes": 11366,
+      "git_sha256": "f14b8b281dc0d6a42ff3e85dcb3cb54530eca3d66f30d0375baed9f3b13d1981",
+      "build_checkout_sha256": "f14b8b281dc0d6a42ff3e85dcb3cb54530eca3d66f30d0375baed9f3b13d1981"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SettingsBackupActivity.java": {
+      "git_bytes": 14282,
+      "git_sha256": "c858dc23f72d93d272e438e51ecb83db97b1dd6a20797e2c6824be7ee5325653",
+      "build_checkout_sha256": "c858dc23f72d93d272e438e51ecb83db97b1dd6a20797e2c6824be7ee5325653"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SettingsRecoveryFiles.java": {
+      "git_bytes": 8949,
+      "git_sha256": "b18e1689e892893cbc297005a65fe1c094ee7b6e6738c2d89affa85903d55964",
+      "build_checkout_sha256": "2cb1d16ec5e333444d5c066dbb951d25128bc853da2905ed0e213ae05b2e8b66"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SplitSelection.java": {
+      "git_bytes": 4416,
+      "git_sha256": "2e664f35fac21cd2aae44e27247979d31efa37fee99b928b314e5a05f75ec695",
+      "build_checkout_sha256": "aaa7c110a9ac2e0d4afa4eedcb61af967733ff639fa5a06dfbda03bedbe7ecb2"
+    },
+    "android/app/src/main/java/org/wangshu/ime/SymbolPanelCatalog.java": {
+      "git_bytes": 2529,
+      "git_sha256": "10388f36f2b5eaa2e2243ea2f2f325d5667ec0838f2f851719159ab42269bcab",
+      "build_checkout_sha256": "59b5d63ddab040847ca7c2fc041c45f934cedd91c09ca4931bb0d76b47aab162"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ThemeBars.java": {
+      "git_bytes": 982,
+      "git_sha256": "54b6e7b704292f7ca851a6434724e39475882d64aaded35fc81b142e03a89075",
+      "build_checkout_sha256": "95cbde0945a34ffd780f18626fa3414f5408d5bfb1190a2dafbdfc6acf475400"
+    },
+    "android/app/src/main/java/org/wangshu/ime/ToolbarIcon.java": {
+      "git_bytes": 2924,
+      "git_sha256": "f9c7ad8e816218773382b6c3c32a15377859fa54e4ab616ba0d55fd6ba88aa06",
+      "build_checkout_sha256": "9d2f5188b6be66ceef38e51e16e0e932fdbe6e207638c3f2dfb6647b9189ad9c"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceCommitUndo.java": {
+      "git_bytes": 1751,
+      "git_sha256": "089d23c04c137515e0de11c35a3337a6f2632829669310b6937439946bdea9da",
+      "build_checkout_sha256": "089d23c04c137515e0de11c35a3337a6f2632829669310b6937439946bdea9da"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceHoldController.java": {
+      "git_bytes": 11201,
+      "git_sha256": "49033502ae777e2f0a18def31cacdbc491e259b3fc90fec9052d1b6283d744db",
+      "build_checkout_sha256": "d5c380cb9d6957a72dd542da6a3ee6d392c276e8073435e7012e2b8422be47a3"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceHoldOverlay.java": {
+      "git_bytes": 8481,
+      "git_sha256": "5d8bad97c27e0e6100c11390e0abec65a2a2122526a11b0a416849729c16492b",
+      "build_checkout_sha256": "5d8bad97c27e0e6100c11390e0abec65a2a2122526a11b0a416849729c16492b"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceHoldSettings.java": {
+      "git_bytes": 953,
+      "git_sha256": "d0e19ab4401b70b720d8962bce437118c98343fd458af8ba24fba11038c07bd1",
+      "build_checkout_sha256": "259f4d84111e9f4e2b31f800879196a5ce41d276e9b2075110a0580ed7120e68"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceHoldTouchSurface.java": {
+      "git_bytes": 6916,
+      "git_sha256": "652049ec65cf92ecd0763bd231fb5bdb8185723266caccd0e30529a1d43ef211",
+      "build_checkout_sha256": "652049ec65cf92ecd0763bd231fb5bdb8185723266caccd0e30529a1d43ef211"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceModels.java": {
+      "git_bytes": 4985,
+      "git_sha256": "2a1933c85e4e0d9cff26080a30fec0b0f368de380b84ffbedb45dbf1bba76bb0",
+      "build_checkout_sha256": "f8d57ba4c2302e576ae9bdca7585e704d8c0751580e2a737a91a1c7425553849"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceNumberFormat.java": {
+      "git_bytes": 7425,
+      "git_sha256": "7e6f363b708cf6914ed21a1725d4c7a57206350467f57ec35586226df7c30d9d",
+      "build_checkout_sha256": "7e6f363b708cf6914ed21a1725d4c7a57206350467f57ec35586226df7c30d9d"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoicePreviewDelivery.java": {
+      "git_bytes": 1078,
+      "git_sha256": "57446181dbfb0cb5376bf3178628915cf72c280bd50d03b1e9ecc35c89c7d06f",
+      "build_checkout_sha256": "57446181dbfb0cb5376bf3178628915cf72c280bd50d03b1e9ecc35c89c7d06f"
+    },
+    "android/app/src/main/java/org/wangshu/ime/VoiceResultPolicy.java": {
+      "git_bytes": 999,
+      "git_sha256": "e9b9a8b01a0fd45193bd81244d6a4bda0891b5c4c2c67cc895d4c3205de7a5eb",
+      "build_checkout_sha256": "e9b9a8b01a0fd45193bd81244d6a4bda0891b5c4c2c67cc895d4c3205de7a5eb"
+    },
+    "android/app/src/main/java/org/wangshu/ime/WangshuIme.java": {
+      "git_bytes": 142539,
+      "git_sha256": "86fc5c550e3872e66159d1d6bde3d5fc29ca51f20ebdefd69e286e1bf18b1c9d",
+      "build_checkout_sha256": "86fc5c550e3872e66159d1d6bde3d5fc29ca51f20ebdefd69e286e1bf18b1c9d"
+    },
+    "android/app/src/main/res/drawable/ic_ime.xml": {
+      "git_bytes": 473,
+      "git_sha256": "8e3448005379b5f9b73a8d090d96c4e67ba9dee92a53c9cfe6491bd96d3f0366",
+      "build_checkout_sha256": "1135dac502fab9b4b8af586cc08b7b7107f14123fee5b28a0c11d79e5b4392aa"
+    },
+    "android/app/src/main/res/values-night-v27/styles.xml": {
+      "git_bytes": 144,
+      "git_sha256": "ce7c29251951183399cf2147e8c7479bdc34b239998749479ec60236392dd682",
+      "build_checkout_sha256": "e77dd2ac90783bd5235c44898c634e87edccf1363c127f5d0681b6525f5edf82"
+    },
+    "android/app/src/main/res/values-night/colors.xml": {
+      "git_bytes": 316,
+      "git_sha256": "92605416867fc7ba7c26361e9b8ff21dbad0ead2a44c4827d0a93baab109f9cc",
+      "build_checkout_sha256": "a3e4a897dcde6a9b5222aaa24372ed49389e3853cb33616fd3aa1a9b250240d3"
+    },
+    "android/app/src/main/res/values-night/styles.xml": {
+      "git_bytes": 734,
+      "git_sha256": "1c5f173a2600b7432662d5abe109dac74a8229408ae2a75d17bfad9645d38bb6",
+      "build_checkout_sha256": "f16fbba0841f875fd5d8ac98a7157bb41a494bf83bb9b7f1314ebfaaf2aba465"
+    },
+    "android/app/src/main/res/values-v27/styles.xml": {
+      "git_bytes": 231,
+      "git_sha256": "07c035938c395aa8f17fdc1491fd6d0cf7d203e7c900978eb2e240c11a29ad9e",
+      "build_checkout_sha256": "2d90ca9a27f7b61e509ec9f2f982d66c4a48689ce9d0a635d60028d2c59091d7"
+    },
+    "android/app/src/main/res/values/colors.xml": {
+      "git_bytes": 316,
+      "git_sha256": "536ae69549cc31167b4732400a4c499a43ecb1ca68eb8bdd7f4b30c99728e623",
+      "build_checkout_sha256": "47e32211731fb8ed76cbd749e86b1e1a4de4144c0a5ce7a6888eb785c859e84d"
+    },
+    "android/app/src/main/res/values/ids.xml": {
+      "git_bytes": 61,
+      "git_sha256": "ea7de1a35f2a927eb51b2f23ef9d441835bdbf36559098a47b93a25021d00c4e",
+      "build_checkout_sha256": "ea9e4995b2adf3c00b62919d9e0a36bc524c70a29cf17f8791555d5d75a3e4d5"
+    },
+    "android/app/src/main/res/values/strings.xml": {
+      "git_bytes": 2271,
+      "git_sha256": "d7c9d584b50ce436eddeebcb9b4ac16a1de8ed999b0bc73813f8c3c7a7ac1dce",
+      "build_checkout_sha256": "d7c9d584b50ce436eddeebcb9b4ac16a1de8ed999b0bc73813f8c3c7a7ac1dce"
+    },
+    "android/app/src/main/res/values/styles.xml": {
+      "git_bytes": 911,
+      "git_sha256": "71143356a549752775888314be212cb564e35cfc11683698770202ee5e8096ce",
+      "build_checkout_sha256": "7ac191219db71797e2430ff9e4a77bbc005f8f77f44ad45ae35b53b34d6b54ae"
+    },
+    "android/app/src/main/res/xml/backup_rules.xml": {
+      "git_bytes": 583,
+      "git_sha256": "d1e9c1966ac454ab40ac14a372e3a0cefa359ce35ff2f345303ddf0eb711accc",
+      "build_checkout_sha256": "b509ef8c64f064fbef46409e52413e870ec7994ba75fb7ff27c6662f726b9160"
+    },
+    "android/app/src/main/res/xml/data_extraction_rules.xml": {
+      "git_bytes": 1074,
+      "git_sha256": "8bd865aaeca072a466dd18ab137c89ab1840a3c02ebbc6cd7d2cbe72e5bc8e4f",
+      "build_checkout_sha256": "3828bea178c63d1996b718c0303c57af2491c69943febb4a4cbb6327973606f0"
+    },
+    "android/app/src/main/res/xml/method.xml": {
+      "git_bytes": 380,
+      "git_sha256": "67cbd64fc65605f9841df0745654b40b099b8bd35b7929151ca3bf4427b9bc9a",
+      "build_checkout_sha256": "e909a336d8d92c65f64bb0b1cf14f9e28c1a5c44d1aed8e2326a94e0952b92e4"
+    },
+    "android/app/src/typingPreview/AndroidManifest.xml": {
+      "git_bytes": 481,
+      "git_sha256": "f27eebc722f3186f508a8bf94fd6523b2c6f24392ca53e3f413c50766c594fb5",
+      "build_checkout_sha256": "1c5c477c0a1cc05ea2a881fd0f99ac51a7d587f99dbd535750a6d765d9890167"
+    },
+    "android/app/src/typingPreview/java/org/wangshu/ime/OfflineVoice.java": {
+      "git_bytes": 1399,
+      "git_sha256": "228b9b21572053d095ea002ac727f8852ca17116772be7f31d395d3258e433c8",
+      "build_checkout_sha256": "228b9b21572053d095ea002ac727f8852ca17116772be7f31d395d3258e433c8"
+    },
+    "android/app/src/typingPreview/res/values/strings.xml": {
+      "git_bytes": 258,
+      "git_sha256": "7a7e82777d54e822893f10a714e4ab3469c1a9ed1f953b293d3d2b539268c07c",
+      "build_checkout_sha256": "fbf96cf83699021b8f4a998f1992b1a8f1b4d219c7c498dbf6d399bd3ec67043"
+    },
+    "android/build.gradle": {
+      "git_bytes": 70,
+      "git_sha256": "96a33edb21d173da2c36f5312f50cdfb9f71d9f5078c081c81f2d029547f6cb9",
+      "build_checkout_sha256": "c8a3739e5d8c03da04a53dc3aab16abd101c23483a1351805dc5c8cf7f3a5e89"
+    },
+    "android/gradle.properties": {
+      "git_bytes": 230,
+      "git_sha256": "d601b055b48a4ccde4266800ec81b0c9983aecb45902b6f5c9be1dcf4b2c6ea9",
+      "build_checkout_sha256": "9cbef4cba38c28887d2d45e31cde3c1c228375f018c8d8060801512f074aecfd"
+    },
+    "android/host-tests/association-cancel-20261101/AssociationCancellationChecks.java": {
+      "git_bytes": 15601,
+      "git_sha256": "815267fcb90c1ad6162d3437c6bfae023e10d1b81993f40f321f1e007a0f23c4",
+      "build_checkout_sha256": "47df62d701a303b03ec35e2ff653e0222e914716f456f17bf5d1d17e6079da68"
+    },
+    "android/host-tests/association-cancel-20261101/DrainRaceChecks.java.in": {
+      "git_bytes": 5932,
+      "git_sha256": "c6371429c512b18c601b50b7d9691e4df696b200cc1af6a0286a7861849c4a04",
+      "build_checkout_sha256": "dcb5bc1ee9fc09653ec7a5b88fcea0c037c7c072e7b7dda00f53ffebb9f392f7"
+    },
+    "android/host-tests/association-cancel-20261101/README.md": {
+      "git_bytes": 2992,
+      "git_sha256": "58d0b895ae9beb5843246a308fe8c8efab1ccb43d0f5be8182016eb0dcf4880f",
+      "build_checkout_sha256": "fa7880976c0670a8ca78fbad28065bb8b3c7b6075d5ab40687742ebecddcf79f"
+    },
+    "android/host-tests/association-cancel-20261101/drain_race.py": {
+      "git_bytes": 1855,
+      "git_sha256": "322d22befc9a7eac2c1e5f3703a4e7fa28c34565a37cf99d04d2784d8e813595",
+      "build_checkout_sha256": "5341521bf7609c370245dcff0b01be0e8c7c1d403508c9194f3cabb2672c3a17"
+    },
+    "android/host-tests/association-cancel-20261101/run.py": {
+      "git_bytes": 4475,
+      "git_sha256": "c59ab7624ee0e5d3cd74bba6614c4fb55d9b81277885beab8aacefce01cae77c",
+      "build_checkout_sha256": "21ca6f1d59c3f841dc06f56ff6cba6e2fcb02dd920e09830489427eba5b986fa"
+    },
+    "android/host-tests/batch-cleanup-20261101/BatchCleanupChecks.java.in": {
+      "git_bytes": 8396,
+      "git_sha256": "79d82cb816db066f0ffea2ccebb765ce53a50e1759fdd2db590f6d35ca499c12",
+      "build_checkout_sha256": "a7a90951753ab61c24c73790b5c873f75e9fcb3f7a83362458ed2dae64d9dd6f"
+    },
+    "android/host-tests/batch-cleanup-20261101/README.md": {
+      "git_bytes": 2907,
+      "git_sha256": "a6d1e506f0ff579f5bb70784c550dd0b91138863e27e245849b0674743f20674",
+      "build_checkout_sha256": "db219251aee4b5ec59ce20294ded25d6dc3ab9b4b0c8e8fe148477999eb149cb"
+    },
+    "android/host-tests/batch-cleanup-20261101/run.py": {
+      "git_bytes": 2204,
+      "git_sha256": "bab32f918cdf21412e8ef273ceebd96dd8d250768bc072d579bdf58116343dd3",
+      "build_checkout_sha256": "3ce2a913cc68271c604754f01b964a9e3e858caec340a2409fc3d38873ff4959"
+    },
+    "android/host-tests/chromium-editor-20261104/ChromeChecks.java": {
+      "git_bytes": 14538,
+      "git_sha256": "6f3f44a9e0bb4d00afbc661d67a31b723b6c739a3aaa3d50de8032c2f111f8ed",
+      "build_checkout_sha256": "d9e7018e484e405d44d38973b05604b37a084b791ea05d543e82f4fd6ee6e6f7"
+    },
+    "android/host-tests/chromium-editor-20261104/README.md": {
+      "git_bytes": 2673,
+      "git_sha256": "22a1549c94f11a1102ded976fe0183922771f8dc4e74b2fed18ecdbce445d09b",
+      "build_checkout_sha256": "51d022d50f9c40115a57be36aa4fb02cca266e3f4636a7aa4d40a172ac0dc89e"
+    },
+    "android/host-tests/chromium-editor-20261104/Service.java.in": {
+      "git_bytes": 5423,
+      "git_sha256": "166b00cd319015f29a55e0f4f192b0066055420ab44cbd43ce6473176e5cabd5",
+      "build_checkout_sha256": "38bdbfd3c38b954b114f9b32e71de9d499f561d74829d421bff3000ab907e902"
+    },
+    "android/host-tests/chromium-editor-20261104/run.py": {
+      "git_bytes": 5758,
+      "git_sha256": "ccff489a45e2b18f944aa5fd6bfe78ca38d7f1e4a2bc72a188d73f212cbb8b5d",
+      "build_checkout_sha256": "57d4020cd0e0c4ebfded1ce553163d1a0471de410b4c6b9cbc27c088b804e8d0"
+    },
+    "android/host-tests/clipboard-atomic-audit-20261101/MemoryRunner.java": {
+      "git_bytes": 3436,
+      "git_sha256": "4c84c631934cc827a6114b995c59ac5577a2d4f0eccc4c97c9c015b92481046c",
+      "build_checkout_sha256": "d3d40590c630271b1c6d2f0c55ad8ebbc60b8f23ace5d8ed4bdaf7f52c3abf6a"
+    },
+    "android/host-tests/clipboard-atomic-audit-20261101/guard_model.py": {
+      "git_bytes": 4363,
+      "git_sha256": "bb52fc04b3a7c300c0a756dc301192d55ee821d8aa8e729162c58f991b481a4c",
+      "build_checkout_sha256": "22c4131c636e4637bf64cfbbfe61200bf67cd607a9e99058d3f63e5daf417c81"
+    },
+    "android/host-tests/clipboard-atomic-audit-20261101/minimal_detection_model.py": {
+      "git_bytes": 1570,
+      "git_sha256": "3b66df0b2b93fc86e739480692724bfb23d459ebd4d5d5b0f1a6a9d5963a22d3",
+      "build_checkout_sha256": "6574eaa3a1e2b3e3a088578c3f9a2d18cb9386cdbfe4f54a19046fb1fa22c8bc"
+    },
+    "android/host-tests/clipboard-atomic-audit-20261101/persistent_fake.py": {
+      "git_bytes": 1206,
+      "git_sha256": "366c19ef23abbc29448f34ea0374608bf31493a49fec70c495373dbc27e57193",
+      "build_checkout_sha256": "bc2f615e270ebf83052e41d0edb575539be27c5123622d8dbc3dfc295e0c425c"
+    },
+    "android/host-tests/clipboard-extracted-clear-20261101/MemoryRunner.java": {
+      "git_bytes": 3787,
+      "git_sha256": "ed2165fbad948cbbf26059095c931364b6bfeb620d74c3cefb5dd16de6fd29c1",
+      "build_checkout_sha256": "78caf88a4d9e21cada7d87f698da01222bc23bb29ca436daa524aa302ef6ac0c"
+    },
+    "android/host-tests/clipboard-guard-20261101/MemoryRunner.java": {
+      "git_bytes": 4962,
+      "git_sha256": "eb99a0462d11298002009aaa9872884048a264e666fc14ff05290a33a9c13364",
+      "build_checkout_sha256": "37070aabc4812a88379c460c55858f113ffbf9fb89a281e3e2da81d85971167e"
+    },
+    "android/host-tests/clipboard-guard-20261101/ProcessRunner.java": {
+      "git_bytes": 3391,
+      "git_sha256": "38aaf8393aff3ddffab5257cb9b5f8292041c2d972b5d1b38a7c2402810ae20e",
+      "build_checkout_sha256": "12aa99e30b19ae5342a0488c68dc96eb736b305319983399fe6069d09a548271"
+    },
+    "android/host-tests/clipboard-guard-20261101/RawFileRunner.java": {
+      "git_bytes": 2963,
+      "git_sha256": "140ff6a070b4ed96d2315960121aa49db5c48789d8ae468cb6a07c17c2e41147",
+      "build_checkout_sha256": "e6c2ba5935c35283109c896f1c03e11b95a2e56ced991c21f4a8d19f8316a283"
+    },
+    "android/host-tests/clipboard-guard-20261101/run_capture.py": {
+      "git_bytes": 3616,
+      "git_sha256": "6e2ecfb7704f6fc1e66025d50164b95164e6293a382ca5653c721ac898ff127d",
+      "build_checkout_sha256": "3a4c5fa02f9494b9867af39c7e6852273da27443f71ee789978155c8c31a5232"
+    },
+    "android/host-tests/displayed-editor-actions-20261118/DisplayedEditorActions.java.in": {
+      "git_bytes": 6971,
+      "git_sha256": "5d0f662d9ad9a188737822a945c0bd3c49583bf6ff5a3042b89797c50c76fb21",
+      "build_checkout_sha256": "5d0f662d9ad9a188737822a945c0bd3c49583bf6ff5a3042b89797c50c76fb21"
+    },
+    "android/host-tests/displayed-editor-actions-20261118/run.py": {
+      "git_bytes": 2215,
+      "git_sha256": "e3944d8ba1ca28b0444f3d5fa793e8d5fb9f501fcc4aeb0a005f23561d267363",
+      "build_checkout_sha256": "e3944d8ba1ca28b0444f3d5fa793e8d5fb9f501fcc4aeb0a005f23561d267363"
+    },
+    "android/host-tests/editor-boundary-20261103/BeforeCaretBoundaryChecks.java": {
+      "git_bytes": 5100,
+      "git_sha256": "60f7f04889fcc56989101539d99a560df3c28768c6f5125c3318a575bb2ab30f",
+      "build_checkout_sha256": "2f6ec03ec60c554345f47c6c0a6fcd9caf69cda5868f26e4bf79eabe4bb33e5e"
+    },
+    "android/host-tests/editor-boundary-20261103/CaptureBoundaryChecks.java.in": {
+      "git_bytes": 5107,
+      "git_sha256": "4468445454a0e2dd9fb30932e88aff1008c5c376c74329d6e409f57574036519",
+      "build_checkout_sha256": "8bcc696fc51191b1637927e612108864037053dbb64209171b939d96fc87d16e"
+    },
+    "android/host-tests/editor-boundary-20261103/ClipboardPolicyChecks.java.in": {
+      "git_bytes": 2220,
+      "git_sha256": "0de1eda612729f2266d0da03dda7895d7f96a52e88965a21055025dcc85ea0e6",
+      "build_checkout_sha256": "66658ec9f016378e3a2193e2b45e28080049ca57030fde1d0ff15c223cbeffee"
+    },
+    "android/host-tests/editor-boundary-20261103/EditorBoundaryChecks.java": {
+      "git_bytes": 17194,
+      "git_sha256": "37ef6621d820641f598e51ba55406e5533c1314bb482294cc486ce8bfe4beb55",
+      "build_checkout_sha256": "37ef6621d820641f598e51ba55406e5533c1314bb482294cc486ce8bfe4beb55"
+    },
+    "android/host-tests/editor-boundary-20261103/README.md": {
+      "git_bytes": 5498,
+      "git_sha256": "743aa489794cb31bb558bdd8cc60bd8c193fad2d4a920190ce3fbd0d00a2c3e7",
+      "build_checkout_sha256": "856f116310bdf991da4beb19d6eaa64226cb19f5269707fe296d31506d7c6501"
+    },
+    "android/host-tests/editor-boundary-20261103/SettingsBoundaryChecks.java": {
+      "git_bytes": 3272,
+      "git_sha256": "4b6fdc42501d74bf5ea04af10d6090f20f1c481031b4dc3365bb1469762dc65d",
+      "build_checkout_sha256": "4b6fdc42501d74bf5ea04af10d6090f20f1c481031b4dc3365bb1469762dc65d"
+    },
+    "android/host-tests/editor-boundary-20261103/SymbolBoundaryChecks.java": {
+      "git_bytes": 4555,
+      "git_sha256": "45f7b1ff7dca4a65531f544f6defee007f739f959ff81376e3a7b43fae3e7d70",
+      "build_checkout_sha256": "afad68acb22f6c76f6f3cb499c4fc480ef616fb17b52bc8466d26e7b5f01ffb1"
+    },
+    "android/host-tests/editor-boundary-20261103/run.py": {
+      "git_bytes": 6747,
+      "git_sha256": "b0c31b190d2d1503d43845d00a1ada34a032f86946557426f36c59d15db92112",
+      "build_checkout_sha256": "1380085707c088a7d383ab818ccb55872cd8a885b6eedb4e2bd452d1e4b580d8"
+    },
+    "android/host-tests/editor-boundary-20261103/run_clipboard.py": {
+      "git_bytes": 4733,
+      "git_sha256": "2b7460c8e46f94352d307c3fad962a7691fc3e2d8227dbf29ca98615201cb393",
+      "build_checkout_sha256": "d59d6b5489f2ef9c04da8c468d9a850ea707e8379bc4d6f5d58e216a3345cd49"
+    },
+    "android/host-tests/editor-boundary-20261103/run_settings.py": {
+      "git_bytes": 2173,
+      "git_sha256": "59588157199dfe0ca492c8427fdbcf7949efa3b002e77e4d41557e4b7ff07da7",
+      "build_checkout_sha256": "9273e85fd2843ad3b00e50e0f34bc5603b134368f9798771db080b3bba66921d"
+    },
+    "android/host-tests/editor-switch-red-20261101/EditorSwitchRed.java": {
+      "git_bytes": 2808,
+      "git_sha256": "66b5723446b4d84c91d0c4f4059e22a0b9eb27c913ab013413ba9f1ac9100c9a",
+      "build_checkout_sha256": "f34b6f2cd9eab7ba43cddd7fa046eb16c00c2a29b5976539137dfde1930ff15a"
+    },
+    "android/host-tests/editor-switch-red-20261101/run_actual_path.py": {
+      "git_bytes": 6753,
+      "git_sha256": "050c4fae2b4c904e2ecc963673d45fe926c29b69208f82512dbb01eae98928c5",
+      "build_checkout_sha256": "ede5ff1853f6aaf14e83dce217f4f60b95350d8b341827ffea7d8a28137e740b"
+    },
+    "android/host-tests/emoji-reentrant-20261101/EmojiReentrantChecks.java": {
+      "git_bytes": 4073,
+      "git_sha256": "4819e7d32caa67574f9fb70b0218a9be9df0815aa18f0be782ad46c289ed68e1",
+      "build_checkout_sha256": "3d5a088db1d15b48eb912357f8e4fbcc391a1f398955aec05c6cb91b2a6bc5bf"
+    },
+    "android/host-tests/emoji-reentrant-20261101/README.md": {
+      "git_bytes": 1993,
+      "git_sha256": "b98399c2220e0bf4b481911fb4b9fc15a554c176362b47f65fa16079111466a1",
+      "build_checkout_sha256": "5d5e7a220dcb7291cc2b5844b24bd795b01ccfdf576a1be7d28e835303e23f0c"
+    },
+    "android/host-tests/learning-segmentation-20261101/LearningSegmentationTest.java": {
+      "git_bytes": 697,
+      "git_sha256": "5e75105437d49d7c515028c47e54431cebe4eb1048eae6dd1a8e1366596dc4f2",
+      "build_checkout_sha256": "165674b643c997daa93da3da5a5751fa764246ce96e0b892462c27e800e49878"
+    },
+    "android/host-tests/learning-segmentation-20261101/OverlaySuppressionTest.java": {
+      "git_bytes": 1110,
+      "git_sha256": "13b37a8ef36a449d415898f67035bdd98ccc86cead2cd108b68aa53588ab623f",
+      "build_checkout_sha256": "5d32b4ad6cc7828f25038a493246c6e92fa7ce0f5d3952e80a2b825001c1e3bf"
+    },
+    "android/host-tests/learning-segmentation-20261101/README.md": {
+      "git_bytes": 1566,
+      "git_sha256": "385c2c510c5266da5c3c7e8c7853de37d9ba79c34551ad9450862a29c7e8c644",
+      "build_checkout_sha256": "e2103e0119ab1a0d85c98775fe1042be80b1225218d5c97b194a74f945d51f30"
+    },
+    "android/host-tests/lint-repairs-20261103/README.md": {
+      "git_bytes": 2191,
+      "git_sha256": "d0ef8f457c90db9ea8c6f61bceff908cc9d6983f5db8a6cdde336e564b200529",
+      "build_checkout_sha256": "2a1df72d307004e3852b4c517e6ba6f833ca8ecd1fa4a261a2c2e49ce67ba599"
+    },
+    "android/host-tests/lint-repairs-20261103/run.py": {
+      "git_bytes": 25339,
+      "git_sha256": "4657ee5e8aaf0cd72b0afca52faafc442306be8cdc989665f6dc44c780ea8d30",
+      "build_checkout_sha256": "d2d7c860cb1ed99ecbcad641069b21fb390ffd88489933ce9fbfe936d243a959"
+    },
+    "android/host-tests/mixed-integration-20261103/LocalControllerChecks.java": {
+      "git_bytes": 12253,
+      "git_sha256": "5ed4be50bedf3fa2d3fbb57eaf213f3744b24b4eb7b814291140733d47694d60",
+      "build_checkout_sha256": "5ed4be50bedf3fa2d3fbb57eaf213f3744b24b4eb7b814291140733d47694d60"
+    },
+    "android/host-tests/mixed-integration-20261103/README.md": {
+      "git_bytes": 960,
+      "git_sha256": "f531afb28e31ca20493f1594a54abef5e9a7d5adc429ee320d29a2ebc8bc2567",
+      "build_checkout_sha256": "ad100244cddf5e324e643ede3eecee22c76f052a4c59e408f2acc825c39144c8"
+    },
+    "android/host-tests/mixed-integration-20261103/fixtures/android/os/Handler.java": {
+      "git_bytes": 1378,
+      "git_sha256": "8ab492a5e3e6e20055ba5996ad93ce715cdc4cca835a5346027f07bb82995bc9",
+      "build_checkout_sha256": "3ee241524a7db1d17f9492aabfc2ad2d741d97332c9c93cfafba44591a07fe87"
+    },
+    "android/host-tests/mixed-integration-20261103/fixtures/android/os/Looper.java": {
+      "git_bytes": 348,
+      "git_sha256": "0adb5db69cd71f4e1b04497a1cf067c17a788569e18ea13896dc8fd73db6da7d",
+      "build_checkout_sha256": "0d76d042f959fe9b2585a1c901ea76c0149fcfd0122859dc305e370dca4cf6a5"
+    },
+    "android/host-tests/mixed-integration-20261103/fixtures/android/os/SystemClock.java": {
+      "git_bytes": 186,
+      "git_sha256": "8de0ffa5c2174e82bbebf4c3e1a580de18b110903cdf271ea626b5928436af80",
+      "build_checkout_sha256": "f708947309dac76caa91e0df6bb1f57bb91b04be7da8b5b9a064c7ef68156dd4"
+    },
+    "android/host-tests/mixed-integration-20261103/fixtures/android/view/inputmethod/InputConnection.java": {
+      "git_bytes": 69,
+      "git_sha256": "e9a42b5a392883ec144ba45af33308c496c97ee4e407fbc5477e2a5ebc97c809",
+      "build_checkout_sha256": "e9a42b5a392883ec144ba45af33308c496c97ee4e407fbc5477e2a5ebc97c809"
+    },
+    "android/host-tests/mixed-integration-20261103/run.py": {
+      "git_bytes": 1688,
+      "git_sha256": "cf789ac0962c32f7ac5748da8a4184f5aaaaec31ec47bb081efb351059ff0a1d",
+      "build_checkout_sha256": "1124f0f7abb23666a0c13220957a2534c32efa7e88363caeaf97289565072ccc"
+    },
+    "android/host-tests/mixed-integration-20261103/run_bound_commit_checks.py": {
+      "git_bytes": 6671,
+      "git_sha256": "80f29ac6a8fb1fc8ca91b34125b11e65e6029b021bd7dae84706c091d16d1534",
+      "build_checkout_sha256": "80f29ac6a8fb1fc8ca91b34125b11e65e6029b021bd7dae84706c091d16d1534"
+    },
+    "android/host-tests/mixed-integration-20261103/run_entry_checks.py": {
+      "git_bytes": 6834,
+      "git_sha256": "f9a728bcdeaedab91d5d0f1928c8cda14f8470c14a540494545753162b5a18ee",
+      "build_checkout_sha256": "f9a728bcdeaedab91d5d0f1928c8cda14f8470c14a540494545753162b5a18ee"
+    },
+    "android/host-tests/mixed-integration-20261103/run_policy_checks.py": {
+      "git_bytes": 4682,
+      "git_sha256": "9043cbad1b6e2ecd5bf83bec8998e6f00b9e07c78b5832c6a34090e95ecddd38",
+      "build_checkout_sha256": "6a9727f92e16b0470caa490cc2ad6aa3adb98aa16769591f6fd3f610f67e191f"
+    },
+    "android/host-tests/mixed-integration-20261103/run_privacy_reentry_checks.py": {
+      "git_bytes": 5258,
+      "git_sha256": "ebf0be675ea1546f17e7e555452322bc40c11e4bbe82255f647eadb4700a7ec9",
+      "build_checkout_sha256": "b1211fd98b81c14d276d6e97af6ec4380b73f5f0cede80273d91b656f55cc65d"
+    },
+    "android/host-tests/mixed-integration-20261103/run_render_checks.py": {
+      "git_bytes": 9085,
+      "git_sha256": "4b5a2e89845506425cbbe7b171642bba4630dc13a81ec014a5ea8e3fcb963890",
+      "build_checkout_sha256": "4b5a2e89845506425cbbe7b171642bba4630dc13a81ec014a5ea8e3fcb963890"
+    },
+    "android/host-tests/mixed-integration-20261103/run_windows_async_checks.py": {
+      "git_bytes": 6852,
+      "git_sha256": "93ec9e25f3a0973ee88bd192b133cb6a05545ed0d1dde07ce17b61d1be8fcdb8",
+      "build_checkout_sha256": "f9563940c3e3d065c8c0c36f0a56aa3c54f3b07a0e609b981e165af597ec7725"
+    },
+    "android/host-tests/mixed-integration-20261103/run_windows_mixed_checks.py": {
+      "git_bytes": 6602,
+      "git_sha256": "c2a0400bfb505582646ebc56b79f60ef84f9deb3934018cb1e1af8c3239dc5ab",
+      "build_checkout_sha256": "64f766e4fe75a7cfd4209b479f3ffaadcf0607a25591ff5526aadeac98ef3dd7"
+    },
+    "android/host-tests/mobile-toolbar-20261103/MobilePresentationChecks.java.in": {
+      "git_bytes": 19710,
+      "git_sha256": "fad8f79dfd2672fcabd24cd5500024039d911fd8cad550436444c1d4b850240d",
+      "build_checkout_sha256": "fad8f79dfd2672fcabd24cd5500024039d911fd8cad550436444c1d4b850240d"
+    },
+    "android/host-tests/mobile-toolbar-20261103/ParseSource.java": {
+      "git_bytes": 1030,
+      "git_sha256": "a3e1f0f46a852818dc684886ac8404e1554a49242edee8afac050d182f9571f3",
+      "build_checkout_sha256": "2c5749491aebb31549d8ab5f76b5de467a0a957486dc0ebf63f67053bc431774"
+    },
+    "android/host-tests/mobile-toolbar-20261103/README.md": {
+      "git_bytes": 2617,
+      "git_sha256": "9025d92f5fd80708e533018ab409151783c29d913722fafef8492a01db820d6b",
+      "build_checkout_sha256": "d7763fe15f6774795509e3099685b1ece176a34c089349e44dbb2990b7818087"
+    },
+    "android/host-tests/mobile-toolbar-20261103/run.py": {
+      "git_bytes": 7710,
+      "git_sha256": "373f1dfec4d5eb3809abd968b7271aa05e6338b1973ebb0ab3f73ea524e0fba4",
+      "build_checkout_sha256": "373f1dfec4d5eb3809abd968b7271aa05e6338b1973ebb0ab3f73ea524e0fba4"
+    },
+    "android/host-tests/phrase-privacy-race-20261101/PhrasePrivacyRaceTest.java": {
+      "git_bytes": 2272,
+      "git_sha256": "e79133807463e6d380dd906dc4cc8fe145c32dab5826cf96ed5d04570a01ba64",
+      "build_checkout_sha256": "8b0083b37015dba15c7c7328c757f96223ed85b1c4a20d1b70a90e260375aca9"
+    },
+    "android/host-tests/presentation-policy-20261104/AlternativeCandidatePageChecks.java": {
+      "git_bytes": 3443,
+      "git_sha256": "1d2044cb6d68c4392528f1a6be7530294c3a2bdb78e5d6adc1b20af7d2526687",
+      "build_checkout_sha256": "1d2044cb6d68c4392528f1a6be7530294c3a2bdb78e5d6adc1b20af7d2526687"
+    },
+    "android/host-tests/presentation-policy-20261104/PanelCallbackChecks.java.in": {
+      "git_bytes": 8069,
+      "git_sha256": "3e7c5a6afe1d13c2c291167d28c2042683851c0f5f8a05f3e25c0441e6f70e39",
+      "build_checkout_sha256": "3e7c5a6afe1d13c2c291167d28c2042683851c0f5f8a05f3e25c0441e6f70e39"
+    },
+    "android/host-tests/presentation-policy-20261104/PresentationPolicyChecks.java": {
+      "git_bytes": 7681,
+      "git_sha256": "13bd1bb1b89c2284ff1c751c81d24fef707feff9355960e9f3ec481e9143e0da",
+      "build_checkout_sha256": "13bd1bb1b89c2284ff1c751c81d24fef707feff9355960e9f3ec481e9143e0da"
+    },
+    "android/host-tests/presentation-policy-20261104/README.md": {
+      "git_bytes": 1901,
+      "git_sha256": "5336543b02fec6b291872d21f4f29500259ec24bc4a7ad6fd584298e58cd7a58",
+      "build_checkout_sha256": "5336543b02fec6b291872d21f4f29500259ec24bc4a7ad6fd584298e58cd7a58"
+    },
+    "android/host-tests/presentation-policy-20261104/run.py": {
+      "git_bytes": 6201,
+      "git_sha256": "0397683135a30afd4a5cb5ff876ab8cc01ed612d8b36b2894af34751602b6edd",
+      "build_checkout_sha256": "0397683135a30afd4a5cb5ff876ab8cc01ed612d8b36b2894af34751602b6edd"
+    },
+    "android/host-tests/segment-key-20261101/README.md": {
+      "git_bytes": 3827,
+      "git_sha256": "3768e63e6410c6543cb5f809a13c5708b4f6a9a9b1140c94d96d31f0a268d34b",
+      "build_checkout_sha256": "da2bf55bebe851c2efb5c3bfffa4a11fba890bf92e826fad664bcdce76f82de6"
+    },
+    "android/host-tests/segment-key-20261101/SegmentKeyStateTest.java": {
+      "git_bytes": 2156,
+      "git_sha256": "f33affebb70a2d201a96660d78dab61d5918dde85b59c9a28f715e9db91e5e2e",
+      "build_checkout_sha256": "bba6e677885f11b14b7d0e978d40f1c8471b425eb19e40dbe2c47480f9a81f3e"
+    },
+    "android/host-tests/segment-key-20261101/test_segment_wiring.py": {
+      "git_bytes": 580,
+      "git_sha256": "14bd6ebc7c183a7d09a4913102f3809ea0b4c8ba86deb176b95c4139b22c8ed6",
+      "build_checkout_sha256": "fc25f55804561ae8743ade48927a8e70fc171496c6b288e0895595618f8dc64d"
+    },
+    "android/host-tests/settings-backup-20261103/AppPreferencesChecks.java": {
+      "git_bytes": 16498,
+      "git_sha256": "a35f44b38c45bb6c1357c0619f1d34599e1cd99e2d56d933a18219bcce961092",
+      "build_checkout_sha256": "a35f44b38c45bb6c1357c0619f1d34599e1cd99e2d56d933a18219bcce961092"
+    },
+    "android/host-tests/settings-backup-20261103/HostDirectorySyncModel.java": {
+      "git_bytes": 1188,
+      "git_sha256": "586cb6f4b33650b61428a7cae39dfb1d5e5863a8bfe09d8869d838d63744bba0",
+      "build_checkout_sha256": "b90641b884f2792497a41e7d2fc1de59a3065105dc0719f7ea135e68943e1ada"
+    },
+    "android/host-tests/settings-backup-20261103/SettingsBackupChecks.java": {
+      "git_bytes": 11778,
+      "git_sha256": "54066d80741749ae7de5b16bae52657ccca20905d1c1700ac05c0c45f1a5c6b5",
+      "build_checkout_sha256": "54066d80741749ae7de5b16bae52657ccca20905d1c1700ac05c0c45f1a5c6b5"
+    },
+    "android/host-tests/settings-backup-20261103/SettingsDirectorySyncFailureChecks.java": {
+      "git_bytes": 6230,
+      "git_sha256": "0bde1ac0c51fecc126e213816c4fdf98a43704e519fcdd383e4fec5d7e972a42",
+      "build_checkout_sha256": "f79fa467f5c2d05187f300dc78eec17e7707f7c3a928faf3b2b19982aa10ffd3"
+    },
+    "android/host-tests/settings-backup-20261103/SettingsHostFilesystemProbe.java": {
+      "git_bytes": 1113,
+      "git_sha256": "1c8a6795b7d1c2cc9e691082dea8d62d10a23818fed1dd6b3f0f2b32db953720",
+      "build_checkout_sha256": "6b7f4e3f5f68dd4adab65c6e68b8741630da19952f94bb8f7202c7081d027b13"
+    },
+    "android/host-tests/settings-backup-20261103/SettingsRecoveryChecks.java": {
+      "git_bytes": 20466,
+      "git_sha256": "d42b54ce109461329c6c70ba5b34b252f9ca56c9e1233f20544041314fe78b9e",
+      "build_checkout_sha256": "7fbebc03b739cc1d53f8112e9b906df42ad05f89f483c4018dc72fb2411795e6"
+    },
+    "android/host-tests/settings-backup-20261103/run.py": {
+      "git_bytes": 9769,
+      "git_sha256": "4ab2b9276acbbc86b24cadf8d4175833dec5b32e74456c7dcb99130ff74ff182",
+      "build_checkout_sha256": "f978aaab09ab50d3cff1ee4393b8ac99780146b9e8bf0eff3d70009f8f7d8ae1"
+    },
+    "android/host-tests/split-owner-prototype-20261101/BoundEditorChecks.java": {
+      "git_bytes": 8981,
+      "git_sha256": "3be6d8fd8727e079d9fac6fb73401db42dd27438e54c5854a29111050f70138d",
+      "build_checkout_sha256": "5ccaf4de4bf4ad8f7ab59e39cbee2bcc36a051ac07097498500b1522629110e5"
+    },
+    "android/host-tests/split-owner-prototype-20261101/BoundEditorPrototype.java": {
+      "git_bytes": 3580,
+      "git_sha256": "eb487f80517811f41f2c9c0fa36bae3322b9fd60406e0cfd350f6b0263448ed8",
+      "build_checkout_sha256": "49f3e8a9aa7fdf35731364f3dc103e4d1548feea5621adae5d3cca12e1e3b73e"
+    },
+    "android/host-tests/split-owner-prototype-20261101/PrototypeRunner.java": {
+      "git_bytes": 2225,
+      "git_sha256": "689631f7f0758d079eef3d65c66be481da7fe1d50a73ad91da151084375b01c2",
+      "build_checkout_sha256": "994abe27df5793284652aa04fe08dd9996fcc50f8e2502a63391aa61e2b2a90c"
+    },
+    "android/host-tests/split-owner-prototype-20261101/README.md": {
+      "git_bytes": 5400,
+      "git_sha256": "48c24e6df864ecbd3f68626958e419443b304ec34ab5dc9d91b8be1c8a1b39bb",
+      "build_checkout_sha256": "24c390de31b7f6ff65828843e64ba1dda9b7391497bcbcd7d6d2440fb587e1f1"
+    },
+    "android/host-tests/split-postwrite-prototype-20261101/PostWriteChecks.java": {
+      "git_bytes": 3568,
+      "git_sha256": "1132a81534784bb9298a75ffddeee948d766ebfea2a2af56a4180b6e60dca5d0",
+      "build_checkout_sha256": "bd7c0934d6c28460f653891824eec746e5672fb31e023af6c3b978fbd339699a"
+    },
+    "android/host-tests/split-postwrite-prototype-20261101/README.md": {
+      "git_bytes": 3346,
+      "git_sha256": "582f4f3fe6640ca1ee432595b6b4cd99f26a39c1a563ec54d9d14db5d4063d94",
+      "build_checkout_sha256": "6e3d423a27a2d1aca99d40b82fedd4f5b9b386e018a9cebd273cb44ee3f110a1"
+    },
+    "android/host-tests/split-reentrant-20261101/MemoryRunner.java": {
+      "git_bytes": 2799,
+      "git_sha256": "3cfc901d826c6115bb33872172fb0e24776acf9d4411ba006482ef1ea79c8bcd",
+      "build_checkout_sha256": "e2b783a6214409d638b9c724d22fabc22353cdd93d5f09b868d48c03e69de76a"
+    },
+    "android/host-tests/split-reentrant-20261101/README.md": {
+      "git_bytes": 2938,
+      "git_sha256": "b25b9faa862a706564c969fefd02457be6f8cd9da0c484689a6488964495853b",
+      "build_checkout_sha256": "1540c064312db2cb2e3a0ce884d81c9453e2ef1287cde1e92687c06e733eb520"
+    },
+    "android/host-tests/split-reentrant-20261101/SplitReentrantChecks.java": {
+      "git_bytes": 6051,
+      "git_sha256": "987ee4d81d18e911e268b4113f1ebf7f2bb418b7f98ea2e584ff2bbb98147b05",
+      "build_checkout_sha256": "aa880626fc92f98229ec00cd0faed39f822d3e57fcf026873ec7983493a4dc89"
+    },
+    "android/host-tests/trial-reveal-20261102/ParseJava.java": {
+      "git_bytes": 1111,
+      "git_sha256": "e93f0006a56f0ab0b3be3c1b3603853db434cbe08b3b1ca41fe64631a319d67a",
+      "build_checkout_sha256": "21a52d6de24300073f7df0b62229d9829cf5f9e2e7b918196b1cf8062f723f5f"
+    },
+    "android/host-tests/trial-reveal-20261102/README.md": {
+      "git_bytes": 4227,
+      "git_sha256": "e3af831bd2e43e53988e359c71319333146bc05a2a22525bc19c3bc48f7ea22c",
+      "build_checkout_sha256": "408e454dfae197dd04d79783d88678689c0eb5300591d8e5452fdde80da20b13"
+    },
+    "android/host-tests/trial-reveal-20261102/old-layout-listener.java.inc": {
+      "git_bytes": 923,
+      "git_sha256": "086174313ade6bfc55b0fe3a2dd48096d45fe66c25eec5c01ebfb6646e3c2175",
+      "build_checkout_sha256": "5ff892d692f621072468893d299efc136ed8ed010657ac51c851acdf95c482b0"
+    },
+    "android/host-tests/trial-reveal-20261102/run.py": {
+      "git_bytes": 9132,
+      "git_sha256": "4c0c6a2565a83db367adcfca39cac1ea6d97c230845f08545c7a9e6f9e09ca00",
+      "build_checkout_sha256": "e949b3b4c630aa95e16a5f130205e527bbd25895405560b491c42dd781e639bb"
+    },
+    "android/host-tests/voice-empty-result-20261101/EmptyVoiceTest.java": {
+      "git_bytes": 3594,
+      "git_sha256": "ef3c790cbb73e2e352c3fefb0935ad84419201bbef63eb3fa86f6874c6e79bf7",
+      "build_checkout_sha256": "278872bdf70df380be5b194a7790908c12a9ca48f5fd243db2f3cc7878679620"
+    },
+    "android/host-tests/voice-safety-20261104/README.md": {
+      "git_bytes": 3768,
+      "git_sha256": "840335ce0d9066fff33156597d65e3cac16a44cacc2d69216f0eeebf7b81680b",
+      "build_checkout_sha256": "7d9e1a9fbfb40c53d5405fe8965cb3b9cc4f915f8ff36474694b4f85d382b50b"
+    },
+    "android/host-tests/voice-safety-20261104/VoiceSafetyChecks.java.in": {
+      "git_bytes": 15026,
+      "git_sha256": "8ba35a408e0d535ec3a2651b336a12a6b37a9b916c661227c571570e87cd97e9",
+      "build_checkout_sha256": "3b9024e29a3341817f738869f070ce0f7be87dd0d45dce661c2346d63cd01c5f"
+    },
+    "android/host-tests/voice-safety-20261104/run.py": {
+      "git_bytes": 3979,
+      "git_sha256": "e1a6481b1919b047928de550f4c8736f975526d11c54ddc4ed53354f9e293b1c",
+      "build_checkout_sha256": "8bd6cdd2926cf717d5aa5582ae1af3adba1b030100d6ab9dd212eb69e5d631b5"
+    },
+    "android/host-tests/voice-ui-20261104/README.md": {
+      "git_bytes": 1594,
+      "git_sha256": "8f8e0efce4393cb733fed6b45df30f71fd6be1a392d9e0f01f615426daccdaf8",
+      "build_checkout_sha256": "19cadaca317dc36859c16ee71cd105d45fee96f650b55c792cc177162c0af16e"
+    },
+    "android/host-tests/voice-ui-20261104/ToolbarVoiceChecks.java.in": {
+      "git_bytes": 11708,
+      "git_sha256": "a4288cdd646df4fbd54378b2e072462813facae677e64772d394fbfbc028dfb8",
+      "build_checkout_sha256": "bb4746b9064d15c63cc4795b83d93ab59bf4e21e14c9c54bc12fe0024b620f6d"
+    },
+    "android/host-tests/voice-ui-20261104/VoiceCommitChecks.java.in": {
+      "git_bytes": 6757,
+      "git_sha256": "c185c3b40cbffa7b229ee74d98bc9727ec2a75cb0fc760b6f29389c228f0d8b6",
+      "build_checkout_sha256": "c185c3b40cbffa7b229ee74d98bc9727ec2a75cb0fc760b6f29389c228f0d8b6"
+    },
+    "android/host-tests/voice-ui-20261104/VoiceUiChecks.java.in": {
+      "git_bytes": 13954,
+      "git_sha256": "cc1997b80c712606116e03e3d11944a8425575225bc7c14f7c1ed3cc9f286ac8",
+      "build_checkout_sha256": "cc1997b80c712606116e03e3d11944a8425575225bc7c14f7c1ed3cc9f286ac8"
+    },
+    "android/host-tests/voice-ui-20261104/run.py": {
+      "git_bytes": 3321,
+      "git_sha256": "2c3517f3869be9ea56ebf2a6813423be2632d4bb05ded1ce0dd945865eba8822",
+      "build_checkout_sha256": "54be61e3da5afe186b769c366f5ee050a7ceb1ecd1d528996692036bf760cba7"
+    },
+    "android/host-tests/voice-ui-20261104/run_commit.py": {
+      "git_bytes": 3090,
+      "git_sha256": "10d7bb72b23ec9579a8bbe4ee2a4715589bb771280d47dc613a093c8a8273339",
+      "build_checkout_sha256": "10d7bb72b23ec9579a8bbe4ee2a4715589bb771280d47dc613a093c8a8273339"
+    },
+    "android/host-tests/voice-ui-20261104/run_toolbar.py": {
+      "git_bytes": 3465,
+      "git_sha256": "66fd4520b4192047344b351bed7e652e4c2f2bbcdd0f9051e41f2a6ae95bc96b",
+      "build_checkout_sha256": "5f7c8b5d9aab36ec28c66b3941440e584d1948c84fca7a94f47cbcfb3161f680"
+    },
+    "android/settings.gradle": {
+      "git_bytes": 271,
+      "git_sha256": "b69a9d0f5e9e604e6e399fd5080e6154f52e70a7043e9f1a3b7a091b1f5fdc21",
+      "build_checkout_sha256": "b8691ec174e6f58d1caa95cbd9ec43c3cbf0a977043592d7e986e853ee770d15"
+    },
+    "core/context_prediction_data.inc": {
+      "git_bytes": 5178754,
+      "git_sha256": "4443b09d10ce37dd453e693defec066d2b2106f02586ab50b8a368064f325051",
+      "build_checkout_sha256": "4443b09d10ce37dd453e693defec066d2b2106f02586ab50b8a368064f325051"
+    },
+    "core/context_predictions.h": {
+      "git_bytes": 8180,
+      "git_sha256": "73ec2e499dd7fc862b49f30dbca6733556a2e405d71537b00614319d262eb5be",
+      "build_checkout_sha256": "73ec2e499dd7fc862b49f30dbca6733556a2e405d71537b00614319d262eb5be"
+    },
+    "core/emoji_catalog.h": {
+      "git_bytes": 435,
+      "git_sha256": "9a0f769ded418243f974afb6da6b5dc7f0c4a5b78c3e83a7a8a83c4b9b93cf65",
+      "build_checkout_sha256": "9a0f769ded418243f974afb6da6b5dc7f0c4a5b78c3e83a7a8a83c4b9b93cf65"
+    },
+    "core/engine.cpp": {
+      "git_bytes": 18317,
+      "git_sha256": "b3acf923ecb826a0cd58de00717261fb1dd88be3193e6d8ed727637fcee3ed00",
+      "build_checkout_sha256": "b3acf923ecb826a0cd58de00717261fb1dd88be3193e6d8ed727637fcee3ed00"
+    },
+    "core/engine.h": {
+      "git_bytes": 1693,
+      "git_sha256": "3aaa0db68e7fa1c17ec16a1bf50411d800a4cc9ff1032223a9210da64971df26",
+      "build_checkout_sha256": "3aaa0db68e7fa1c17ec16a1bf50411d800a4cc9ff1032223a9210da64971df26"
+    },
+    "core/grapheme.h": {
+      "git_bytes": 3826,
+      "git_sha256": "035ff7dc914902a8d234c5505e409fb6334e8ee838afcc047b0776ba78d53aba",
+      "build_checkout_sha256": "035ff7dc914902a8d234c5505e409fb6334e8ee838afcc047b0776ba78d53aba"
+    },
+    "core/grapheme_data.inc": {
+      "git_bytes": 71997,
+      "git_sha256": "9a9dac9ecc23f452c409fccf2fbdff8721e8a029726c2c08dcdb88e4f025262d",
+      "build_checkout_sha256": "9a9dac9ecc23f452c409fccf2fbdff8721e8a029726c2c08dcdb88e4f025262d"
+    },
+    "core/handwriting.h": {
+      "git_bytes": 1260,
+      "git_sha256": "529e4637b93adf4b0bca8c243367a8c6f01f6c57021141ca4e44dec5c17b1d8a",
+      "build_checkout_sha256": "041b33be029405f701bfac650828141fb8c469b8e068f9da7a8c04dc1ef0dab5"
+    },
+    "core/local_prediction_data.inc": {
+      "git_bytes": 7882,
+      "git_sha256": "85c9d8e528a27ff0cd6e8953b74819aab26485dd2d97288c37214deebbf8770a",
+      "build_checkout_sha256": "b168658b8c3a10ad46c4054a0200f0489dd99c838b596b6fc575076e51b21ba8"
+    },
+    "core/local_predictions.h": {
+      "git_bytes": 6793,
+      "git_sha256": "27168a7b636382512145c47a38a97c61edd16b14b8754771e30b4396b3286b1e",
+      "build_checkout_sha256": "27168a7b636382512145c47a38a97c61edd16b14b8754771e30b4396b3286b1e"
+    },
+    "core/long_english_data.inc": {
+      "git_bytes": 11366779,
+      "git_sha256": "e5b9c6fc8d55c082c9e6064480b001e500a37dd5d7397fee52999b6c56b21405",
+      "build_checkout_sha256": "e5b9c6fc8d55c082c9e6064480b001e500a37dd5d7397fee52999b6c56b21405"
+    },
+    "core/long_english_prediction.h": {
+      "git_bytes": 9329,
+      "git_sha256": "9bd6f6e8156b44eff6dfc603b65a1ed4e9c1a5b6e818267bb0d2dec05676397a",
+      "build_checkout_sha256": "9bd6f6e8156b44eff6dfc603b65a1ed4e9c1a5b6e818267bb0d2dec05676397a"
+    },
+    "core/mixed_composition.h": {
+      "git_bytes": 1147,
+      "git_sha256": "16dae8f1ffd6399f6257332e2269c4e086fe5699fe8b4045871efed3f6b2896d",
+      "build_checkout_sha256": "297c9214eb576b4e17ad6d212595f836232ee757d9be3258efb2faa4b3b0cc2d"
+    },
+    "core/numeric_suffix.h": {
+      "git_bytes": 3192,
+      "git_sha256": "5f2402829c34876dd3484ab61721564e8f9ed01b1872307596bc255135ac9460",
+      "build_checkout_sha256": "5f2402829c34876dd3484ab61721564e8f9ed01b1872307596bc255135ac9460"
+    },
+    "core/pinyin_composition.h": {
+      "git_bytes": 5660,
+      "git_sha256": "12b349ecba9ec35b8a6feea4d9afe7ae37e39e85a4f757993a3a5ab163b8c085",
+      "build_checkout_sha256": "2e872c9ddb82b10ab648733b644a5888c2632b401af3e5734cd89b256887958e"
+    },
+    "core/tests/crlf-symbol-audit-20261101/crlf_probe.cpp": {
+      "git_bytes": 1242,
+      "git_sha256": "562c43a546a4dcc3a7f3b38538e91ac8b6f31e78840af1b89c181a24dd7e0673",
+      "build_checkout_sha256": "dc6bec328103577e03f9f3e59ccb78ad947ddf5c8e3728c0dd547e4d571b93f2"
+    },
+    "core/tests/malformed-score-audit-20261101/score_parse_probe.cpp": {
+      "git_bytes": 2002,
+      "git_sha256": "81bf22050d874ad64b48eaf1cab087793a03bc3cd259475fea5ca9747893ad22",
+      "build_checkout_sha256": "fabb084df540129169ba86333dd5722863a55d97cfd36bae219e974b71f53b97"
+    },
+    "core/tests/score_overflow.cpp": {
+      "git_bytes": 2090,
+      "git_sha256": "f3164b04bff9148528b8af071ba5d650f2293d68c31c85ae8c425d1f080d0089",
+      "build_checkout_sha256": "b189b99b6b730ed09bc2b2b7c42f2053e5eda7799bc2bc1dd78545cce1181399"
+    },
+    "data/CC-CEDICT-NOTICE.txt": {
+      "git_bytes": 950,
+      "git_sha256": "67fa36d54e35c99ba1f87eff2b15f63affe8b01d186a22a39ccc144cd88aaf55",
+      "build_checkout_sha256": "be7d4d7f4a1027697d258650bffcf7ea808f45b198f8e6e7619dbcebeaf3cd4f"
+    },
+    "data/ENGLISH-NEXT-WORD-SOURCE.json": {
+      "git_bytes": 564,
+      "git_sha256": "ecbd5b86c1c005a6279207f96e1bc2265c22172f3d495fb533d39f5194ddeec6",
+      "build_checkout_sha256": "ecbd5b86c1c005a6279207f96e1bc2265c22172f3d495fb533d39f5194ddeec6"
+    },
+    "data/KOTLIN-LICENSE.txt": {
+      "git_bytes": 11358,
+      "git_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "build_checkout_sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    },
+    "data/KOTLIN-NOTICE.txt": {
+      "git_bytes": 482,
+      "git_sha256": "0b09a83d3ef7795c7dec65e815866597c066c53898f2852a76599b8f5552941a",
+      "build_checkout_sha256": "37ce3381b1f5882f3cebca69529eb8856e9ba104a8e75cc45c40041177d7aa59"
+    },
+    "data/LOCAL-PREDICTIONS-SOURCE.json": {
+      "git_bytes": 550,
+      "git_sha256": "d2db1269622b014ee75aa5f808b8175749f0106bf29898b1540858d4c90525c8",
+      "build_checkout_sha256": "a76414afe06ca5bddbbe59bac403a4538eff44660b5d26aaaca871a90c73cc11"
+    },
+    "data/ONNXRUNTIME-LICENSE.txt": {
+      "git_bytes": 1073,
+      "git_sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+      "build_checkout_sha256": "c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674"
+    },
+    "data/ONNXRUNTIME-ThirdPartyNotices.txt": {
+      "git_bytes": 325054,
+      "git_sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2",
+      "build_checkout_sha256": "fb0af774b4d7cffc5b9d046f2aaeade2f37df2f80abf8033c95dfffcc77a8866"
+    },
+    "data/SHERPA-ONNX-LICENSE.txt": {
+      "git_bytes": 11358,
+      "git_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "build_checkout_sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    },
+    "data/SPEECH-THIRD-PARTY-NOTICES.txt": {
+      "git_bytes": 64226,
+      "git_sha256": "6d1b93bf7bfd31ad956d7cdcf19d8d09683b4ef7062a681ba69d673c4bdc6ff6",
+      "build_checkout_sha256": "2fd7b93f0db48e12a55a432ac4ff249fff9866a5732bbf30c6a0afbf7a49afe2"
+    },
+    "data/local-predictions.tsv": {
+      "git_bytes": 4626,
+      "git_sha256": "7cccd93cc584a295358f544a8db332b7bd000d7bc01c0df0e2dff048b0c90eb5",
+      "build_checkout_sha256": "1fdcf2bdb5e6df78685d9fcb486e72185ce4c5581297d27bf793a6a782da58ea"
+    },
+    "data/notices/ANDROID-NDK-LLVM-NOTICE.txt": {
+      "git_bytes": 130424,
+      "git_sha256": "f96f763beb66a7ba7a667647fc64c0226ace875e590c831fdd9579ec1c1d91e1",
+      "build_checkout_sha256": "7adcc0d186e462f0819b1df997ff4634c63475603e87f79b02cbc95e1daffd16"
+    },
+    "data/notices/CC-CEDICT-UPSTREAM-HEADER.txt": {
+      "git_bytes": 777,
+      "git_sha256": "43a389d7fc4eb0366cb4ba76c095db05e38219a9c52e46913b067ff476b723b7",
+      "build_checkout_sha256": "68727adfb63d84ec52b2c5fa8a074896f54bcb9f1a57adaa61a109b3b77f825e"
+    },
+    "data/notices/GCC-RUNTIME-COPYRIGHT.txt": {
+      "git_bytes": 75729,
+      "git_sha256": "f891d7e0c56f503a92c7258d540b3d8215852d8387cbca8f1f07c6f4b6e67da6",
+      "build_checkout_sha256": "7ded7af97b5b432ac4580d33d8599df4d1f858e31e3860688672786ea1a27c29"
+    },
+    "data/notices/GPL-3.txt": {
+      "git_bytes": 35149,
+      "git_sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "build_checkout_sha256": "230184f60bae2feaf244f10a8bac053c8ff33a183bcc365b4d8b876d2b7f4809"
+    },
+    "data/notices/JIEBA-LICENSE.txt": {
+      "git_bytes": 1075,
+      "git_sha256": "18ba0984839f85853b29fadaf992f7dba8fd0ca0fbeae34de2b8735222dc7a37",
+      "build_checkout_sha256": "901d4ea24b62b5d6ab28e0e359ea7d8407a72eb876605ec5f20591267fb0d136"
+    },
+    "data/notices/MINGW-COPYRIGHT.txt": {
+      "git_bytes": 41584,
+      "git_sha256": "50e5bb66d222c7d4692c2d13670ddcd3664779358e389a026b69a0e0e18e7be5",
+      "build_checkout_sha256": "cf5a42bf3e994ba352e992a2e01953551f11bd30894448cfe0a23be7a5c89238"
+    },
+    "data/notices/TATOEBA-NOTICE.txt": {
+      "git_bytes": 1095,
+      "git_sha256": "b0d7e4a88529617044afd2cf2e3afd7365ce89fa4c03e4fb76441af3a9dd4f1c",
+      "build_checkout_sha256": "b0d7e4a88529617044afd2cf2e3afd7365ce89fa4c03e4fb76441af3a9dd4f1c"
+    },
+    "data/notices/UNICODE-LICENSE.txt": {
+      "git_bytes": 1995,
+      "git_sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+      "build_checkout_sha256": "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96"
+    },
+    "data/pinyin.tsv": {
+      "git_bytes": 2893625,
+      "git_sha256": "ba80abb85e43b47f7d16c7e2a39f3de56e3dadc986fb67e4167bbd075e64d77b",
+      "build_checkout_sha256": "9ae21f58b3ecb7106a21338270081de75927bbcdb3dd51f72727b9fd8228d061"
+    },
+    "data/symbols.tsv": {
+      "git_bytes": 4511,
+      "git_sha256": "8eec154551936b7a94efbac8b067b7f26f2f8bbfc31fbffe4f4ad94d28ef9393",
+      "build_checkout_sha256": "fd63042fe56869d6a9c4f59f2c93b00aef1c2a55cf926290530c7e3d9ac479d0"
+    },
+    "data/version.json": {
+      "git_bytes": 493,
+      "git_sha256": "56895e490d7433af6f892009ba13c9a6e5f859ad9cce9d7cc40c910e907d6c83",
+      "build_checkout_sha256": "99e90d17d3e8c4aa1acb54a84c35eb9ffc7fde654d1bc31b3fc91d582f14c14e"
+    },
+    "third_party/nlohmann/LICENSE.MIT": {
+      "git_bytes": 1076,
+      "git_sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603",
+      "build_checkout_sha256": "b9715282b2f1db1359a919bb3a542dd4362fd9e38ae72d421367eb11abe62eec"
+    },
+    "third_party/nlohmann/SOURCE.json": {
+      "git_bytes": 576,
+      "git_sha256": "867dfb2cdaa05d666a71482298d5618f674633582a6e5b6c7f51940f9e695977",
+      "build_checkout_sha256": "be3dd3ae0ca6f5ae7a4e8f367fc79f487b50c7ee884b36d1dbcb7a38e2c47bf0"
+    },
+    "third_party/nlohmann/json.hpp": {
+      "git_bytes": 953436,
+      "git_sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63",
+      "build_checkout_sha256": "5f09d1eebe9b3557f21df155869af13bcde79b74a0748f82ca946e8cc088aaa0"
+    },
+    "third_party/sherpa/LICENSE": {
+      "git_bytes": 11358,
+      "git_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "build_checkout_sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    },
+    "third_party/sherpa/c-api.h": {
+      "git_bytes": 167345,
+      "git_sha256": "426db2c6acfb51e02143aece67c45779fae699d961c7c26ccf6f1388fdeaa2df",
+      "build_checkout_sha256": "55e97b3d579316f951164801817bc1b1a8c64a98daca5e2c45b6ea4abae32bec"
+    },
+    "tools/benchmark_engine.py": {
+      "git_bytes": 3071,
+      "git_sha256": "9c3e8666db162f569ef30e5ee65e9f771d7ead0e8eed17ac0388819bb35107ea",
+      "build_checkout_sha256": "09812f41da4e434e63a9d71ee345b8f89479d7bf14b7f557a5e628f015879835"
+    },
+    "tools/build_android.py": {
+      "git_bytes": 7090,
+      "git_sha256": "09f621f04407c900475165603fd23f4d1a068a47952d4fd6dffb9958a4a3e3dd",
+      "build_checkout_sha256": "b274c1c34151f38d47d234e5a83c82ffa2129ec14169eb1f0601c4bffd46e770"
+    },
+    "tools/build_android.sh": {
+      "git_bytes": 157,
+      "git_sha256": "dc82177bbf7548e620f045fad0833dbf8d805f661db89dd2fac919e3c9605866",
+      "build_checkout_sha256": "222b2fd7149aee5904dec5f47c7a64163f34fd0130986195f30bdb630c9722eb"
+    },
+    "tools/build_dictionary.py": {
+      "git_bytes": 4396,
+      "git_sha256": "a226f2ca9925f7e34879a09d84db3523a0aedec4bd34d3e5d52c1c1e3585cc41",
+      "build_checkout_sha256": "a52aa60ce93c9e343fbc8eaeb9b7ecf80dd9666bdbf39b70e0a065355bb7226f"
+    },
+    "tools/build_speech_android.py": {
+      "git_bytes": 7439,
+      "git_sha256": "b52b484b303311ba0c953295fbc5aad594f319046a6a1402a2bd878a9be40e1b",
+      "build_checkout_sha256": "b4528d7aa480c8182fef629ef84e64f7dceaaaba7aa7c28ad60c356ef5503dc5"
+    },
+    "tools/build_windows.sh": {
+      "git_bytes": 166,
+      "git_sha256": "bfe9ea1eabf626f3afaa6fcacf7d707a0148b2c0fd87fc444599bbafb796f5c3",
+      "build_checkout_sha256": "2982742d016a02f3e2389f283e5b01357e0dba9fdcf3c8a292d3f2534e484fbc"
+    },
+    "tools/build_windows_personal.py": {
+      "git_bytes": 7954,
+      "git_sha256": "18c029f3d9b2c67e42a52dbd2890789d283ac905ae5347130e7ed2efdb40537f",
+      "build_checkout_sha256": "18c029f3d9b2c67e42a52dbd2890789d283ac905ae5347130e7ed2efdb40537f"
+    },
+    "tools/build_windows_personal_tests.sh": {
+      "git_bytes": 174,
+      "git_sha256": "d93c9f3b2457ef5c87e22e76600db47d573a2d31b25b5f4ec22f1ebd75a4d1eb",
+      "build_checkout_sha256": "e8d1a573f6fe57ec645f9a5671425a647a9e22a474ef854632dfeae2d06e9303"
+    },
+    "tools/build_windows_tests.sh": {
+      "git_bytes": 174,
+      "git_sha256": "d93c9f3b2457ef5c87e22e76600db47d573a2d31b25b5f4ec22f1ebd75a4d1eb",
+      "build_checkout_sha256": "e8d1a573f6fe57ec645f9a5671425a647a9e22a474ef854632dfeae2d06e9303"
+    },
+    "tools/check_android_alignment.py": {
+      "git_bytes": 15052,
+      "git_sha256": "9133733fa00795c0186b7b9b31461f8b07998f35d090bc36b7f70bc734189f5a",
+      "build_checkout_sha256": "8f2231bb946d3a3aa973c43dae019e8c2283448158598c78d44ee567cea685e8"
+    },
+    "tools/check_phase_one_host.py": {
+      "git_bytes": 7078,
+      "git_sha256": "e7652c187bdebe884ea51f9873e6b8180bbcbe0517898d805ffcc9c846b3e6f5",
+      "build_checkout_sha256": "e53f15f00d179fb1010f763aefcf2af2570da34a28eb25193e3c2b2ddcfd4e92"
+    },
+    "tools/generate_context_predictions.py": {
+      "git_bytes": 12193,
+      "git_sha256": "03a7707da4ae47266cce288b94a1797a04dfc4e3f625a4287a3867b4f0fff132",
+      "build_checkout_sha256": "03a7707da4ae47266cce288b94a1797a04dfc4e3f625a4287a3867b4f0fff132"
+    },
+    "tools/generate_grapheme_data.py": {
+      "git_bytes": 2740,
+      "git_sha256": "a64819c0e5eafc02f2d325e6a161cd5e534591d4808df115ad10d49272173ccf",
+      "build_checkout_sha256": "a64819c0e5eafc02f2d325e6a161cd5e534591d4808df115ad10d49272173ccf"
+    },
+    "tools/generate_local_predictions.py": {
+      "git_bytes": 841,
+      "git_sha256": "fd90c5a7e21f4715c904e07b03404ca1976d4ef53320e5f4c5c0a43f67da5414",
+      "build_checkout_sha256": "12c1cd0af34248d0e8454855eacb0c077569b352611ecfdb26f27e06269044b2"
+    },
+    "tools/generate_windows_emoji_catalog.py": {
+      "git_bytes": 4715,
+      "git_sha256": "5a5ad93981b417af8d3a758fe8cb2c8670b3448153eb9e85859e1843579f18c8",
+      "build_checkout_sha256": "5a5ad93981b417af8d3a758fe8cb2c8670b3448153eb9e85859e1843579f18c8"
+    },
+    "tools/pack_english_next_word.py": {
+      "git_bytes": 5738,
+      "git_sha256": "c15634bbfa21f7e04df6960dfa05837594a41fb9d802563e4d145f43ebc4f35a",
+      "build_checkout_sha256": "c15634bbfa21f7e04df6960dfa05837594a41fb9d802563e4d145f43ebc4f35a"
+    },
+    "tools/package_voice.py": {
+      "git_bytes": 2890,
+      "git_sha256": "1ec4c72eab84b5c3712e538e889e078f3da68988b5776d210b6ca32a5a882447",
+      "build_checkout_sha256": "fcfa74a38088ececf2887032cee5edf3af64fc124723c6aed465a4a5e88043d6"
+    },
+    "tools/package_windows_personal.py": {
+      "git_bytes": 15727,
+      "git_sha256": "95ec154e327680d5c1141042c6365ebe3ea16a22c950327947f517097366c492",
+      "build_checkout_sha256": "709f5999200582fcbcdfac50b5242900780bee451883aee958cee08efdfa6c1e"
+    },
+    "tools/prepare_dictionary_source.py": {
+      "git_bytes": 2287,
+      "git_sha256": "499c98b69549f005ecc2ad05015c141d337a9f83eb1044f1aea96ba8d089580e",
+      "build_checkout_sha256": "abeda3a9ca75ff3bf9d34e71e241d569aa5213a371f259f45f4cc52fabaa9038"
+    },
+    "tools/prepare_speech_source.py": {
+      "git_bytes": 8749,
+      "git_sha256": "85fc059f93b5b47a881859ca987e6419883964b1088610f5be414f03bcc670af",
+      "build_checkout_sha256": "5bfd71214890e1b2eb3d2542059dcb029d3150e0e70fefe4634b0afd1a56e6ed"
+    },
+    "tools/prepare_wine_runtime.py": {
+      "git_bytes": 1313,
+      "git_sha256": "dd50b3b7a4aeb81d37eadbae3c61657385c6edd60e594551bbc4bdd915897dab",
+      "build_checkout_sha256": "8a45116044f979463fb3ec305cf5b986edb6abf672a9cb26c6016945d5c7201d"
+    },
+    "tools/run_windows_personal_checks.py": {
+      "git_bytes": 10448,
+      "git_sha256": "c5d07674db4bd4e4edaaade55a0ec568a921ab5d9dd34965a03a570af20602a6",
+      "build_checkout_sha256": "5d076b9e4c6a9563157e04924e2cd0787274ca1263d51fb44b7aa7cba2dafd2f"
+    },
+    "tools/run_wine.sh": {
+      "git_bytes": 656,
+      "git_sha256": "87a3fce10eff02e37488717c785c926c3c353f7793a0faa72cb2904a91de63db",
+      "build_checkout_sha256": "451a7c7689e0ce6a9c0dd1926f20b728db265db2a1b18d655d23ed3f5388d637"
+    },
+    "tools/score_phase_one.py": {
+      "git_bytes": 10046,
+      "git_sha256": "7192c5d0964e8054187e73d980839846c939c16b1b9b561d3e4bb2b7e1f90d28",
+      "build_checkout_sha256": "7192c5d0964e8054187e73d980839846c939c16b1b9b561d3e4bb2b7e1f90d28"
+    },
+    "tools/test_candidate_readiness.py": {
+      "git_bytes": 8284,
+      "git_sha256": "1c978966600046bf09da352f0faccd05d6ff4d94b8038e35950af4892e9e2b46",
+      "build_checkout_sha256": "922e09aadeb074e317f686b3c1be2292192d81da77d1e7d97acac03916f79904"
+    },
+    "tools/test_click_helper.py": {
+      "git_bytes": 7476,
+      "git_sha256": "a22f5b5fc993d71163a51efb6dffc8c42081f5cfddd4632d131b064c31762a7f",
+      "build_checkout_sha256": "1ce92674e6079e48bd450246ee26cfd4fcdaee0bc24a7b5bf6cebd590b04a110"
+    },
+    "tools/test_composition_boundaries.py": {
+      "git_bytes": 8583,
+      "git_sha256": "d9301b031a62d0ec19e4c807ac2a6349ef7b0c6bcff9488f86a1f5353f3ad373",
+      "build_checkout_sha256": "d243c9f1ac357fd4778273229ca055cfee425b0eb04ca4ac0ab5780b436d80b5"
+    },
+    "tools/test_core.sh": {
+      "git_bytes": 378,
+      "git_sha256": "dedefccc48a002ecc90f842a569b101c3a713364758c161840f1cd598586e565",
+      "build_checkout_sha256": "d9179ac8d341cc39553a7b11c6ff774482c8138c2b6225fc534133aba200abfa"
+    },
+    "tools/test_external_math_ui.py": {
+      "git_bytes": 24220,
+      "git_sha256": "16f4a2dbdfbfb33772687ed65382852519007a57de9d343ed605decf5b6d1cb2",
+      "build_checkout_sha256": "1f6a531d6c7ff9d8db88c949756f218a76c8517c8eed27664a6b89893dea21ed"
+    },
+    "tools/test_failure_evidence.py": {
+      "git_bytes": 5931,
+      "git_sha256": "e2891873a5300cadaa5ee70d7234825f8a192c5c2f6f2c1665eaa4764e99e503",
+      "build_checkout_sha256": "6a21cd7ec7b5d2acb6a4f3d0dfdd4301e4dd0b976155209f7ca36a38a5f2a0eb"
+    },
+    "tools/test_fixture_probe_protocol.py": {
+      "git_bytes": 8850,
+      "git_sha256": "151aff8c955f86785e21d8d406cd0f4f14f6c53bb7e88e8122298851a4fd9a98",
+      "build_checkout_sha256": "932fcbe7e7965942d88fd3023f5c6207c952c773add9f33f4af9ecb3588b7658"
+    },
+    "tools/test_ime_preconditions.py": {
+      "git_bytes": 8987,
+      "git_sha256": "f14214021f123dd3805d14756f589ba9dc4dd424b79ac4a05088dcb2834e4df5",
+      "build_checkout_sha256": "daf2b6b07b5492bf8c509fdb3c27f891f3e37af1dd827fa4b2e8b54143bd4e4c"
+    },
+    "tools/test_math_text_action.py": {
+      "git_bytes": 9303,
+      "git_sha256": "8a1e16ea8385f4a9e9d2df5d7cf024c65b4477ececa99d3788a7d2303fe263df",
+      "build_checkout_sha256": "fb1cf6a4dcdd6fe767b59ad3f45fb001fb806094a78932d014190a879032929c"
+    },
+    "tools/test_pending_commit.py": {
+      "git_bytes": 8547,
+      "git_sha256": "1ab245649dc13c679ba6db2c6479077a670fec5bc994bbf67936ac1ea2149fc5",
+      "build_checkout_sha256": "a8257cdae5704a790f2749d9e91c76d561540b662ea2cdef442bd41deef1da28"
+    },
+    "tools/test_pinyin_composition.py": {
+      "git_bytes": 3584,
+      "git_sha256": "20e811d8f0880ab403cf83fcce0327744f0384d7ce31a6c6bbbef181bce1ca48",
+      "build_checkout_sha256": "50bf76217043229cd63e78a992e07515abdee5e7c4035457be9befe36c72df3c"
+    },
+    "tools/test_prediction_jni.py": {
+      "git_bytes": 4408,
+      "git_sha256": "16432c41d4e67d77e9218db581b14cfbe2ef1878fdc91b2393d7a8e7ae59f6a6",
+      "build_checkout_sha256": "a61088021a4518139d4d8f4ad036014602e77fd7425972483c1a7a31f6a01f1f"
+    },
+    "tools/test_preference_cleanup.py": {
+      "git_bytes": 12572,
+      "git_sha256": "71d5bebb219e92b372564a51152e5f4006fdcd8bd57f3f4fbe8b42c2b3dfb849",
+      "build_checkout_sha256": "157bf9ccb812aff583f149492082d5a872554619322ae325f0edb53ebc6dff7c"
+    },
+    "tools/test_suite_window_queries.py": {
+      "git_bytes": 8765,
+      "git_sha256": "fd6c2c555d4848b4fe71867f14c78bee9ce757b5fa1bb4a464fcb8899ba4cff2",
+      "build_checkout_sha256": "4c658f4eb5db7437400f75fadffd5c66ff3afadedfd715bf0079554d516fdb3c"
+    },
+    "tools/test_voice_installer.sh": {
+      "git_bytes": 959,
+      "git_sha256": "48435f2a5f9056d0c4ea8c7a173d38a4fc79b0de22abbf06c0415dbacf3dc90b",
+      "build_checkout_sha256": "366ee4d7de1f2916b14222ee3ce63701c9009c72431e0354a9c4eda9e191f9f6"
+    },
+    "tools/test_voice_screen_coordinates.py": {
+      "git_bytes": 8937,
+      "git_sha256": "e3a34d57ef908085f04feb40df2ddb19d8a039f55909063cb09cc90e1f7d26c5",
+      "build_checkout_sha256": "c58db20420a74e60e072fe487ee223f3f107ad977fdd64e7aa5df24923fa129b"
+    },
+    "tools/test_voice_toolbar_pointer.py": {
+      "git_bytes": 12633,
+      "git_sha256": "e7a318961b92143c02615374f50af35598c5133c765a99fb5486deff307d063d",
+      "build_checkout_sha256": "65dc700f24e9f445ffc7e635f05f955a910aa977b36c54f1fe803b12b64e52ac"
+    },
+    "tools/test_window_query.py": {
+      "git_bytes": 9201,
+      "git_sha256": "80a54f73c46f65d150fab4dfe8ab35ae81c77f905b75b793de786ce17d08f481",
+      "build_checkout_sha256": "60005296488e3126e844c29b7a513ec1c07fd235731ae011a69ba2625379eb1b"
+    },
+    "tools/verify_windows_package.py": {
+      "git_bytes": 7947,
+      "git_sha256": "46c61a68e08f2dfc1c07c21c1d034cf3bc12c2db7e77a7a781f8e079ee03a605",
+      "build_checkout_sha256": "46c61a68e08f2dfc1c07c21c1d034cf3bc12c2db7e77a7a781f8e079ee03a605"
+    },
+    "tools/windows_receipts.py": {
+      "git_bytes": 10925,
+      "git_sha256": "651cce8e21ef692fef78649ab0d0cc1421b9e5402f5eca4d2eb68aafa973aeb5",
+      "build_checkout_sha256": "eb2dbf567ec7ec17364fa3d26da3c0754cda2dc9d5fd8005e74e4e29224a51ec"
+    }
+  },
+  "external_asr_aar": {
+    "name": "sherpa-onnx-asr-only-1.13.6.aar",
+    "sha256": "e8a00003c6115928640e582b05b33d8c4c1850576fe928a1de05625f2472d619",
+    "distributed_in_source": false
+  },
+  "dependency_manifest_sha256": {
+    "docs/dictionary-source.json": "8957a0b2b4955b1e0f3584cecd3cbe46112e4913a68d4dc44554683b472174c0",
+    "docs/frequency-source.json": "000a14e19f6cafd588d1205185d4acab36450f1873a345b755899f4d9b8f89cf",
+    "docs/speech-dependencies.json": "7b8a4219e5cf5544162a3ec2bea7f37d085ea84881cc3154e27a5880791573e4",
+    "docs/voice-model-source.json": "396bff209296dfbe113dd96065dd2de2b64ce74d5ea3a0bb33b38a6de710dd9d"
+  }
+}

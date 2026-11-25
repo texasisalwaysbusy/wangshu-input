@@ -4,6 +4,8 @@
 
 This document defines the beta's boundaries. **Whether a fix is included in a particular download must be established from that release's notes, matching source and artifact hashes.** Host tests, simulated editors, Wine, emulators, physical phones and real Windows are distinct evidence levels, not interchangeable results.
 
+See the [Beta.2 release notes](../../releases/android/v0.1.0-beta.2/README.md) for the current candidate. The historical compatibility fixes below remain applicable; the new candidate adds independent streaming previews plus further editor, symbol and personal-data safeguards, not physical-device acceptance.
+
 ## Android: available for evaluation, with known issues
 
 The full variant includes local Pinyin, explicit mixed segments, offline speech entry points, symbols and personal-data tools. Compatibility across hosts is not established. This build includes the following source fixes, covered by automated checks against production methods and synthetic hosts:
@@ -19,7 +21,7 @@ The abbreviated input `ceshy` retrieves `测试页`, but an existing host query 
 
 Other open areas include English and mixed-language recognition, partial results, number/punctuation formatting, hold/slide speech gestures, narrow-screen touch targets, landscape occlusion, and host-specific commit and selection behavior. Offline speech samples do not establish general accuracy or physical-device latency.
 
-Local example prediction uses only 115 manually authored fixed examples and is off by default. It is not open-ended generation, general bilingual prediction or semantic understanding. Automatic learning from speech corrections, quick translation and semantic rewriting are not completed beta capabilities.
+The manually authored local example feature remains limited. Beta.2 adds offline word and context-based bilingual completion/next-word improvements, not validated open-ended sentence generation or general-quality prediction. Automatic learning from speech corrections, quick translation and semantic rewriting are not completed beta capabilities.
 
 ## Windows: development implementation, not real-platform acceptance
 
@@ -29,7 +31,7 @@ Real-Windows registration, system enablement, 32-bit hosts, modern apps, multipl
 
 ## Debug signing and data
 
-Android beta builds use a debug signature, not a store-release signature. In-place upgrade compatibility across builds is not established. Do not use this beta for passwords, sensitive information or important text; keep another keyboard available.
+Android beta builds use a debug signature, not a store-release signature. Beta.2 Full matches Beta.1's package and signing certificate, with versionCode 2 → 3. Actual updates, data retention and reboot behavior remain unverified. Do not use this beta for passwords, sensitive information or important text; keep another keyboard available.
 
 Backups are not complete app snapshots. Personal words/phrases and settings are exported separately; these backups exclude clipboard history, recordings, models and learning records. Choose a trusted destination. See [Privacy](PRIVACY.en.md).
 

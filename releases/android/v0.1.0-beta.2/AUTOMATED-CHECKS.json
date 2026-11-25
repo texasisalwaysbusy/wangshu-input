@@ -1,0 +1,24 @@
+{
+  "source_commit": "df154a47866877778b29feeb95e4ea2b7247d3e8",
+  "build_source_inputs": 324,
+  "source_stability": "PASS",
+  "build": "PASS (both app and androidTest APKs)",
+  "lint": {
+    "fullDebug": 0,
+    "typingPreviewDebug": 0
+  },
+  "gradle_unit_test": "NO-SOURCE",
+  "preflight": "PASS (offline, both variants)",
+  "version_certificate_permission_abi_dependency_zip_crc_alignment": "PASS",
+  "host_recovery": "119 assertions; two symbolic-link checks and native directory sync unavailable, real Android NOT_RUN",
+  "prior_functional_candidate": {
+    "source_commit": "e217860524e10a3b88f320197519190fcaae2826",
+    "only_build_input_change": "android/app/build.gradle versionCode/versionName",
+    "toolbar_speech_owner": "19 targeted assertions; nine host groups",
+    "native_libraries": "all members equal to this beta build"
+  },
+  "physical_device": "NOT_RUN",
+  "actual_upgrade_or_downgrade": "NOT_RUN",
+  "microphone": "NOT_RUN",
+  "complete_phase_one": "NOT_ACHIEVED"
+}
