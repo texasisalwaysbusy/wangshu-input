@@ -122,8 +122,39 @@ public:
  }
 };
 struct Microphone {
- HWAVEIN handle=nullptr;std::array<WAVEHDR,4> headers{};std::array<std::array<short,1600>,4> data{};
- ~Microphone(){if(handle){waveInReset(handle);for(auto& h:headers)if(h.dwFlags&WHDR_PREPARED)waveInUnprepareHeader(handle,&h,sizeof(h));waveInClose(handle);}}
+ struct Buffers {
+  std::array<WAVEHDR,4> headers{};
+  std::array<std::array<short,1600>,4> data{};
+ };
+ HWAVEIN handle=nullptr;
+ std::unique_ptr<Buffers> storage=std::make_unique<Buffers>();
+ std::array<WAVEHDR,4>& headers=storage->headers;
+ std::array<std::array<short,1600>,4>& data=storage->data;
+ bool resetConfirmed=false,releaseFailed=false;
+ bool closeInput() noexcept{
+  if(!handle)return !releaseFailed;
+  if(!resetConfirmed)resetConfirmed=waveInReset(handle)==MMSYSERR_NOERROR;
+  bool returned=resetConfirmed;
+  if(resetConfirmed){
+   for(auto& h:headers)if(h.dwFlags&WHDR_PREPARED){
+    if(waveInUnprepareHeader(handle,&h,sizeof(h))!=MMSYSERR_NOERROR)returned=false;
+   }
+  }
+  const bool closed=waveInClose(handle)==MMSYSERR_NOERROR;
+  handle=nullptr;
+  if(!returned||!closed){
+   // The driver may still hold a buffer. Retain this bounded allocation until
+   // the owned helper exits rather than freeing memory the driver may access.
+   storage.release();
+   releaseFailed=true;
+   return false;
+  }
+  return true;
+ }
+ ~Microphone(){closeInput();}
+ void closeConfirmed(){
+  if(!closeInput())throw std::runtime_error("microphone release not confirmed");
+ }
  void start(){WAVEFORMATEX f{};f.wFormatTag=WAVE_FORMAT_PCM;f.nChannels=1;f.nSamplesPerSec=16000;f.wBitsPerSample=16;f.nBlockAlign=2;f.nAvgBytesPerSec=32000;if(waveInOpen(&handle,WAVE_MAPPER,&f,0,0,CALLBACK_NULL)!=MMSYSERR_NOERROR)throw std::runtime_error("microphone unavailable; check Windows permission");for(size_t i=0;i<headers.size();i++){headers[i].lpData=reinterpret_cast<char*>(data[i].data());headers[i].dwBufferLength=data[i].size()*2;if(waveInPrepareHeader(handle,&headers[i],sizeof(WAVEHDR))!=MMSYSERR_NOERROR||waveInAddBuffer(handle,&headers[i],sizeof(WAVEHDR))!=MMSYSERR_NOERROR)throw std::runtime_error("microphone buffer failed");}if(waveInStart(handle)!=MMSYSERR_NOERROR)throw std::runtime_error("microphone start failed");}
  void record(Asr& asr,PreviewReporter& preview){
   size_t next=0;ULONGLONG deadline=GetTickCount64()+30000;
@@ -140,7 +171,9 @@ struct Microphone {
    }
    if(!available)Sleep(10);
   }
-  waveInStop(handle);waveInReset(handle);
+  const bool stopped=waveInStop(handle)==MMSYSERR_NOERROR;
+  resetConfirmed=waveInReset(handle)==MMSYSERR_NOERROR;
+  if(!stopped||!resetConfirmed)throw std::runtime_error("microphone stop or buffer return not confirmed");
   // Reset returns queued buffers; drain any nonempty data in queue order.
   if(!cancelled)for(size_t i=0;i<headers.size();++i){
    auto& h=headers[(next+i)%headers.size()];
@@ -183,6 +216,7 @@ int wmain(int argc,wchar_t** argv){
    mic.start();
    std::cout<<"READY\n"<<std::flush;
    mic.record(asr,preview);
+   mic.closeConfirmed();
   }
   if(!cancelled){auto text=asr.result(sampleRate);if(text.size()>16384)throw std::runtime_error("result too large");for(char& c:text)if(c=='\r'||c=='\n')c=' ';std::cout<<"RESULT "<<text<<"\n"<<std::flush;}return cancelled?3:0;
  }catch(const std::exception& e){std::cout<<"ERROR "<<e.what()<<"\n"<<std::flush;return 1;}catch(...){std::cout<<"ERROR local recognition failed\n"<<std::flush;return 1;}
