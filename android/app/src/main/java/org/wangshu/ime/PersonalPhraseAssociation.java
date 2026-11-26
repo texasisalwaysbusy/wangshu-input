@@ -97,7 +97,14 @@ final class PersonalPhraseAssociation implements AutoCloseable {
                             suffix=savedEnabled?PersonalPhraseSuggestions.suggest(left,right,language,data.phrases):null;
                             if(suffix!=null)choices.add(new Choice(suffix,"常用语续写",false));
                             if(workerCancelled(id))return;
-                            if(localEnabled){List<Choice> local=host.localSuggestions(left,right,language,numericPanel);if(local!=null)for(Choice choice:local){if(choices.size()>=5)break;if(choice!=null&&choice.builtin&&choice.suffix!=null&&!choice.suffix.isEmpty()&&choice.suffix.length()<=128&&choices.stream().noneMatch(old->old.suffix.equals(choice.suffix)))choices.add(choice);}}
+                            if(localEnabled){
+                                int limit=choices.size()+8;
+                                List<Choice> local=host.localSuggestions(left,right,language,numericPanel);
+                                if(local!=null)for(Choice choice:local){
+                                    if(choices.size()>=limit)break;
+                                    if(choice!=null&&choice.builtin&&choice.suffix!=null&&!choice.suffix.isEmpty()&&choice.suffix.length()<=128&&choices.stream().noneMatch(old->old.suffix.equals(choice.suffix)))choices.add(choice);
+                                }
+                            }
                             suffix=choices.isEmpty()?null:choices.get(0).suffix;
                             if(workerCancelled(id))return;
                             if(suffix!=null){

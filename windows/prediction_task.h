@@ -23,7 +23,7 @@ class PredictionTask {
         if (input->module) FreeLibraryWhenCallbackReturns(instance, input->module);
         auto result = input->task;
         try {
-            result->candidates_ = input->engine->predict(input->before, input->after, input->english, 4, input->numericPanel);
+            result->candidates_ = input->engine->predictForDisplay(input->before, input->after, input->english, input->numericPanel);
         } catch (...) {
             // A failed optional query leaves ordinary input available.
         }

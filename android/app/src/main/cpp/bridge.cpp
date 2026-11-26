@@ -47,7 +47,7 @@ static jobjectArray prediction(JNIEnv* env,jstring before,jstring after,bool eng
         if(env->ExceptionCheck())return nullptr;
         return env->NewObjectArray(0,env->FindClass("java/lang/String"),nullptr);
     }
-    auto list=engineSnapshot()->predict(left,right,english,4,numericPanel);
+    auto list=engineSnapshot()->predictForDisplay(left,right,english,numericPanel);
     jobjectArray out=env->NewObjectArray(static_cast<jsize>(list.size()*2),env->FindClass("java/lang/String"),nullptr);
     if(!out)return nullptr;
     for(size_t i=0;i<list.size();i++){

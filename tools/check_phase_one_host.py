@@ -59,6 +59,7 @@ def main():
     try:
         cpp('core','tests/core_test.cpp',[project/'data',project/'tests/typing-corpus.tsv'])
         cpp('local-predictions','tests/local_prediction_test.cpp',[project/'data'])
+        cpp('prediction-display','tests/prediction_display_test.cpp',[project/'data'])
         cpp('prediction-structure','tests/local_prediction_focused_test.cpp',[project/'data'])
         cpp('prediction-han-boundary','tests/local_prediction_han_test.cpp',[project/'data'])
         if args.sanitizers:cpp('prediction-sanitizers','tests/local_prediction_stress_test.cpp',[project/'data'],True)

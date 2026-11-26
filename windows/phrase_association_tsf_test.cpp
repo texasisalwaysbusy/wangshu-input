@@ -18,6 +18,7 @@ struct WindowsPersonalTestAccess {
  static void expire(TextService* s){s->predictionRequest->expires=0;tick(s);}
  static bool calculating(TextService* s){return s->predictionWork!=nullptr;}
  static HWND dispatchWindow(TextService* s){return s->predictionWindow;}
+ static const std::vector<wangshu::Candidate>& displayedPredictions(TextService* s){return s->builtinCandidates;}
 };
 static int passed=0,failed=0;
 static void expect(bool ok){if(!ok)throw std::runtime_error("phrase association contract");}
@@ -122,6 +123,25 @@ static int builtinSuite(){
      auto p=f.ui();expect(SUCCEEDED(p->SetSelection(2)));auto committed=p->Finalize();p->Release();
      expect(SUCCEEDED(committed));
      expect(f.c->doc.value==L"你想不想一起，之后再说");
+ });
+ test("Chinese completion and next-word lanes both arrive through the native worker",[]{
+     Fixture f;f.builtin();f.text(L"一个小，之后");f.c->doc.cursor=3;f.release();
+     f.waitPrediction();
+     const auto& values=WindowsPersonalTestAccess::displayedPredictions(f.s);
+     expect(values.size()>=2&&values.size()<=8&&values[0].annotation=="语料补全"&&
+            values[1].annotation=="语料下一词");
+     const auto alternate=f.at(1);
+     expect(alternate==wide(values[1].text)&&f.c->doc.value==L"一个小，之后");
+     auto p=f.ui();expect(SUCCEEDED(p->SetSelection(1)));
+     auto result=p->Finalize();p->Release();
+     expect(SUCCEEDED(result)&&f.c->doc.value==L"一个小"+alternate+L"，之后");
+ });
+ test("queued alternate-lane selection cannot insert after the caret changes",[]{
+     Fixture f;f.builtin();f.text(L"一个小，之后");f.c->doc.cursor=3;f.release();f.waitPrediction();
+     auto p=f.ui();expect(SUCCEEDED(p->SetSelection(1)));f.c->deferred=true;
+     expect(SUCCEEDED(p->Finalize()));p->Release();
+     f.c->doc.cursor=1;auto result=f.c->flush();
+     expect(result.size()==1&&FAILED(result[0])&&f.c->doc.value==L"一个小，之后");
  });
  test("English completion after a sentence period preserves the following sentence",[]{
      Fixture f;f.builtin();WindowsPersonalTestAccess::english(f.s);

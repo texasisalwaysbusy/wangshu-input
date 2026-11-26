@@ -8,6 +8,7 @@ namespace wangshu::context_prediction {
 struct Word { uint32_t text; uint16_t count; };
 struct Transition { uint32_t key, text; uint16_t count; bool partial; };
 struct Result { std::u16string suffix; int count; bool partial; };
+enum class ChineseGroup { Any, Completion, NextWord };
 
 #include "context_prediction_data.inc"
 
@@ -37,10 +38,13 @@ inline void append(std::vector<Result>& result, std::u16string value, int count,
 template<size_t N>
 inline void fromContext(const Transition (&table)[N], std::u16string_view key,
                         std::u16string_view prefix, std::u16string_view after,
-                        bool uppercase, size_t limit, std::vector<Result>& result) {
+                        bool uppercase, size_t limit, std::vector<Result>& result,
+                        ChineseGroup group = ChineseGroup::Any) {
     auto row = std::lower_bound(std::begin(table), std::end(table), key,
         [](const Transition& entry, std::u16string_view needle) { return text(entry.key) < needle; });
     for (; row != std::end(table) && text(row->key) == key && result.size() < limit; ++row) {
+        if (group != ChineseGroup::Any && row->partial != (group == ChineseGroup::Completion))
+            continue;
         auto word = text(row->text);
         if (word.size() <= prefix.size() || !startsWith(word, prefix)) continue;
         std::u16string suffix(word.substr(prefix.size()));
@@ -49,13 +53,14 @@ inline void fromContext(const Transition (&table)[N], std::u16string_view key,
     }
 }
 
-inline std::vector<Result> chinese(std::u16string_view line, std::u16string_view after, size_t limit) {
+inline std::vector<Result> chinese(std::u16string_view line, std::u16string_view after, size_t limit,
+                                   ChineseGroup group = ChineseGroup::Any) {
     size_t length = 0;
     while (length < line.size() && length < 6 && local_prediction::han(line[line.size() - length - 1]))
         ++length;
     std::vector<Result> result;
     for (; length >= 2 && result.empty(); --length) {
-        fromContext(chineseContexts, line.substr(line.size() - length), {}, after, false, limit, result);
+        fromContext(chineseContexts, line.substr(line.size() - length), {}, after, false, limit, result, group);
     }
     return result;
 }

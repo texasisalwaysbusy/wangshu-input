@@ -45,7 +45,7 @@ std::vector<Engine::CompletionWord> Engine::completionWords(
 }
 
 std::vector<Candidate> Engine::completeChinese(
-        std::u16string_view line,std::u16string_view after,size_t limit) const{
+        std::u16string_view line,std::u16string_view after,size_t limit,size_t minimumPrefix) const{
     size_t length=0;
     while(length<line.size()&&length<maxCompletionWordLength-1&&
             local_prediction::han(line[line.size()-length-1]))++length;
@@ -60,7 +60,7 @@ std::vector<Candidate> Engine::completeChinese(
         }
     });
     while(!after.empty()&&local_prediction::separator(after.front()))after.remove_prefix(1);
-    for(;length>0;--length){
+    for(;length>=minimumPrefix;--length){
         const auto prefix=line.substr(line.size()-length);
         auto word=std::lower_bound(index.words.begin(),index.words.end(),prefix,
                 [](const CompletionWord& entry,std::u16string_view key){return std::u16string_view(entry.text)<key;});
@@ -241,6 +241,59 @@ std::vector<Candidate> Engine::predict(const std::string& before,const std::stri
         out.push_back({utf8(value.suffix),value.partial?"语料补全":"语料下一词",value.count});
     if(out.empty()&&!english)return completeChinese(line,right,limit);
     return out;
+}
+
+std::vector<Candidate> Engine::predictForDisplay(const std::string& before,const std::string& after,
+                                                bool english,bool numericPanel) const{
+    constexpr size_t laneLimit=4;
+    auto baseline=predict(before,after,english,laneLimit,numericPanel);
+    // Preserve the existing example, English, numeric and suppressed-result
+    // routes. They must not silently acquire a different interpretation.
+    if(english||numericPanel||baseline.empty())return baseline;
+    auto isCompletion=[](const Candidate& c){
+        return c.annotation=="语料补全"||c.annotation=="词典补全";
+    };
+    if(!std::all_of(baseline.begin(),baseline.end(),[&](const Candidate& c){
+        return isCompletion(c)||c.annotation=="语料下一词";
+    }))return baseline;
+
+    const auto left=utf16(before), right=utf16(after);
+    const auto line=local_prediction::eligibleLine(left,right,laneLimit);
+    if(line.empty())return baseline;
+    std::vector<Candidate> completions,nextWords;
+    std::set<std::string> seen;
+    auto add=[&](std::vector<Candidate>& lane,Candidate value){
+        if(lane.size()<laneLimit&&seen.insert(value.text).second)
+            lane.push_back(std::move(value));
+    };
+    // Preserve every original choice and its origin before adding alternatives.
+    for(const auto& value:baseline)add(isCompletion(value)?completions:nextWords,value);
+    using Group=context_prediction::ChineseGroup;
+    for(auto group:{Group::Completion,Group::NextWord}){
+        auto& lane=group==Group::Completion?completions:nextWords;
+        if(lane.size()==laneLimit)continue;
+        for(const auto& value:context_prediction::chinese(line,right,laneLimit,group))
+            add(lane,{utf8(value.suffix),value.partial?"语料补全":"语料下一词",value.count});
+    }
+    if(completions.empty()){
+        // A new completion lane needs more than an ambiguous final Han
+        // character. Keep the existing dictionary-only fallback unchanged
+        // for legacy queries, but do not inject weak one-character matches
+        // into an already meaningful next-word list.
+        for(auto& value:completeChinese(line,right,laneLimit,2))add(completions,std::move(value));
+    }
+    if(completions.empty()||nextWords.empty())return baseline;
+    // Both types are visible in one candidate flow without sacrificing the
+    // original first item or removing any of the original completion choices.
+    auto& first=isCompletion(baseline.front())?completions:nextWords;
+    auto& second=isCompletion(baseline.front())?nextWords:completions;
+    std::vector<Candidate> display;
+    display.reserve(first.size()+second.size());
+    for(size_t i=0;i<laneLimit;++i){
+        if(i<first.size())display.push_back(std::move(first[i]));
+        if(i<second.size())display.push_back(std::move(second[i]));
+    }
+    return display;
 }
 std::vector<Symbol> Engine::symbols(const std::string& category) const{std::vector<Symbol> out;for(const auto& s:symbols_)if(category.empty()||s.category==category)out.push_back(s);return out;}
 std::string Engine::punctuation(char c,bool chinese)const{if(!chinese)return std::string(1,c);const std::map<char,std::string> names={{',',"comma"},{'.',"period"},{'?',"question"},{'!',"exclamation"},{';',"semicolon"},{':',"colon"}};auto it=names.find(c);if(it!=names.end())for(const auto& s:symbols_)if(s.alias==it->second)return s.text;return std::string(1,c);}

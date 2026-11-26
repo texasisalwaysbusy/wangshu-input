@@ -10,13 +10,14 @@ public class LocalControllerChecks {
  static final class F implements PersonalPhraseAssociation.Host,AutoCloseable {
   boolean allowed=true,saved=true,local=true,cursorEnabled=true,refuse,lying,mutationOnRead,swapOnInsert,clearOnRead,disableOnLocal,modeChangedOnLocal;volatile boolean numbers;int session=1,readCalls,inserts,deletes,unavailable,personalReads,providerCalls;long revision=1;String text="Thank you ";int caret=text.length();
   InputConnection owner=new InputConnection(){};PersonalPhraseAssociation.Display visible;PersonalPhraseAssociation controller=new PersonalPhraseAssociation(this);
+  List<PersonalPhraseAssociation.Choice> localOverride;
   public boolean allowed(){return allowed;}public int session(){return session;}public InputConnection connection(){return owner;}public PersonalPhraseSuggestions.Language language(){return PersonalPhraseSuggestions.Language.ENGLISH;}
   public SplitSelection.Snapshot read(InputConnection c){readCalls++;if(clearOnRead){clearOnRead=false;controller.clear();}if(mutationOnRead){mutationOnRead=false;text+="x";caret++;}return new SplitSelection.Snapshot(text,caret,caret);}
   public PersonalPhraseAssociation.PhraseData phrases(){personalReads++;return new PersonalPhraseAssociation.PhraseData(revision,List.of("Thank you for your help"));}
   public long revision(){return revision;}public boolean savedEnabled(){return saved;}public boolean localEnabled(){return local;}
   public boolean numericPanel(){return numbers;}
   public boolean cursorEnabled(){return cursorEnabled;}
-  public List<PersonalPhraseAssociation.Choice> localSuggestions(String before,String after,PersonalPhraseSuggestions.Language language,boolean numericPanel){providerCalls++;if(disableOnLocal){disableOnLocal=false;local=false;}if(modeChangedOnLocal)numbers=false;if(numericPanel)return List.of(new PersonalPhraseAssociation.Choice("年","数字续写",true));return List.of(new PersonalPhraseAssociation.Choice("for", "本地例句 #1 · 下一词",true),new PersonalPhraseAssociation.Choice("for the update.","本地例句 #2 · 整句",true));}
+  public List<PersonalPhraseAssociation.Choice> localSuggestions(String before,String after,PersonalPhraseSuggestions.Language language,boolean numericPanel){providerCalls++;if(disableOnLocal){disableOnLocal=false;local=false;}if(modeChangedOnLocal)numbers=false;if(numericPanel)return List.of(new PersonalPhraseAssociation.Choice("年","数字续写",true));if(localOverride!=null)return localOverride;return List.of(new PersonalPhraseAssociation.Choice("for", "本地例句 #1 · 下一词",true),new PersonalPhraseAssociation.Choice("for the update.","本地例句 #2 · 整句",true));}
   public void show(PersonalPhraseAssociation.Display value){visible=value;}
   public boolean insert(InputConnection expected,int id,SplitSelection.Snapshot snapshot,
                         java.util.function.BooleanSupplier current,String value){
@@ -39,6 +40,24 @@ public class LocalControllerChecks {
   check(Handler.pending()==2,"worker posted alongside its timeout");Handler.pump();
  }
  public static void main(String[]args)throws Exception{
+  List<PersonalPhraseAssociation.Choice> grouped=new ArrayList<>();
+  grouped.add(new PersonalPhraseAssociation.Choice("for","语料补全",true));
+  for(int i=0;i<10;i++)grouped.add(new PersonalPhraseAssociation.Choice("lane"+i,i%2==0?"语料补全":"语料下一词",true));
+  try(F f=new F()){
+   f.localOverride=grouped;f.request();var d=f.visible;
+   check(d.choices.size()==9&&!d.choices.get(0).builtin&&d.choices.get(8).suffix.equals("lane7"),
+         "eight grouped local choices coexist with one saved phrase and no duplicate");
+   String original=f.text;f.controller.accept(d,d.choices.get(8));
+   check(f.text.equals(original+"lane7")&&f.inserts==1&&f.controller.hasUndo(),"last new lane uses exact guarded insert");
+   f.controller.accept(d,d.choices.get(8));check(f.inserts==1,"old grouped choice cannot replay");
+   f.undo();check(f.text.equals(original)&&f.deletes==1,"grouped choice has ordinary exact undo");
+  }
+  try(F f=new F()){
+   f.saved=false;f.localOverride=grouped;f.request();var d=f.visible;
+   check(d.choices.size()==8,"local-only grouped display bounded at eight");
+   f.owner=new InputConnection(){};f.session++;
+   f.controller.accept(d,d.choices.get(7));check(f.inserts==0,"late alternate lane cannot write a replacement editor");
+  }
   try(F f=new F()){f.request();check(f.visible.choices.size()==2,"saved candidate priority and duplicate local suffix removed");check(!f.visible.choices.get(0).builtin&&f.visible.choices.get(1).builtin,"provenance retained per choice");String original=f.text;var d=f.visible;f.controller.accept(d,d.choices.get(1));check(f.text.equals(original+"for the update.")&&f.controller.hasUndo(),"full sentence inserted once with exact undo token");f.controller.accept(d);check(f.inserts==1,"old choice cannot insert twice");f.undo();check(f.text.equals(original)&&f.deletes==1&&!f.controller.hasUndo(),"undo deletes only this suffix");f.undo();check(f.deletes==1,"undo single use");}
   try(F f=new F()){f.saved=false;f.request();check(f.personalReads==0,"builtin only never reads saved phrase store");check(f.visible.revision==0&&f.visible.choices.get(0).builtin,"builtin independent of personal revision");f.revision=99;f.controller.accept(f.visible);check(f.inserts==1,"builtin unaffected by unrelated personal revision");}
   try(F f=new F()){f.request();f.revision++;f.controller.accept(f.visible);check(f.inserts==0,"saved revision race refused");}
